@@ -1,0 +1,104 @@
+# =========================================
+# 🌿 CodeFlow-AI Full-Stack .gitignore
+# Covers: Frontend (React/Vite) + Backend (.NET)
+# =========================================
+
+# ---------- General ----------
+*.log
+logs
+*.tmp
+*.bak
+*.swp
+*.orig
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---------- Environment ----------
+.env
+.env.*
+*.local
+
+# ---------- Node / Frontend ----------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.tsbuildinfo
+*.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------- Frontend: IDE & System ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---------- Backend (.NET) ----------
+bin/
+obj/
+artifacts/
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.dbproj.schemaview
+project.lock.json
+project.fragment.lock.json
+ScaffoldingReadMe.txt
+
+# ---------- Build Output ----------
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+*.zip
+*.tar.gz
+*.tar
+*.bak
+*.tmp
+*.pid
+
+# ---------- SQLite Databases ----------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ---------- Misc ----------
+# Ignore generated config
+appsettings.*.json
+!appsettings.Development.json
+
+# ---------- OS Specific ----------
+# macOS
+.AppleDouble
+.LSOverride
+# Windows
+$RECYCLE.BIN/
+# Linux
+.Trash-*
+
+# ---------- Backup ----------
+*.old
+*.backup
+*.orig
+
+# =========================================
+# End of file
+# =========================================
