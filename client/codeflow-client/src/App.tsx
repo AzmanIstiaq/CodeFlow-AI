@@ -1,33 +1,84 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
+import { getWorkflows, createWorkflow, deleteWorkflow } from './api'
+
+interface Workflow {
+  id: number;
+  name: string;
+  workflow: string;
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [getWorkflowsData, setGetWorkflowsData] = useState<Workflow[]>([]);
+
+  useEffect(() => {
+    getWorkflows()
+      .then(res => setGetWorkflowsData(res.data))
+      .catch(err => console.error("Error loading workflows", err));
+  }, []);
+
+  const [name, setName] = useState('');
+  const [workflow, setWorkflow] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !workflow) {
+      alert("Please fill in all fields");
+      return;
+    }
+    try {
+      await createWorkflow({ Name: name, Workflow: workflow });
+      const res = await getWorkflows();
+      setGetWorkflowsData(res.data);
+      setName('');
+      setWorkflow('');
+    } catch (err) {
+      console.error("Error creating workflow", err);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteWorkflow(id);
+      const res = await getWorkflows();
+      setGetWorkflowsData(res.data);
+    } catch (err) {
+      console.error("Error deleting workflow", err);
+    }
+
+  };
 
   return (
     <>
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        <form onSubmit={handleSubmit}>
+          <h2>Create Workflow</h2>
+          <div>
+            <label>
+              Name:
+              <input type="text" name="name" value={name} onChange={(e) => setName(e.target.value)}/>
+            </label>
+          </div>
+          <div>
+            <label>
+              Workflow:
+              <textarea name="workflow" value={workflow} onChange={(e) => setWorkflow(e.target.value)}/>
+            </label>
+          </div>
+          <button type="submit">Create</button>
+        </form>
+        {!getWorkflowsData && <p>Loading...</p>}
+        {getWorkflowsData && getWorkflowsData.length === 0 && <p>No workflows yet</p>}
+        {getWorkflowsData && getWorkflowsData.length > 0 && (
+          <ul>
+            {getWorkflowsData.map((w: any) => (
+              <li key={w.id}>
+                {w.name}: {w.workflow}: <button onClick={() => handleDelete(w.id)}>Delete</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
   )
 }
