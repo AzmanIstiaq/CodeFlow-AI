@@ -95,6 +95,29 @@ app.MapDelete("/api/workflows/{id}", (int id) =>
     return Results.Ok(new { message = "Deleted successfully" });
 });
 
+app.MapPut("/api/workflows/{id}", async (int id, HttpRequest request) =>
+{
+    using var reader = new StreamReader(request.Body);
+    var body = await reader.ReadToEndAsync();
+    var workflowRequest = JsonSerializer.Deserialize<WorkflowRequest>(body);
+
+    using var connection = new SqliteConnection("Data Source=workflows.db");
+    connection.Open();
+    var updateCommand = connection.CreateCommand();
+    updateCommand.CommandText = @"UPDATE Workflows SET name = $name, workflow = $workflow WHERE id = $id;";
+    updateCommand.Parameters.AddWithValue("$name", workflowRequest!.Name);
+    updateCommand.Parameters.AddWithValue("$workflow", workflowRequest!.Workflow);
+    updateCommand.Parameters.AddWithValue("$id", id);
+
+    var rowsAffected = updateCommand.ExecuteNonQuery();
+
+    if (rowsAffected == 0)
+    {
+        return Results.NotFound(new { message = "Workflow not found" });
+    }
+
+    return Results.Ok(new { message = "Updated successfully" });
+});
 
 app.Run();
 

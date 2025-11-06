@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { getWorkflows, createWorkflow, deleteWorkflow } from './api'
+import { getWorkflows, createWorkflow, deleteWorkflow, updateWorkflow } from './api'
 
 interface Workflow {
   id: number;
@@ -19,6 +19,9 @@ function App() {
 
   const [name, setName] = useState('');
   const [workflow, setWorkflow] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [editingWorkflow, setEditingWorkflow] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +51,16 @@ function App() {
 
   };
 
+  const handleUpdate = async (id: number, updatedData: { Name: string; Workflow: string}) => {
+    try {
+      await updateWorkflow(id, updatedData);
+      const res = await getWorkflows();
+      setGetWorkflowsData(res.data);
+    } catch (err) {
+      console.error("Error updating workflow", err);
+    }
+  };
+
   return (
     <>
       <div>
@@ -73,7 +86,27 @@ function App() {
           <ul>
             {getWorkflowsData.map((w: any) => (
               <li key={w.id}>
-                {w.name}: {w.workflow}: <button onClick={() => handleDelete(w.id)}>Delete</button>
+                {editingId === w.id ? (
+                  <>
+                    <input type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} />
+                    <textarea value={editingWorkflow} onChange={(e) => setEditingWorkflow(e.target.value)} />
+                    <button onClick={() => {
+                      handleUpdate(w.id, { Name: editingName, Workflow: editingWorkflow });
+                      setEditingId(null);
+                    }}>Save</button>
+                    <button onClick={() => setEditingId(null)}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    {w.name}: {w.workflow} 
+                    <button onClick={() => {
+                      setEditingId(w.id);
+                      setEditingName(w.name);
+                      setEditingWorkflow(w.workflow);
+                    }}>Edit</button>
+                  </>
+                )}
+                <button onClick={() => handleDelete(w.id)}>Delete</button>
               </li>
             ))}
           </ul>

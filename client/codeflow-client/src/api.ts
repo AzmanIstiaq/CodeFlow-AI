@@ -13,3 +13,7 @@ export async function createWorkflow(data: { Name: string; Workflow: string}) {
 export async function deleteWorkflow(id: number) {
     return axios.delete(`${API_BASE_URL}/workflows/${id}`);
 }
+
+export async function updateWorkflow(id: number, data: { Name: string; Workflow: string}) {
+    return axios.put(`${API_BASE_URL}/workflows/${id}`, data);
+}
