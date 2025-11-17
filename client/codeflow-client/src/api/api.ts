@@ -17,3 +17,12 @@ export async function deleteWorkflow(id: number) {
 export async function updateWorkflow(id: number, data: { Name: string; Workflow: string}) {
     return axios.put(`${API_BASE_URL}/workflows/${id}`, data);
 }
+
+export async function saveDiagram(id: number, diagram: { nodes: any[]; edges: any[] }) {
+    return axios.put(`${API_BASE_URL}/workflows/${id}/diagram`, diagram);
+}
+
+export async function getDiagram(id: number) {
+    return axios.get(`${API_BASE_URL}/workflows/${id}/diagram`);
+}
+

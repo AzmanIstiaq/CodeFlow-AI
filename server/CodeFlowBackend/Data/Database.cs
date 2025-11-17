@@ -16,7 +16,8 @@ namespace CodeFlowBackend.Data
             @"CREATE TABLE IF NOT EXISTS Workflows (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                workflow TEXT NOT NULL
+                workflow TEXT NOT NULL,
+                diagram TEXT
             );";
             command.ExecuteNonQuery();
         }

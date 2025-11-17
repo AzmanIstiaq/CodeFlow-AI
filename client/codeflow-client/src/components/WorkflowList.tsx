@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { deleteWorkflow, updateWorkflow, getWorkflows } from "../api/api";
+import { useNavigate } from "react-router-dom";
 
 interface Workflow {
   id: number;
@@ -16,6 +17,7 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingWorkflow, setEditingWorkflow] = useState("");
+  const navigate = useNavigate();
 
   const handleDelete = async (id: number) => {
     try {
@@ -40,7 +42,7 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
   if (!workflows) return <p>Loading...</p>;
   if (workflows.length === 0) return <p>No workflows yet</p>;
 
-  return (
+return (
     <ul>
       {workflows.map((w) => (
         <li key={w.id}>
@@ -67,7 +69,7 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
             </>
           ) : (
             <>
-              {w.name}: {w.workflow}
+              {w.name}: {w.workflow}{" "}
               <button
                 onClick={() => {
                   setEditingId(w.id);
@@ -76,10 +78,11 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
                 }}
               >
                 Edit
-              </button>
+              </button>{" "}
+              <button onClick={() => handleDelete(w.id)}>Delete</button>{" "}
+              <button onClick={() => navigate(`/builder?id=${w.id}`)}>Open</button>
             </>
           )}
-          <button onClick={() => handleDelete(w.id)}>Delete</button>
         </li>
       ))}
     </ul>

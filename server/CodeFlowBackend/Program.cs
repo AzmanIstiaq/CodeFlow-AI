@@ -19,5 +19,6 @@ app.UseCors("AllowAll");
 Database.Initialize();
 
 app.MapWorkflowEndpoints();
+app.MapVisualBuilderEndpoints();
 
 app.Run();
