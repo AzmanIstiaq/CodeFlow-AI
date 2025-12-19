@@ -1,0 +1,22 @@
+{
+  "name": "codeflow-ai",
+  "version": "1.0.0",
+  "description": "AI-powered workflow builder with visual editor",
+  "type": "module",
+  "scripts": {
+    "start": "dotnet run --project backend/Program.cs",
+    "backend": "dotnet run --project backend",
+    "frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "build": "npm install && npm install --prefix frontend && npm run build --prefix frontend"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AzmanIstiaq/CodeFlow-AI.git"
+  },
+  "author": "Azman Istiaq",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
