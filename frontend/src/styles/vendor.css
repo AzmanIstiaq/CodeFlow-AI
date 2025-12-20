@@ -1,0 +1,22 @@
+/* =====================================================
+   VENDOR OVERRIDES - ReactFlow and Third-Party Styles
+   ===================================================== */
+
+/* ReactFlow default style overrides - prevent white backgrounds */
+.react-flow__node.react-flow__node-default {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* ReactFlow node overrides for output node */
+.react-flow__node.react-flow__node-output {
+  background: transparent !important;
+  width: auto;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.node-output .react-flow__handle {
+  border: none !important;
+}

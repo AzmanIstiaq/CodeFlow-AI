@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { deleteWorkflow, updateWorkflow, getWorkflows } from "../api/api";
+import {
+  deleteWorkflow,
+  updateWorkflow,
+  getWorkflows,
+  type Workflow,
+} from "../api/api";
 import { useNavigate } from "react-router-dom";
-
-interface Workflow {
-  id: number;
-  name: string;
-  workflow: string;
-}
 
 interface WorkflowListProps {
   workflows: Workflow[];
@@ -22,18 +21,21 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
   const handleDelete = async (id: number) => {
     try {
       await deleteWorkflow(id);
-      const res = await getWorkflows();
-      setWorkflows(res.data);
+      const workflows = await getWorkflows();
+      setWorkflows(workflows);
     } catch (err) {
       console.error("Error deleting workflow", err);
     }
   };
 
-  const handleUpdate = async (id: number, updatedData: { Name: string; Workflow: string }) => {
+  const handleUpdate = async (
+    id: number,
+    updatedData: { Name: string; Workflow: string }
+  ) => {
     try {
       await updateWorkflow(id, updatedData);
-      const res = await getWorkflows();
-      setWorkflows(res.data);
+      const workflows = await getWorkflows();
+      setWorkflows(workflows);
     } catch (err) {
       console.error("Error updating workflow", err);
     }
@@ -42,7 +44,7 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
   if (!workflows) return <p>Loading...</p>;
   if (workflows.length === 0) return <p>No workflows yet</p>;
 
-return (
+  return (
     <ul>
       {workflows.map((w) => (
         <li key={w.id}>
@@ -59,7 +61,10 @@ return (
               />
               <button
                 onClick={() => {
-                  handleUpdate(w.id, { Name: editingName, Workflow: editingWorkflow });
+                  handleUpdate(w.id, {
+                    Name: editingName,
+                    Workflow: editingWorkflow,
+                  });
                   setEditingId(null);
                 }}
               >
@@ -74,13 +79,15 @@ return (
                 onClick={() => {
                   setEditingId(w.id);
                   setEditingName(w.name);
-                  setEditingWorkflow(w.workflow);
+                  setEditingWorkflow(w.workflow || "");
                 }}
               >
                 Edit
               </button>{" "}
               <button onClick={() => handleDelete(w.id)}>Delete</button>{" "}
-              <button onClick={() => navigate(`/builder?id=${w.id}`)}>Open</button>
+              <button onClick={() => navigate(`/builder?id=${w.id}`)}>
+                Open
+              </button>
             </>
           )}
         </li>

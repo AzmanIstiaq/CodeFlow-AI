@@ -16,9 +16,9 @@ function WorkflowForm({ setWorkflows }: WorkflowFormProps) {
       return;
     }
     try {
-      await createWorkflow({ Name: name, Workflow: workflow });
-      const res = await getWorkflows();
-      setWorkflows(res.data);
+      await createWorkflow({ name: name, workflow: workflow });
+      const workflows = await getWorkflows();
+      setWorkflows(workflows);
       setName("");
       setWorkflow("");
     } catch (err) {

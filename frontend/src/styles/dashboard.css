@@ -1,0 +1,245 @@
+/* =====================================================
+   DASHBOARD PAGE - Workflow Management
+   ===================================================== */
+
+.dashboard-page {
+  min-height: 100vh;
+  background: #0a0a0a;
+  padding: 40px 20px;
+}
+
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.dashboard-header h1 {
+  font-family: "Montserrat", sans-serif;
+  font-size: 2.5rem;
+  margin: 0;
+  color: white;
+}
+
+.dashboard-subtitle {
+  font-size: 1rem;
+  color: #888;
+  margin: 8px 0 0 0;
+}
+
+.dashboard-loading {
+  text-align: center;
+  padding: 60px;
+  color: #888;
+}
+
+.dashboard-empty {
+  text-align: center;
+  padding: 80px 20px;
+  background: #1a1a2e;
+  border: 1px dashed #2a2a3e;
+  border-radius: 16px;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.dashboard-empty h3 {
+  font-family: "Montserrat", sans-serif;
+  font-size: 1.5rem;
+  margin: 0 0 12px 0;
+  color: white;
+}
+
+.dashboard-empty p {
+  font-size: 1rem;
+  color: #888;
+  margin: 0 0 32px 0;
+}
+
+.workflows-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.workflow-card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.workflow-card:hover {
+  transform: translateY(-4px);
+  border-color: #3b82f6;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2);
+}
+
+.workflow-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.workflow-card h3 {
+  font-family: "Montserrat", sans-serif;
+  font-size: 1.25rem;
+  margin: 0;
+  color: white;
+}
+
+.workflow-badge {
+  background: #2a2a3e;
+  color: #888;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.workflow-description {
+  font-size: 0.875rem;
+  color: #888;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.workflow-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid #2a2a3e;
+}
+
+.workflow-date {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.btn-delete {
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 4px 12px;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+/* Modal Dialog Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+  font-family: "Montserrat", sans-serif;
+  font-size: 1.5rem;
+  margin: 0 0 24px 0;
+  color: white;
+}
+
+.workflow-name-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1rem;
+  background: #0a0a0a;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-family: "Poppins", sans-serif;
+  margin-bottom: 24px;
+  transition: border-color 0.3s ease;
+}
+
+.workflow-name-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.workflow-name-input::placeholder {
+  color: #666;
+}
+
+.workflow-description-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1rem;
+  background: #0a0a0a;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-family: "Poppins", sans-serif;
+  margin-bottom: 24px;
+  transition: border-color 0.3s ease;
+  resize: vertical;
+}
+
+.workflow-description-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.workflow-description-input::placeholder {
+  color: #666;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-actions button {
+  min-width: 100px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

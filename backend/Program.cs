@@ -20,5 +20,6 @@ Database.Initialize();
 
 app.MapWorkflowEndpoints();
 app.MapVisualBuilderEndpoints();
+app.MapExecutionEndpoints();
 
 app.Run();

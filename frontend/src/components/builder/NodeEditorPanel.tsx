@@ -2,12 +2,16 @@ import { useState, useEffect } from "react";
 import type { Node } from "reactflow";
 
 interface NodeSettingsPanelProps {
-    node: Node<any> | null;
-    updateNodeData: (id: string, data: any) => void;
-    closePanel: () => void;
+  node: Node<any> | null;
+  updateNodeData: (id: string, data: any) => void;
+  closePanel: () => void;
 }
 
-export default function NodeSettingsPanel({ node, updateNodeData, closePanel }: NodeSettingsPanelProps) {
+export default function NodeSettingsPanel({
+  node,
+  updateNodeData,
+  closePanel,
+}: NodeSettingsPanelProps) {
   const [localData, setLocalData] = useState<any>({});
 
   // Initialize local state when node changes
@@ -34,7 +38,9 @@ export default function NodeSettingsPanel({ node, updateNodeData, closePanel }: 
     <div className="node-editor-panel">
       <div className="panel-header">
         <h3>Node Settings</h3>
-        <button className="panel-close-button" onClick={closePanel}>×</button>
+        <button className="panel-close-button" onClick={closePanel}>
+          ×
+        </button>
       </div>
 
       <div className="panel-section">
@@ -42,20 +48,20 @@ export default function NodeSettingsPanel({ node, updateNodeData, closePanel }: 
         <input
           className="input-field"
           type="text"
-          value={localData.label || ''}
-          onChange={(e) => handleChange('label', e.target.value)}
+          value={localData.label || ""}
+          onChange={(e) => handleChange("label", e.target.value)}
           placeholder="Enter node label"
         />
       </div>
 
-      {node.type === 'ai' && (
+      {node.type === "ai" && (
         <>
           <div className="panel-section">
             <label>Prompt</label>
             <textarea
               className="textarea-field"
-              value={localData.prompt || ''}
-              onChange={(e) => handleChange('prompt', e.target.value)}
+              value={localData.prompt || ""}
+              onChange={(e) => handleChange("prompt", e.target.value)}
               placeholder="Enter AI prompt"
               rows={6}
             />
@@ -70,71 +76,51 @@ export default function NodeSettingsPanel({ node, updateNodeData, closePanel }: 
               max="1"
               step="0.1"
               value={localData.temperature ?? 0.7}
-              onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+              onChange={(e) =>
+                handleChange("temperature", parseFloat(e.target.value))
+              }
             />
-            <small style={{ color: '#999', display: 'block', marginTop: '4px' }}>
-              Range: 0 (deterministic) to 1 (creative)
-            </small>
+            <small>Range: 0 (deterministic) to 1 (creative)</small>
           </div>
 
           <div className="panel-section">
             <label>Model</label>
-            <input
+            <select
               className="input-field"
-              type="text"
-              value={localData.model || 'gpt-4'}
-              onChange={(e) => handleChange('model', e.target.value)}
-              placeholder="e.g., gpt-4, gpt-3.5-turbo"
-            />
+              value={localData.model || "llama3.2"}
+              onChange={(e) => handleChange("model", e.target.value)}
+            >
+              <option value="llama3.2">Llama 3.2 (3B)</option>
+              <option value="llama3.2:1b">Llama 3.2 (1B)</option>
+              <option value="llama3.1">Llama 3.1 (8B)</option>
+              <option value="phi3">Phi-3 (3.8B)</option>
+              <option value="gemma2">Gemma 2 (9B)</option>
+              <option value="qwen2.5">Qwen 2.5 (7B)</option>
+              <option value="mistral">Mistral (7B)</option>
+            </select>
+            <small>Install models with: ollama pull &lt;model-name&gt;</small>
           </div>
         </>
       )}
 
-      {node.type === 'output' && (
+      {node.type === "output" && (
         <div className="panel-section">
           <label>Output Variable Name</label>
           <input
             className="input-field"
             type="text"
-            value={localData.outputName || ''}
-            onChange={(e) => handleChange('outputName', e.target.value)}
+            value={localData.outputName || ""}
+            onChange={(e) => handleChange("outputName", e.target.value)}
             placeholder="e.g., result, response"
           />
         </div>
       )}
 
-      <div className="panel-section" style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #333' }}>
-        <button
-          className="panel-save-button"
-          onClick={handleSave}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            marginBottom: '8px',
-          }}
-        >
+      <div className="panel-section panel-section-footer">
+        <button className="panel-save-button" onClick={handleSave}>
           ✓ Save Changes
         </button>
-        <button
-          className="panel-cancel-button"
-          onClick={closePanel}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-          }}
-        >
+        <button className="panel-cancel-button" onClick={closePanel}>
           Cancel
         </button>
       </div>

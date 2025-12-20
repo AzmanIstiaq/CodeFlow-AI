@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using System.Text.Json;
 using CodeFlowBackend.Data;
 using CodeFlowBackend.Models;
+using System;
 
 namespace CodeFlowBackend.Routes
 {
@@ -20,12 +21,14 @@ namespace CodeFlowBackend.Routes
                 connection.Open();
 
                 var insertCommand = connection.CreateCommand();
-                insertCommand.CommandText = @"INSERT INTO Workflows (name, workflow) VALUES ($name, $workflow);";
+                insertCommand.CommandText = @"INSERT INTO Workflows (name, workflow, description) VALUES ($name, $workflow, $description); SELECT last_insert_rowid();";
                 insertCommand.Parameters.AddWithValue("$name", workflowRequest!.Name);
                 insertCommand.Parameters.AddWithValue("$workflow", workflowRequest!.Workflow);
-                insertCommand.ExecuteNonQuery();
+                insertCommand.Parameters.AddWithValue("$description", workflowRequest.Description ?? (object)DBNull.Value);
+                
+                var newId = Convert.ToInt32(insertCommand.ExecuteScalar());
 
-                return Results.Ok(new { message = "Success", data = body });
+                return Results.Ok(new { id = newId, message = "Success" });
             });
 
             // GET — all workflows
@@ -35,17 +38,23 @@ namespace CodeFlowBackend.Routes
                 connection.Open();
 
                 var selectCommand = connection.CreateCommand();
-                selectCommand.CommandText = @"SELECT id, name, workflow FROM Workflows;";
+                selectCommand.CommandText = @"SELECT id, name, workflow, description, createdAt, updatedAt FROM Workflows;";
                 using var reader = selectCommand.ExecuteReader();
 
                 var workflows = new List<WorkflowRequest>();
                 while (reader.Read())
                 {
+                    var createdAt = reader.IsDBNull(4) ? null : reader.GetString(4);
+                    var updatedAt = reader.IsDBNull(5) ? null : reader.GetString(5);
+                    
                     workflows.Add(new WorkflowRequest
                     {
                         Id = reader.GetInt32(0),
                         Name = reader.GetString(1),
-                        Workflow = reader.GetString(2)
+                        Workflow = reader.GetString(2),
+                        Description = reader.IsDBNull(3) ? null : reader.GetString(3),
+                        CreatedAt = createdAt ?? DateTime.UtcNow.ToString("o"),
+                        UpdatedAt = updatedAt
                     });
                 }
 

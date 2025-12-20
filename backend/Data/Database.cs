@@ -17,9 +17,29 @@ namespace CodeFlowBackend.Data
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 workflow TEXT NOT NULL,
-                diagram TEXT
+                description TEXT,
+                diagram TEXT,
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                updatedAt TEXT
             );";
             command.ExecuteNonQuery();
+
+            // Migration: Add createdAt and updatedAt columns if they don't exist
+            try
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = @"ALTER TABLE Workflows ADD COLUMN createdAt TEXT DEFAULT CURRENT_TIMESTAMP;";
+                alterCommand.ExecuteNonQuery();
+            }
+            catch { /* Column already exists */ }
+
+            try
+            {
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = @"ALTER TABLE Workflows ADD COLUMN updatedAt TEXT;";
+                alterCommand.ExecuteNonQuery();
+            }
+            catch { /* Column already exists */ }
         }
 
         public static SqliteConnection GetConnection()
