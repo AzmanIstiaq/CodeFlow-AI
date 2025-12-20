@@ -84,9 +84,8 @@ ScaffoldingReadMe.txt
 *.sqlite3
 
 # ---------- Misc ----------
-# Ignore generated config
+# Ignore environment-specific config (keep only base appsettings.json)
 appsettings.*.json
-!appsettings.Development.json
 
 # ---------- OS Specific ----------
 # macOS
