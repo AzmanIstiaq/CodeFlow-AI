@@ -15,7 +15,7 @@ interface WorkflowListProps {
 function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
-  const [editingWorkflow, setEditingWorkflow] = useState("");
+  const [editingDescription, setEditingDescription] = useState("");
   const navigate = useNavigate();
 
   const handleDelete = async (id: number) => {
@@ -28,17 +28,32 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
     }
   };
 
-  const handleUpdate = async (
-    id: number,
-    updatedData: { Name: string; Workflow: string }
-  ) => {
+  const handleUpdate = async (id: number) => {
+    const workflow = workflows.find((w) => w.id === id);
     try {
-      await updateWorkflow(id, updatedData);
+      await updateWorkflow(id, {
+        name: editingName,
+        description: editingDescription,
+        workflow: workflow?.workflow,
+      });
       const workflows = await getWorkflows();
       setWorkflows(workflows);
+      setEditingId(null);
     } catch (err) {
       console.error("Error updating workflow", err);
     }
+  };
+
+  const startEditing = (w: Workflow) => {
+    setEditingId(w.id);
+    setEditingName(w.name);
+    setEditingDescription(w.description || "");
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditingName("");
+    setEditingDescription("");
   };
 
   if (!workflows) return <p>Loading...</p>;
@@ -49,46 +64,48 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
       {workflows.map((w) => (
         <li key={w.id}>
           {editingId === w.id ? (
-            <>
-              <input
-                type="text"
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-              />
-              <textarea
-                value={editingWorkflow}
-                onChange={(e) => setEditingWorkflow(e.target.value)}
-              />
-              <button
-                onClick={() => {
-                  handleUpdate(w.id, {
-                    Name: editingName,
-                    Workflow: editingWorkflow,
-                  });
-                  setEditingId(null);
-                }}
-              >
-                Save
-              </button>
-              <button onClick={() => setEditingId(null)}>Cancel</button>
-            </>
+            <div className="workflow-edit-form">
+              <div className="form-group">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  placeholder="Workflow name"
+                />
+              </div>
+              <div className="form-group">
+                <label>Description:</label>
+                <textarea
+                  value={editingDescription}
+                  onChange={(e) => setEditingDescription(e.target.value)}
+                  placeholder="Workflow description"
+                  rows={3}
+                />
+              </div>
+              <div className="form-actions">
+                <button onClick={() => handleUpdate(w.id)}>Save</button>
+                <button onClick={cancelEditing}>Cancel</button>
+              </div>
+            </div>
           ) : (
-            <>
-              {w.name}: {w.workflow}{" "}
-              <button
-                onClick={() => {
-                  setEditingId(w.id);
-                  setEditingName(w.name);
-                  setEditingWorkflow(w.workflow || "");
-                }}
-              >
-                Edit
-              </button>{" "}
-              <button onClick={() => handleDelete(w.id)}>Delete</button>{" "}
-              <button onClick={() => navigate(`/builder?id=${w.id}`)}>
-                Open
-              </button>
-            </>
+            <div className="workflow-item">
+              <div className="workflow-info">
+                <h3>{w.name}</h3>
+                {w.description && (
+                  <p className="description">{w.description}</p>
+                )}
+              </div>
+              <div className="workflow-actions">
+                <button onClick={() => startEditing(w)}>Edit</button>
+                <button onClick={() => navigate(`/builder?id=${w.id}`)}>
+                  Open
+                </button>
+                <button onClick={() => handleDelete(w.id)} className="delete">
+                  Delete
+                </button>
+              </div>
+            </div>
           )}
         </li>
       ))}

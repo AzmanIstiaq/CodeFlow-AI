@@ -15,8 +15,9 @@ namespace CodeFlowBackend.Routes
                 connection.Open();
 
                 var updateCommand = connection.CreateCommand();
-                updateCommand.CommandText = @"UPDATE Workflows SET diagram = $diagram WHERE id = $id;";
+                updateCommand.CommandText = @"UPDATE Workflows SET diagram = $diagram, workflow = $workflow WHERE id = $id;";
                 updateCommand.Parameters.AddWithValue("$diagram", body);
+                updateCommand.Parameters.AddWithValue("$workflow", body);
                 updateCommand.Parameters.AddWithValue("$id", id);
 
                 var rows = updateCommand.ExecuteNonQuery();

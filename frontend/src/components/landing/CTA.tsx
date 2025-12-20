@@ -1,19 +1,26 @@
 import { useNavigate } from "react-router-dom";
+import { Container, Row, Col } from "react-bootstrap";
 
 export default function CTA() {
   const navigate = useNavigate();
 
   return (
     <section className="cta-section">
-      <div className="cta-container">
-        <h2 className="cta-headline">Start building AI workflows now.</h2>
-        <button
-          onClick={() => navigate("/builder")}
-          className="btn-primary btn-large"
-        >
-          Launch Builder →
-        </button>
-      </div>
+      <Container className="cta-container">
+        <Row>
+          <Col className="text-center">
+            <h2 className="cta-headline">
+              Ready to Build Your First Workflow?
+            </h2>
+            <button
+              onClick={() => navigate("/builder")}
+              className="btn-primary btn-large"
+            >
+              Launch Visual Builder
+            </button>
+          </Col>
+        </Row>
+      </Container>
     </section>
   );
 }

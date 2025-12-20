@@ -19,17 +19,8 @@
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
 }
 
-.hero-container {
-  max-width: 1200px;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  align-items: center;
-}
-
 .hero-content {
-  max-width: 600px;
+  max-width: 100%;
 }
 
 .hero-headline {
@@ -42,6 +33,121 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  position: relative;
+}
+
+.placeholder-text {
+  visibility: hidden;
+  display: block;
+}
+
+/* Typewriter animation */
+.typewriter {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.typewriter::before {
+  content: "";
+  animation: typing 2.3s steps(1, end) forwards;
+  background: linear-gradient(135deg, #fff 0%, #a0a0a0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes typing {
+  0% {
+    content: "";
+  }
+  3.45% {
+    content: "B";
+  }
+  6.90% {
+    content: "Bu";
+  }
+  10.34% {
+    content: "Bui";
+  }
+  13.79% {
+    content: "Buil";
+  }
+  17.24% {
+    content: "Build";
+  }
+  20.69% {
+    content: "Build ";
+  }
+  24.14% {
+    content: "Build A";
+  }
+  27.59% {
+    content: "Build AI";
+  }
+  31.03% {
+    content: "Build AI ";
+  }
+  34.48% {
+    content: "Build AI w";
+  }
+  37.93% {
+    content: "Build AI wo";
+  }
+  41.38% {
+    content: "Build AI wor";
+  }
+  44.83% {
+    content: "Build AI work";
+  }
+  48.28% {
+    content: "Build AI workf";
+  }
+  51.72% {
+    content: "Build AI workfl";
+  }
+  55.17% {
+    content: "Build AI workflo";
+  }
+  58.62% {
+    content: "Build AI workflow";
+  }
+  62.07% {
+    content: "Build AI workflows";
+  }
+  65.52% {
+    content: "Build AI workflows ";
+  }
+  68.97% {
+    content: "Build AI workflows v";
+  }
+  72.41% {
+    content: "Build AI workflows vi";
+  }
+  75.86% {
+    content: "Build AI workflows vis";
+  }
+  79.31% {
+    content: "Build AI workflows visu";
+  }
+  82.76% {
+    content: "Build AI workflows visua";
+  }
+  86.21% {
+    content: "Build AI workflows visual";
+  }
+  89.66% {
+    content: "Build AI workflows visuall";
+  }
+  93.10% {
+    content: "Build AI workflows visually";
+  }
+  96.55% {
+    content: "Build AI workflows visually.";
+  }
+  100% {
+    content: "Build AI workflows visually.";
+  }
 }
 
 .hero-subtext {
@@ -49,12 +155,13 @@
   line-height: 1.6;
   color: #b0b0b0;
   margin: 0 0 40px 0;
+  max-width: 100%;
 }
 
 .hero-buttons {
   display: flex;
-  gap: 16px;
   flex-wrap: wrap;
+  gap: 16px;
 }
 
 .btn-primary {
@@ -103,28 +210,47 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .preview-placeholder {
   background: #1a1a2e;
   border: 1px solid #2a2a3e;
   border-radius: 16px;
-  padding: 40px;
+  padding: 30px 20px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  gap: 15px;
+  box-shadow: none;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .placeholder-node {
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-radius: 8px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-weight: 600;
-  min-width: 100px;
+  min-width: 80px;
+  font-size: 0.9rem;
+}
+
+.placeholder-node span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.placeholder-node small {
+  font-size: 0.7rem;
 }
 
 .placeholder-node.node-start {
@@ -148,8 +274,9 @@
 }
 
 .placeholder-arrow {
-  font-size: 2rem;
+  font-size: 1.5rem;
   color: #666;
+  flex-shrink: 0;
 }
 
 /* Preview Section */
@@ -202,9 +329,10 @@
   border-radius: 12px;
   padding: 20px;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto;
+  place-items: center;
   gap: 12px;
   transition: all 0.3s ease;
 }
@@ -299,20 +427,6 @@
   margin: 0 auto;
 }
 
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 32px;
-}
-
-.feature-card {
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 16px;
-  padding: 40px;
-  transition: all 0.3s ease;
-}
-
 .feature-card:hover {
   transform: translateY(-8px);
   border-color: #3b82f6;
@@ -322,21 +436,6 @@
 .feature-icon {
   font-size: 3rem;
   margin-bottom: 20px;
-}
-
-.feature-title {
-  font-family: "Montserrat", sans-serif;
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 16px 0;
-  color: white;
-}
-
-.feature-description {
-  font-size: 1rem;
-  line-height: 1.6;
-  color: #b0b0b0;
-  margin: 0;
 }
 
 /* CTA Section */
@@ -362,7 +461,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .hero-container {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 40px;
   }
 

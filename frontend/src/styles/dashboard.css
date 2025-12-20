@@ -2,6 +2,30 @@
    DASHBOARD PAGE - Workflow Management
    ===================================================== */
 
+.back-button {
+  background: transparent;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr;
+  align-items: center;
+  gap: 8px;
+  font-family: "Poppins", sans-serif;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  width: max-content;
+}
+
+.back-button:hover {
+  color: #2563eb;
+  border-color: transparent;
+}
+
 .dashboard-page {
   min-height: 100vh;
   background: #0a0a0a;
@@ -14,11 +38,11 @@
 }
 
 .dashboard-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto;
   align-items: center;
   margin-bottom: 40px;
-  flex-wrap: wrap;
   gap: 20px;
 }
 
@@ -69,18 +93,18 @@
 }
 
 .workflows-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  margin: 0 !important;
+  row-gap: 24px !important;
 }
 
 .workflow-card {
-  background: #1a1a2e;
-  border: 1px solid #2a2a3e;
-  border-radius: 12px;
-  padding: 24px;
   cursor: pointer;
   transition: all 0.3s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  height: 100%;
 }
 
 .workflow-card:hover {
@@ -90,9 +114,10 @@
 }
 
 .workflow-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto;
+  align-items: start;
   margin-bottom: 12px;
 }
 
@@ -120,8 +145,9 @@
 }
 
 .workflow-card-footer {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto;
   align-items: center;
   padding-top: 16px;
   border-top: 1px solid #2a2a3e;
@@ -157,9 +183,10 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  place-items: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
 }

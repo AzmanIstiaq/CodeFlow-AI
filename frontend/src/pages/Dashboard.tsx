@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getWorkflows, createWorkflow, type Workflow } from "../api/api";
+import {
+  getWorkflows,
+  createWorkflow,
+  updateWorkflow,
+  type Workflow,
+} from "../api/api";
+import BackButton from "../components/BackButton";
+import { Container, Row, Col, Card } from "react-bootstrap";
 
 export default function Dashboard() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -8,6 +15,9 @@ export default function Dashboard() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState("");
   const [newWorkflowDescription, setNewWorkflowDescription] = useState("");
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,9 +37,10 @@ export default function Dashboard() {
     try {
       const data = await getWorkflows();
       console.log("Loaded workflows:", data);
-      setWorkflows(data);
-    } catch (error) {
+      setWorkflows(data || []);
+    } catch (error: any) {
       console.error("Failed to load workflows:", error);
+      setWorkflows([]);
     } finally {
       setLoading(false);
     }
@@ -63,9 +74,12 @@ export default function Dashboard() {
         console.error("No workflow ID in response:", response.data);
         alert("Failed to create workflow - no ID returned");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create workflow:", error);
-      alert("Failed to create workflow");
+      // Show more detailed error information
+      const errorMessage =
+        error?.response?.data?.message || error?.message || "Unknown error";
+      alert(`Failed to create workflow: ${errorMessage}`);
     }
   };
 
@@ -84,14 +98,72 @@ export default function Dashboard() {
       await deleteWorkflow(id);
       // Reload workflows after deletion
       await loadWorkflows();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete workflow:", error);
       alert("Failed to delete workflow");
     }
   };
 
+  const handleEditWorkflow = (e: React.MouseEvent, workflow: Workflow) => {
+    e.stopPropagation(); // Prevent opening the workflow
+    setEditingWorkflow(workflow);
+    setEditName(workflow.name);
+    setEditDescription(workflow.description || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWorkflow) return;
+
+    try {
+      await updateWorkflow(editingWorkflow.id, {
+        name: editName,
+        description: editDescription,
+        workflow: editingWorkflow.workflow,
+      });
+      setEditingWorkflow(null);
+      await loadWorkflows();
+    } catch (error: any) {
+      console.error("Failed to update workflow:", error);
+      alert("Failed to update workflow");
+    }
+  };
+
   return (
-    <div className="dashboard-page">
+    <Container fluid className="dashboard-page" style={{ minHeight: "100vh" }}>
+      {editingWorkflow && (
+        <div className="modal-overlay" onClick={() => setEditingWorkflow(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Edit Workflow</h2>
+            <input
+              type="text"
+              placeholder="Enter workflow name..."
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              autoFocus
+              className="workflow-name-input"
+            />
+            <textarea
+              placeholder="Enter workflow description (optional)..."
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              className="workflow-description-input"
+              rows={3}
+            />
+            <div className="modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => setEditingWorkflow(null)}
+              >
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={handleSaveEdit}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCreateDialog && (
         <div
           className="modal-overlay"
@@ -132,6 +204,7 @@ export default function Dashboard() {
       <div className="dashboard-container">
         <header className="dashboard-header">
           <div>
+            <BackButton />
             <h1>My Workflows</h1>
             <p className="dashboard-subtitle">
               Manage your AI workflow projects
@@ -154,42 +227,65 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
-          <div className="workflows-grid">
+          <Row className="workflows-grid">
             {workflows.map((workflow) => (
-              <div
-                key={workflow.id}
-                className="workflow-card"
-                onClick={() => handleOpenWorkflow(workflow.id)}
-              >
-                <div className="workflow-card-header">
-                  <h3>{workflow.name}</h3>
-                  <span className="workflow-badge">
-                    {workflow.workflow
-                      ? JSON.parse(workflow.workflow).nodes?.length || 0
-                      : 0}{" "}
-                    nodes
-                  </span>
-                </div>
-                <p className="workflow-description">
-                  {workflow.description || "No description"}
-                </p>
-                <div className="workflow-card-footer">
-                  <span className="workflow-date">
-                    {new Date(workflow.createdAt).toLocaleDateString()}
-                  </span>
-                  <button
-                    className="btn-delete"
-                    onClick={(e) => handleDeleteWorkflow(e, workflow.id)}
-                    title="Delete workflow"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
+              <Col key={workflow.id} lg={4} md={6} sm={12}>
+                <Card
+                  className="workflow-card"
+                  onClick={() => handleOpenWorkflow(workflow.id)}
+                >
+                  <Card.Body>
+                    <div className="workflow-card-header">
+                      <Card.Title as="h3">{workflow.name}</Card.Title>
+                      <span className="workflow-badge">
+                        {(() => {
+                          try {
+                            return workflow.workflow
+                              ? JSON.parse(workflow.workflow).nodes?.length || 0
+                              : 0;
+                          } catch {
+                            return 0;
+                          }
+                        })()}{" "}
+                        nodes
+                      </span>
+                    </div>
+                    <Card.Text className="workflow-description">
+                      {workflow.description || "No description"}
+                    </Card.Text>
+                    <div className="workflow-card-footer">
+                      <span className="workflow-date">
+                        {new Date(workflow.createdAt).toLocaleDateString()}
+                      </span>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          className="btn-delete"
+                          onClick={(e) => handleEditWorkflow(e, workflow)}
+                          title="Edit workflow"
+                          style={{
+                            background: "transparent",
+                            border: "1px solid #3b82f6",
+                            color: "#3b82f6",
+                          }}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn-delete"
+                          onClick={(e) => handleDeleteWorkflow(e, workflow.id)}
+                          title="Delete workflow"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
             ))}
-          </div>
+          </Row>
         )}
       </div>
-    </div>
+    </Container>
   );
 }

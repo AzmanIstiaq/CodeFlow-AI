@@ -1,3 +1,5 @@
+import { Container, Row, Col, Card } from "react-bootstrap";
+
 export default function Features() {
   const features = [
     {
@@ -19,19 +21,30 @@ export default function Features() {
 
   return (
     <section className="features-section">
-      <div className="features-container">
-        <h2 className="section-title">Why CodeFlow AI</h2>
-
-        <div className="features-grid">
+      <Container className="features-container">
+        <Row>
+          <Col>
+            <h2 className="section-title">Why CodeFlow AI</h2>
+          </Col>
+        </Row>
+        <Row>
           {features.map((feature, index) => (
-            <div key={index} className="feature-card">
-              <div className="feature-icon">{feature.icon}</div>
-              <h3 className="feature-title">{feature.title}</h3>
-              <p className="feature-description">{feature.description}</p>
-            </div>
+            <Col key={index} lg={4} md={6} sm={12}>
+              <Card className="feature-card">
+                <Card.Body>
+                  <div className="feature-icon">{feature.icon}</div>
+                  <Card.Title as="h3" className="feature-title">
+                    {feature.title}
+                  </Card.Title>
+                  <Card.Text className="feature-description">
+                    {feature.description}
+                  </Card.Text>
+                </Card.Body>
+              </Card>
+            </Col>
           ))}
-        </div>
-      </div>
+        </Row>
+      </Container>
     </section>
   );
 }

@@ -91,9 +91,10 @@ namespace CodeFlowBackend.Routes
 
                 var updateCommand = connection.CreateCommand();
                 updateCommand.CommandText =
-                    @"UPDATE Workflows SET name = $name, workflow = $workflow WHERE id = $id;";
+                    @"UPDATE Workflows SET name = $name, workflow = $workflow, description = $description WHERE id = $id;";
                 updateCommand.Parameters.AddWithValue("$name", workflowRequest!.Name);
                 updateCommand.Parameters.AddWithValue("$workflow", workflowRequest!.Workflow);
+                updateCommand.Parameters.AddWithValue("$description", workflowRequest.Description ?? (object)DBNull.Value);
                 updateCommand.Parameters.AddWithValue("$id", id);
 
                 var rowsAffected = updateCommand.ExecuteNonQuery();

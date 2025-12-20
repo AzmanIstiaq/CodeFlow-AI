@@ -1,0 +1,105 @@
+/* =====================================================
+   BOOTSTRAP OVERRIDES - Maintain CodeFlow Dark Theme
+   ===================================================== */
+
+/* Override Bootstrap's default light theme */
+body {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+/* Container adjustments */
+.hero-section .container-fluid {
+  max-width: 1200px;
+  height: 100%;
+}
+
+.features-container.container {
+  max-width: 1200px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.features-section .row {
+  row-gap: 32px;
+}
+
+.preview-container.container,
+.cta-container.container {
+  max-width: 1200px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.hero-container {
+  --bs-gutter-x: 60px;
+  width: 100%;
+  align-items: center;
+  height: 100%;
+}
+
+/* Bootstrap Card dark theme for dashboard */
+.workflow-card.card {
+  background: #1a1a2e !important;
+  border: 1px solid #2a2a3e !important;
+  border-radius: 12px !important;
+}
+
+.workflow-card .card-body {
+  padding: 24px !important;
+}
+
+.workflow-card .card-title {
+  font-family: "Montserrat", sans-serif !important;
+  font-size: 1.25rem !important;
+  margin: 0 !important;
+  color: white !important;
+}
+
+.workflow-card .card-text {
+  font-size: 0.875rem !important;
+  color: #888 !important;
+  margin: 0 0 16px 0 !important;
+  line-height: 1.5 !important;
+}
+
+/* Features Card styling */
+.feature-card.card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 16px;
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+.feature-card .card-body {
+  padding: 40px;
+}
+
+.feature-card .card-title {
+  font-family: "Montserrat", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: white;
+}
+
+.feature-card .card-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #b0b0b0;
+  margin: 0;
+}
+.btn-secondary,
+.btn-large {
+  border: none;
+  font-family: "Poppins", sans-serif;
+}
+
+/* Responsive - Maintain original behavior */
+@media (max-width: 991px) {
+  .hero-container {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+}

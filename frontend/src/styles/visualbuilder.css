@@ -6,7 +6,9 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
   overflow: hidden;
   z-index: 0;
 }
@@ -20,8 +22,9 @@
 
 /* Toolbar container placed on top-left of the canvas */
 .node-toolbar-container {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(auto-fit, auto);
   gap: 8px;
 }
 
@@ -36,8 +39,9 @@
   top: 10px;
   left: 10px;
   z-index: 1001;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(auto-fit, auto);
   gap: 8px;
 }
 .node-toolbar .toolbar-button {
