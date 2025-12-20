@@ -1,0 +1,5 @@
+{
+  "Ollama": {
+    "BaseUrl": "YOUR_URL"
+  }
+}
