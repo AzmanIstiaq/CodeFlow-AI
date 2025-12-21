@@ -4,7 +4,7 @@ import type { TreeNode } from "./buildTree";
  * Check if a node type should be included in HTML export (builder mode)
  */
 function isBuilderNode(type: string): boolean {
-  return type === "text"; // Add more builder node types here (button, image, section, etc.)
+  return type === "text" || type === "section"; // Add more builder node types here (button, image, etc.)
 }
 
 /**
@@ -30,6 +30,11 @@ function renderNode(node: TreeNode): string {
       const color = node.data.color || "#000000";
       return `<div style="font-size:${fontSize}px;color:${color};">${text}</div>`;
 
+    case "section":
+      const padding = node.data.padding || 40;
+      const bgColor = node.data.backgroundColor || "#111111";
+      return `<section style="padding:${padding}px;background:${bgColor};">`;
+
     default:
       return "";
   }
@@ -43,6 +48,13 @@ function renderTree(nodes: TreeNode[]): string {
     .map((n) => {
       const nodeContent = renderNode(n);
       const children = n.children?.length ? renderTree(n.children) : "";
+
+      // Section wraps its children inside
+      if (n.type === "section") {
+        return `${nodeContent}
+  ${children}
+</section>`;
+      }
 
       // If node has children, wrap in a container div
       if (children) {

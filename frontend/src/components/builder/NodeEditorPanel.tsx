@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
-import type { Node } from "reactflow";
+import type { Node, Edge } from "reactflow";
 
 interface NodeSettingsPanelProps {
   node: Node<any> | null;
   updateNodeData: (id: string, data: any) => void;
   closePanel: () => void;
+  edges?: Edge[];
+  nodes?: Node[];
 }
 
 export default function NodeSettingsPanel({
   node,
   updateNodeData,
   closePanel,
+  edges = [],
+  nodes = [],
 }: NodeSettingsPanelProps) {
   const [localData, setLocalData] = useState<any>({});
 
@@ -22,6 +26,12 @@ export default function NodeSettingsPanel({
   }, [node]);
 
   if (!node) return null;
+
+  // Find parent section for text nodes
+  const parentEdge = edges.find((e) => e.target === node.id);
+  const parentSection = parentEdge
+    ? nodes.find((n) => n.id === parentEdge.source)
+    : null;
 
   const handleSave = () => {
     updateNodeData(node.id, localData);
@@ -42,6 +52,13 @@ export default function NodeSettingsPanel({
           ×
         </button>
       </div>
+
+      {/* Breadcrumb for containment */}
+      {parentSection && (
+        <div className="panel-breadcrumb">
+          📍 Inside: <strong>{parentSection.data?.label || "Section"}</strong>
+        </div>
+      )}
 
       <div className="panel-section">
         <label>Label</label>
@@ -151,6 +168,35 @@ export default function NodeSettingsPanel({
               type="color"
               value={localData.color || "#000000"}
               onChange={(e) => handleChange("color", e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      {node.type === "section" && (
+        <>
+          <div className="panel-section">
+            <label>Padding</label>
+            <input
+              className="number-field"
+              type="number"
+              min="0"
+              max="100"
+              value={localData.padding || 40}
+              onChange={(e) =>
+                handleChange("padding", parseInt(e.target.value))
+              }
+            />
+            <small>Range: 0px to 100px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Background Color</label>
+            <input
+              className="input-field"
+              type="color"
+              value={localData.backgroundColor || "#111111"}
+              onChange={(e) => handleChange("backgroundColor", e.target.value)}
             />
           </div>
         </>

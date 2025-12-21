@@ -1,37 +1,35 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import ReactFlow, {
-  Background,
-  Controls,
-  addEdge,
-  useEdgesState,
-  useNodesState,
-} from "reactflow";
+import ReactFlow, { Background, Controls, addEdge } from "reactflow";
 import type { Connection, Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
 import NodeToolbar from "../components/builder/NodeToolbar";
+import PageTabs from "../components/builder/PageTabs";
 import StartNode from "../components/builder/Nodes/StartNode";
 import AINode from "../components/builder/Nodes/AINode";
 import OutputNode from "../components/builder/Nodes/OutputNode";
 import TextNode from "../components/builder/Nodes/TextNode";
+import SectionNode from "../components/builder/Nodes/SectionNode";
 import NodeEditorPanel from "../components/builder/NodeEditorPanel";
 import { saveDiagram, getDiagram, executeWorkflow } from "../api/api";
 import { buildTree } from "../utils/buildTree";
 import { exportHTML } from "../utils/exportHtml";
+import type { SiteSchema, PageSchema } from "../types/siteSchema";
+import { createDefaultSite, createEmptyPage } from "../types/siteSchema";
 
 const nodeTypes = {
   start: StartNode,
   ai: AINode,
   output: OutputNode,
   text: TextNode,
+  section: SectionNode,
 };
 
 // Mode: "workflow" for AI execution, "builder" for page building
 const MODE: "workflow" | "builder" = "builder";
 
 export default function PageBuilder() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [site, setSite] = useState<SiteSchema>(createDefaultSite());
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const id = searchParams.get("id");
@@ -42,18 +40,144 @@ export default function PageBuilder() {
   const [workflowName, setWorkflowName] = useState("");
   const [workflowDescription, setWorkflowDescription] = useState("");
 
+  // Get active page
+  const activePage = site.pages.find((p) => p.id === site.activePageId)!;
+  const nodes = activePage.nodes;
+  const edges = activePage.edges;
+
+  // Update active page
+  const updateActivePage = (updates: Partial<PageSchema>) => {
+    setSite((prev) => ({
+      ...prev,
+      pages: prev.pages.map((p) =>
+        p.id === prev.activePageId ? { ...p, ...updates } : p
+      ),
+    }));
+  };
+
+  // Node/Edge change handlers
+  const onNodesChange = (changes: any) => {
+    import("reactflow").then(({ applyNodeChanges }) => {
+      let newNodes = applyNodeChanges(changes, nodes);
+
+      // Check if any nodes were deleted
+      const hasDeletes = changes.some((c: any) => c.type === "remove");
+      if (hasDeletes) {
+        // Normalize order for all sections
+        newNodes = normalizeOrder(newNodes, edges);
+        // Normalize order for children of each section
+        newNodes
+          .filter((n: any) => n.type === "section")
+          .forEach((section: any) => {
+            normalizeOrder(newNodes, edges, section.id);
+          });
+      }
+
+      // Highlight parent sections when child is selected
+      const updatedNodes = newNodes.map((n: any) => {
+        if (n.type === "section") {
+          const hasSelectedChild = edges.some(
+            (e) =>
+              e.source === n.id &&
+              newNodes.find(
+                (child: any) => child.id === e.target && child.selected
+              )
+          );
+          return {
+            ...n,
+            data: { ...n.data, isParentOfSelected: hasSelectedChild },
+          };
+        }
+        return n;
+      });
+
+      updateActivePage({ nodes: updatedNodes });
+    });
+  };
+
+  const onEdgesChange = (changes: any) => {
+    import("reactflow").then(({ applyEdgeChanges }) => {
+      updateActivePage({ edges: applyEdgeChanges(changes, edges) });
+    });
+  };
+
+  const setNodes = (nodesOrUpdater: any) => {
+    const newNodes =
+      typeof nodesOrUpdater === "function"
+        ? nodesOrUpdater(nodes)
+        : nodesOrUpdater;
+    updateActivePage({ nodes: newNodes });
+  };
+
+  const setEdges = (edgesOrUpdater: any) => {
+    const newEdges =
+      typeof edgesOrUpdater === "function"
+        ? edgesOrUpdater(edges)
+        : edgesOrUpdater;
+    updateActivePage({ edges: newEdges });
+  };
+
+  // Page management
+  const handlePageSelect = (pageId: string) => {
+    setSite((prev) => ({ ...prev, activePageId: pageId }));
+    setSelectedNode(null);
+  };
+
+  const handlePageAdd = () => {
+    const newPageId = `page_${Date.now()}`;
+    const pageName =
+      prompt("Enter page name:") || `Page ${site.pages.length + 1}`;
+    setSite((prev) => ({
+      ...prev,
+      pages: [...prev.pages, createEmptyPage(newPageId, pageName)],
+      activePageId: newPageId,
+    }));
+  };
+
+  const handlePageDelete = (pageId: string) => {
+    setSite((prev) => {
+      const newPages = prev.pages.filter((p) => p.id !== pageId);
+      const newActiveId =
+        prev.activePageId === pageId ? newPages[0].id : prev.activePageId;
+      return { pages: newPages, activePageId: newActiveId };
+    });
+  };
+
+  const handlePageRename = (pageId: string, newName: string) => {
+    setSite((prev) => ({
+      ...prev,
+      pages: prev.pages.map((p) =>
+        p.id === pageId ? { ...p, name: newName } : p
+      ),
+    }));
+  };
+
   useEffect(() => {
     if (id) {
       getDiagram(Number(id))
         .then((res) => {
-          // Server returns { diagram: "<json string>" }
-          // axios already parses JSON, so res.data is an object. Handle both shapes.
           const raw = res.data && (res.data.diagram ?? res.data);
           if (raw) {
             const str = typeof raw === "string" ? raw : JSON.stringify(raw);
             const parsed = JSON.parse(str);
-            setNodes(parsed.nodes || []);
-            setEdges(parsed.edges || []);
+
+            // Check if it's multi-page format
+            if (parsed.pages) {
+              setSite(parsed);
+            } else {
+              // Legacy format: single page
+              setSite({
+                pages: [
+                  {
+                    id: "home",
+                    name: "Home",
+                    nodes: parsed.nodes || [],
+                    edges: parsed.edges || [],
+                  },
+                ],
+                activePageId: "home",
+              });
+            }
           }
         })
         .catch(() => console.log("No saved diagram yet."));
@@ -62,14 +186,13 @@ export default function PageBuilder() {
 
   const save = async () => {
     if (!id) {
-      // Show dialog to create workflow
       setWorkflowName("");
       setWorkflowDescription("");
       setShowSaveDialog(true);
       return;
     }
-    await saveDiagram(Number(id), { nodes, edges });
-    alert("Diagram saved successfully!");
+    await saveDiagram(Number(id), site as any);
+    alert("Site saved successfully!");
   };
 
   const handleSaveConfirm = async () => {
@@ -82,24 +205,22 @@ export default function PageBuilder() {
       const response = await createWorkflow({
         name: name,
         description: description,
-        workflow: JSON.stringify({ nodes, edges }),
+        workflow: JSON.stringify(site),
       });
 
       const workflowId = response.data.id;
       if (workflowId) {
-        // Save the diagram to the new workflow
-        await saveDiagram(workflowId, { nodes, edges });
+        await saveDiagram(workflowId, site as any);
 
         setShowSaveDialog(false);
-        // Update URL with new workflow ID
         navigate(`/pageBuilder?id=${workflowId}`, { replace: true });
-        alert("Workflow created and saved successfully!");
+        alert("Site created and saved successfully!");
       } else {
-        alert("Failed to create workflow - no ID returned");
+        alert("Failed to create site - no ID returned");
       }
     } catch (error) {
-      console.error("Failed to create workflow:", error);
-      alert("Failed to create workflow");
+      console.error("Failed to create site:", error);
+      alert("Failed to create site");
     }
   };
 
@@ -150,8 +271,8 @@ export default function PageBuilder() {
       }
 
       // Mark AI node as executing
-      setNodes((nds) =>
-        nds.map((n) =>
+      setNodes((nds: any) =>
+        nds.map((n: any) =>
           n.id === aiNode.id
             ? { ...n, data: { ...n.data, status: "executing", output: null } }
             : n
@@ -166,8 +287,8 @@ export default function PageBuilder() {
       });
 
       // Update AI node with output and mark as completed
-      setNodes((nds) =>
-        nds.map((n) =>
+      setNodes((nds: any) =>
+        nds.map((n: any) =>
           n.id === aiNode.id
             ? {
                 ...n,
@@ -188,8 +309,8 @@ export default function PageBuilder() {
           (n) => n.id === outputEdge.target && n.type === "output"
         );
         if (outputNode) {
-          setNodes((nds) =>
-            nds.map((n) =>
+          setNodes((nds: any) =>
+            nds.map((n: any) =>
               n.id === outputNode.id
                 ? { ...n, data: { ...n.data, result: response.data.output } }
                 : n
@@ -203,8 +324,8 @@ export default function PageBuilder() {
       // Mark AI node as failed
       const aiNode = nodes.find((n) => n.type === "ai");
       if (aiNode) {
-        setNodes((nds) =>
-          nds.map((n) =>
+        setNodes((nds: any) =>
+          nds.map((n: any) =>
             n.id === aiNode.id
               ? { ...n, data: { ...n.data, status: "failed" } }
               : n
@@ -223,56 +344,140 @@ export default function PageBuilder() {
     }
   };
 
-  const onConnect = (connection: Connection) =>
-    setEdges((eds) => addEdge(connection, eds));
+  const onConnect = (connection: Connection) => {
+    const source = nodes.find((n) => n.id === connection.source);
+    const target = nodes.find((n) => n.id === connection.target);
 
-  const handleExportHTML = () => {
-    const tree = buildTree(nodes, edges);
-    const html = exportHTML(tree);
+    if (!source || !target) return;
 
-    // Download as HTML file
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `page-${id || "new"}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Rule: Only Sections can contain elements
+    if (source.type !== "section") {
+      alert("Only Sections can contain elements.");
+      return;
+    }
+
+    // Rule: Each element can only belong to one Section
+    const hasParent = edges.some((e) => e.target === target.id);
+    if (hasParent) {
+      alert("This element already belongs to a Section.");
+      return;
+    }
+
+    setEdges((eds: any) => addEdge(connection, eds));
   };
 
-  const generateId = (prefix: string) => {
+  const handleExportHTML = () => {
+    // Export all pages
+    site.pages.forEach((page) => {
+      const tree = buildTree(page.nodes, page.edges);
+      const html = exportHTML(tree);
+
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${page.name.toLowerCase().replace(/\s+/g, "-")}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    alert(`Exported ${site.pages.length} page(s)!`);
+  };
+
+  const generateId = (prefix: string): string => {
     return prefix + "_" + Math.random().toString(36).substring(2, 9);
   };
 
-  const addNode = (type: string, label: string) => {
+  // Normalize order after deletions to prevent gaps
+  const normalizeOrder = (
+    nodeList: any[],
+    edgeList: any[],
+    parentId?: string
+  ) => {
+    const scoped = parentId
+      ? nodeList.filter((n) =>
+          edgeList.some((e) => e.source === parentId && e.target === n.id)
+        )
+      : nodeList.filter((n) => n.type === "section");
+
+    scoped
+      .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0))
+      .forEach((n, index) => {
+        n.data.order = index;
+      });
+
+    return nodeList;
+  };
+
+  const addNode = (type: string, label: string): void => {
     const id = generateId(type);
 
     let data: any = {};
+    let position = {
+      x: Math.random() * 400 + 200,
+      y: Math.random() * 200 + 200,
+    };
 
     if (type === "text") {
+      // Auto-attach to nearest Section
+      const section = nodes.find((n) => n.type === "section");
+
+      // Count siblings to determine order
+      const siblings = section
+        ? nodes.filter((n) =>
+            edges.some((e) => e.source === section.id && e.target === n.id)
+          )
+        : [];
+
       data = {
         text: "Sample Text",
         fontSize: 14,
         color: "#ffffff",
+        order: siblings.length, // 👈 child order inside section
+      };
+
+      if (section) {
+        // Position text inside section
+        position = {
+          x: section.position.x + 40,
+          y: section.position.y + 40,
+        };
+      }
+    } else if (type === "section") {
+      // Count existing sections to determine order
+      const sectionCount = nodes.filter((n) => n.type === "section").length;
+
+      data = {
+        label: label,
+        padding: 40,
+        backgroundColor: "#111111",
+        order: sectionCount, // 👈 section stack order
       };
     } else {
-      data = { label: type.toUpperCase() };
+      data = { label: type.toUpperCase(), order: 0 };
     }
 
-    setNodes((nds) => [
-      ...nds,
-      {
-        id,
-        type,
-        position: {
-          x: Math.random() * 400 + 200,
-          y: Math.random() * 200 + 200,
-        },
-        data,
-      },
-    ]);
+    const newNode = {
+      id,
+      type,
+      position,
+      data,
+    };
+
+    setNodes((nds: any) => [...nds, newNode]);
+
+    // Auto-create edge from Section to Text
+    if (type === "text") {
+      const section = nodes.find((n) => n.type === "section");
+      if (section) {
+        setEdges((eds: any) => [
+          ...eds,
+          { id: `${section.id}-${id}`, source: section.id, target: id },
+        ]);
+      }
+    }
   };
 
   return (
@@ -345,6 +550,17 @@ export default function PageBuilder() {
           </div>
         </div>
       </nav>
+
+      {/* Page Tabs */}
+      <PageTabs
+        pages={site.pages}
+        activePageId={site.activePageId}
+        onPageSelect={handlePageSelect}
+        onPageAdd={handlePageAdd}
+        onPageRename={handlePageRename}
+        onPageDelete={handlePageDelete}
+      />
+
       <div className={`visualbuilder-root ${selectedNode ? "panel-open" : ""}`}>
         {/* LEFT — ReactFlow (always full-size) */}
         <div className="visualbuilder-canvas">
@@ -359,6 +575,10 @@ export default function PageBuilder() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={(_, node) => setSelectedNode(node)}
+            defaultEdgeOptions={{
+              style: { stroke: "transparent" },
+              animated: false,
+            }}
             fitView
             style={{ width: "100%", height: "100%" }}
           >
@@ -373,11 +593,15 @@ export default function PageBuilder() {
             <NodeEditorPanel
               node={selectedNode}
               closePanel={() => setSelectedNode(null)}
-              updateNodeData={(id, newData) =>
-                setNodes((nds) =>
-                  nds.map((n) => (n.id === id ? { ...n, data: newData } : n))
+              updateNodeData={(id: string, newData: any) =>
+                setNodes((nds: any) =>
+                  nds.map((n: any) =>
+                    n.id === id ? { ...n, data: newData } : n
+                  )
                 )
               }
+              edges={edges}
+              nodes={nodes}
             />
           </div>
         )}

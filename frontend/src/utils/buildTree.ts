@@ -29,8 +29,18 @@ export function buildTree(nodes: Node[], edges: Edge[]): TreeNode[] {
     }
   });
 
+  // Sort children by order
+  map.forEach((node) => {
+    node.children.sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+  });
+
   // Return only root nodes (nodes that are not children of any other node)
-  return Array.from(map.values()).filter(
+  const roots = Array.from(map.values()).filter(
     (n) => !edges.some((e) => e.target === n.id)
   );
+
+  // Sort root sections by order
+  roots.sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+
+  return roots;
 }
