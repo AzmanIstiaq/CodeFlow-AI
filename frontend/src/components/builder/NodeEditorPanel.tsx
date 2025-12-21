@@ -116,6 +116,46 @@ export default function NodeSettingsPanel({
         </div>
       )}
 
+      {node.type === "text" && (
+        <>
+          <div className="panel-section">
+            <label>Text Content</label>
+            <textarea
+              className="textarea-field"
+              value={localData.text || ""}
+              onChange={(e) => handleChange("text", e.target.value)}
+              placeholder="Enter text content"
+              rows={6}
+            />
+          </div>
+
+          <div className="panel-section">
+            <label>Font Size</label>
+            <input
+              className="number-field"
+              type="number"
+              min="8"
+              max="48"
+              value={localData.fontSize || 14}
+              onChange={(e) =>
+                handleChange("fontSize", parseInt(e.target.value))
+              }
+            />
+            <small>Range: 8px to 48px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Text Color</label>
+            <input
+              className="input-field"
+              type="color"
+              value={localData.color || "#000000"}
+              onChange={(e) => handleChange("color", e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
       <div className="panel-section panel-section-footer">
         <button className="panel-save-button" onClick={handleSave}>
           ✓ Save Changes

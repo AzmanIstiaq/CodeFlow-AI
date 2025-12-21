@@ -18,7 +18,9 @@ function Home() {
     <div>
       <WorkflowForm setWorkflows={setWorkflows} />
       <WorkflowList workflows={workflows} setWorkflows={setWorkflows} />
-      <button onClick={() => navigate("/builder")}>Go to Visual Builder</button>
+      <button onClick={() => navigate("/pageBuilder")}>
+        Go to Visual Builder
+      </button>
     </div>
   );
 }

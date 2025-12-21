@@ -10,19 +10,26 @@ import ReactFlow, {
 import type { Connection, Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
 import NodeToolbar from "../components/builder/NodeToolbar";
-import StartNode from "../components/builder/CustomNodes/StartNode";
-import AINode from "../components/builder/CustomNodes/AINode";
-import OutputNode from "../components/builder/CustomNodes/OutputNode";
+import StartNode from "../components/builder/Nodes/StartNode";
+import AINode from "../components/builder/Nodes/AINode";
+import OutputNode from "../components/builder/Nodes/OutputNode";
+import TextNode from "../components/builder/Nodes/TextNode";
 import NodeEditorPanel from "../components/builder/NodeEditorPanel";
 import { saveDiagram, getDiagram, executeWorkflow } from "../api/api";
+import { buildTree } from "../utils/buildTree";
+import { exportHTML } from "../utils/exportHtml";
 
 const nodeTypes = {
   start: StartNode,
   ai: AINode,
   output: OutputNode,
+  text: TextNode,
 };
 
-export default function VisualBuilder() {
+// Mode: "workflow" for AI execution, "builder" for page building
+const MODE: "workflow" | "builder" = "builder";
+
+export default function PageBuilder() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [searchParams] = useSearchParams();
@@ -85,7 +92,7 @@ export default function VisualBuilder() {
 
         setShowSaveDialog(false);
         // Update URL with new workflow ID
-        navigate(`/builder?id=${workflowId}`, { replace: true });
+        navigate(`/pageBuilder?id=${workflowId}`, { replace: true });
         alert("Workflow created and saved successfully!");
       } else {
         alert("Failed to create workflow - no ID returned");
@@ -97,6 +104,13 @@ export default function VisualBuilder() {
   };
 
   const runWorkflow = async () => {
+    if (MODE === "builder") {
+      alert(
+        "Execution is disabled in Builder mode. Switch to Workflow mode to run AI workflows."
+      );
+      return;
+    }
+
     if (isExecuting) return;
 
     try {
@@ -212,12 +226,40 @@ export default function VisualBuilder() {
   const onConnect = (connection: Connection) =>
     setEdges((eds) => addEdge(connection, eds));
 
+  const handleExportHTML = () => {
+    const tree = buildTree(nodes, edges);
+    const html = exportHTML(tree);
+
+    // Download as HTML file
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `page-${id || "new"}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const generateId = (prefix: string) => {
     return prefix + "_" + Math.random().toString(36).substring(2, 9);
   };
 
   const addNode = (type: string, label: string) => {
     const id = generateId(type);
+
+    let data: any = {};
+
+    if (type === "text") {
+      data = {
+        text: "Sample Text",
+        fontSize: 14,
+        color: "#ffffff",
+      };
+    } else {
+      data = { label: type.toUpperCase() };
+    }
 
     setNodes((nds) => [
       ...nds,
@@ -228,7 +270,7 @@ export default function VisualBuilder() {
           x: Math.random() * 400 + 200,
           y: Math.random() * 200 + 200,
         },
-        data: { label },
+        data,
       },
     ]);
   };
@@ -283,13 +325,23 @@ export default function VisualBuilder() {
             <button onClick={save} className="btn-secondary btn-sm">
               💾 Save
             </button>
-            <button
-              onClick={runWorkflow}
-              disabled={isExecuting}
-              className="btn-primary btn-sm"
-            >
-              {isExecuting ? "⏳ Running..." : "▶️ Run Workflow"}
-            </button>
+            {MODE === "builder" && (
+              <button
+                onClick={handleExportHTML}
+                className="btn-secondary btn-sm"
+              >
+                📄 Export HTML
+              </button>
+            )}
+            {MODE === "workflow" && (
+              <button
+                onClick={runWorkflow}
+                disabled={isExecuting}
+                className="btn-primary btn-sm"
+              >
+                {isExecuting ? "⏳ Running..." : "▶️ Run Workflow"}
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -297,7 +349,7 @@ export default function VisualBuilder() {
         {/* LEFT — ReactFlow (always full-size) */}
         <div className="visualbuilder-canvas">
           {/* Toolbar */}
-          <NodeToolbar addNode={addNode} />
+          <NodeToolbar addNode={addNode} mode={MODE} />
 
           <ReactFlow
             nodes={nodes}

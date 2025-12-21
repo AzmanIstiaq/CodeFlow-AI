@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import Dashboard from "./pages/Dashboard";
-import VisualBuilder from "./pages/visualbuilder";
+import PageBuilder from "./pages/PageBuilder";
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/builder" element={<VisualBuilder />} />
+        <Route path="/pageBuilder" element={<PageBuilder />} />
       </Routes>
     </Router>
   );

@@ -98,7 +98,7 @@ function WorkflowList({ workflows, setWorkflows }: WorkflowListProps) {
               </div>
               <div className="workflow-actions">
                 <button onClick={() => startEditing(w)}>Edit</button>
-                <button onClick={() => navigate(`/builder?id=${w.id}`)}>
+                <button onClick={() => navigate(`/pageBuilder?id=${w.id}`)}>
                   Open
                 </button>
                 <button onClick={() => handleDelete(w.id)} className="delete">

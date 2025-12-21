@@ -28,7 +28,7 @@ export default function Hero() {
                   My Workflows
                 </button>
                 <button
-                  onClick={() => navigate("/builder")}
+                  onClick={() => navigate("/pageBuilder")}
                   className="btn-secondary"
                 >
                   Open Visual Builder

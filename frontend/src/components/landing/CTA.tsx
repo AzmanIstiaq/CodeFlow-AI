@@ -13,7 +13,7 @@ export default function CTA() {
               Ready to Build Your First Workflow?
             </h2>
             <button
-              onClick={() => navigate("/builder")}
+              onClick={() => navigate("/pageBuilder")}
               className="btn-primary btn-large"
             >
               Launch Visual Builder

@@ -69,7 +69,7 @@ export default function Dashboard() {
 
       if (workflowId) {
         setShowCreateDialog(false);
-        navigate(`/builder?id=${workflowId}`);
+        navigate(`/pageBuilder?id=${workflowId}`);
       } else {
         console.error("No workflow ID in response:", response.data);
         alert("Failed to create workflow - no ID returned");
@@ -84,7 +84,7 @@ export default function Dashboard() {
   };
 
   const handleOpenWorkflow = (id: number) => {
-    navigate(`/builder?id=${id}`);
+    navigate(`/pageBuilder?id=${id}`);
   };
 
   const handleDeleteWorkflow = async (e: React.MouseEvent, id: number) => {
