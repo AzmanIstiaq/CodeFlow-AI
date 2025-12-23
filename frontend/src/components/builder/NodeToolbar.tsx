@@ -38,10 +38,22 @@ export default function NodeToolbar({ addNode, mode }: ToolbarProps) {
             📦 Add Section
           </button>
           <button
+            className="toolbar-button toolbar-btn-columns"
+            onClick={() => addNode("columnsSection", "Columns Section")}
+          >
+            ⬜ Add Columns
+          </button>
+          <button
             className="toolbar-button toolbar-btn-text"
             onClick={() => addNode("text", "Text Node")}
           >
             📝 Add Text Node
+          </button>
+          <button
+            className="toolbar-button toolbar-btn-button"
+            onClick={() => addNode("button", "Button")}
+          >
+            🔘 Add Button
           </button>
         </>
       )}

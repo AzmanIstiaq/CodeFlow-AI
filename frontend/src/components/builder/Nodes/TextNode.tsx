@@ -17,7 +17,7 @@ export default function TextNode({ data }: Props) {
         fontSize: data.fontSize,
         color: data.color,
         padding: "8px 12px",
-        cursor: "text",
+        cursor: "grab",
       }}
     >
       {data.text}

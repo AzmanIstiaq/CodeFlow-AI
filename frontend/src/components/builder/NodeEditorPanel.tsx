@@ -60,16 +60,19 @@ export default function NodeSettingsPanel({
         </div>
       )}
 
-      <div className="panel-section">
-        <label>Label</label>
-        <input
-          className="input-field"
-          type="text"
-          value={localData.label || ""}
-          onChange={(e) => handleChange("label", e.target.value)}
-          placeholder="Enter node label"
-        />
-      </div>
+      {/* Generic label field - skip for nodes that have their own specific label field */}
+      {node.type !== "button" && node.type !== "text" && (
+        <div className="panel-section">
+          <label>Label</label>
+          <input
+            className="input-field"
+            type="text"
+            value={localData.label || ""}
+            onChange={(e) => handleChange("label", e.target.value)}
+            placeholder="Enter node label"
+          />
+        </div>
+      )}
 
       {node.type === "ai" && (
         <>
@@ -176,6 +179,47 @@ export default function NodeSettingsPanel({
       {node.type === "section" && (
         <>
           <div className="panel-section">
+            <label>Alignment</label>
+            <select
+              className="input-field"
+              value={localData.align || "start"}
+              onChange={(e) => handleChange("align", e.target.value)}
+            >
+              <option value="start">Left</option>
+              <option value="center">Center</option>
+            </select>
+          </div>
+
+          <div className="panel-section">
+            <label>Gap (spacing between children)</label>
+            <input
+              className="number-field"
+              type="range"
+              min="0"
+              max="40"
+              value={localData.gap || 16}
+              onChange={(e) => handleChange("gap", parseInt(e.target.value))}
+            />
+            <small>{localData.gap || 16}px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Max Width (content width)</label>
+            <input
+              className="number-field"
+              type="range"
+              min="600"
+              max="1200"
+              step="40"
+              value={localData.maxWidth || 960}
+              onChange={(e) =>
+                handleChange("maxWidth", parseInt(e.target.value))
+              }
+            />
+            <small>{localData.maxWidth || 960}px</small>
+          </div>
+
+          <div className="panel-section">
             <label>Padding</label>
             <input
               className="number-field"
@@ -195,9 +239,132 @@ export default function NodeSettingsPanel({
             <input
               className="input-field"
               type="color"
-              value={localData.backgroundColor || "#111111"}
+              value={localData.backgroundColor || "#000000"}
               onChange={(e) => handleChange("backgroundColor", e.target.value)}
             />
+          </div>
+        </>
+      )}
+
+      {node.type === "columnsSection" && (
+        <>
+          <div className="panel-section">
+            <label>Number of Columns</label>
+            <input
+              className="number-field"
+              type="range"
+              min="1"
+              max="6"
+              value={localData.columns || 2}
+              onChange={(e) =>
+                handleChange("columns", parseInt(e.target.value))
+              }
+            />
+            <small>{localData.columns || 2} columns</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Gap (spacing between columns)</label>
+            <input
+              className="number-field"
+              type="range"
+              min="0"
+              max="48"
+              value={localData.gap || 24}
+              onChange={(e) => handleChange("gap", parseInt(e.target.value))}
+            />
+            <small>{localData.gap || 24}px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Alignment</label>
+            <select
+              className="input-field"
+              value={localData.align || "start"}
+              onChange={(e) => handleChange("align", e.target.value)}
+            >
+              <option value="start">Left</option>
+              <option value="center">Center</option>
+            </select>
+          </div>
+
+          <div className="panel-section">
+            <label>Max Width (content width)</label>
+            <input
+              className="number-field"
+              type="range"
+              min="600"
+              max="1200"
+              step="40"
+              value={localData.maxWidth || 960}
+              onChange={(e) =>
+                handleChange("maxWidth", parseInt(e.target.value))
+              }
+            />
+            <small>{localData.maxWidth || 960}px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Padding</label>
+            <input
+              className="number-field"
+              type="number"
+              min="0"
+              max="100"
+              value={localData.padding || 32}
+              onChange={(e) =>
+                handleChange("padding", parseInt(e.target.value))
+              }
+            />
+            <small>Range: 0px to 100px</small>
+          </div>
+
+          <div className="panel-section">
+            <label>Background Color</label>
+            <input
+              className="input-field"
+              type="color"
+              value={localData.backgroundColor || "#000000"}
+              onChange={(e) => handleChange("backgroundColor", e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      {node.type === "button" && (
+        <>
+          <div className="panel-section">
+            <label>Label</label>
+            <input
+              className="input-field"
+              type="text"
+              value={localData.label || ""}
+              onChange={(e) => handleChange("label", e.target.value)}
+              placeholder="Button text"
+            />
+          </div>
+
+          <div className="panel-section">
+            <label>Link (href)</label>
+            <input
+              className="input-field"
+              type="text"
+              value={localData.href || ""}
+              onChange={(e) => handleChange("href", e.target.value)}
+              placeholder="e.g., #, /page, https://..."
+            />
+          </div>
+
+          <div className="panel-section">
+            <label>Variant</label>
+            <select
+              className="input-field"
+              value={localData.variant || "primary"}
+              onChange={(e) => handleChange("variant", e.target.value)}
+            >
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+            </select>
           </div>
         </>
       )}
