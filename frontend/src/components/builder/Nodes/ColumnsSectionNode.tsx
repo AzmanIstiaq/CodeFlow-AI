@@ -3,30 +3,49 @@ import { Handle, Position } from "reactflow";
 
 export default function ColumnsSectionNode({ id, data }: any) {
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const allNodes = data._allNodes ?? [];
 
   // 🔑 Register column DOM rects for drop detection
+  // This effect runs whenever the node moves OR viewport changes
   useLayoutEffect(() => {
     if (!data._registerColumnRect) return;
 
-    requestAnimationFrame(() => {
+    const registerRects = () => {
       Object.entries(columnRefs.current).forEach(([colIndex, el]) => {
         if (!el) return;
         data._registerColumnRect(Number(colIndex), el.getBoundingClientRect());
       });
-    });
+    };
+
+    // Register immediately
+    requestAnimationFrame(registerRects);
+
+    // Also set up a MutationObserver to catch position changes
+    if (containerRef.current) {
+      const observer = new MutationObserver(() => {
+        requestAnimationFrame(registerRects);
+      });
+
+      observer.observe(containerRef.current, {
+        attributes: true,
+        attributeFilter: ["style"],
+      });
+
+      return () => observer.disconnect();
+    }
   }, [
     data.columns,
     data.gap,
     data.padding,
     data._viewportVersion,
-    data._nodePosition,
-    data._registerColumnRect,
+    data._nodePosition, // 🔑 Re-register when position changes
   ]);
 
   return (
     <div
+      ref={containerRef}
       style={{
         padding: data.padding,
         background: data.backgroundColor,
@@ -35,7 +54,12 @@ export default function ColumnsSectionNode({ id, data }: any) {
       }}
     >
       {data.label && (
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>{data.label}</div>
+        <div
+          className="columns-drag-handle"
+          style={{ fontWeight: 600, marginBottom: 12, color: "#ffffff" }}
+        >
+          {data.label}
+        </div>
       )}
 
       <div
@@ -55,6 +79,7 @@ export default function ColumnsSectionNode({ id, data }: any) {
           return (
             <div
               key={colIndex}
+              id={`column-${id}-${colIndex}`}
               data-column
               data-section-id={id}
               data-col-index={colIndex}
@@ -86,12 +111,30 @@ export default function ColumnsSectionNode({ id, data }: any) {
                 columnChildren.map((node: any) => (
                   <div
                     key={node.id}
+                    onClick={() => {
+                      // Release node from column when clicked
+                      if (data._onRemoveNodeFromColumn) {
+                        data._onRemoveNodeFromColumn(node.id);
+                      }
+                    }}
                     style={{
                       padding: 8,
                       borderRadius: 6,
                       background: "rgba(255,255,255,0.08)",
                       fontSize: 12,
+                      color: "#ffffff",
+                      cursor: "pointer",
+                      transition: "background 0.2s",
                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background =
+                        "rgba(59, 130, 246, 0.2)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background =
+                        "rgba(255,255,255,0.08)";
+                    }}
+                    title="Click to drag this node out"
                   >
                     {node.type}: {node.data?.label || node.data?.text}
                   </div>
