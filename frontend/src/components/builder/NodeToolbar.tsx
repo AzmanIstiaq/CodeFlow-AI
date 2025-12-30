@@ -1,9 +1,14 @@
 interface ToolbarProps {
   addNode: (type: string, label: string) => void;
   mode: "workflow" | "builder";
+  hasFrame?: boolean;
 }
 
-export default function NodeToolbar({ addNode, mode }: ToolbarProps) {
+export default function NodeToolbar({
+  addNode,
+  mode,
+  hasFrame = false,
+}: ToolbarProps) {
   return (
     <div className="node-toolbar">
       {mode === "workflow" && (
@@ -29,14 +34,8 @@ export default function NodeToolbar({ addNode, mode }: ToolbarProps) {
         </>
       )}
 
-      {mode === "builder" && (
+      {mode === "builder" && hasFrame && (
         <>
-          <button
-            className="toolbar-button toolbar-btn-section"
-            onClick={() => addNode("section", "Section")}
-          >
-            📦 Add Section
-          </button>
           <button
             className="toolbar-button toolbar-btn-columns"
             onClick={() => addNode("columnsSection", "Columns Section")}

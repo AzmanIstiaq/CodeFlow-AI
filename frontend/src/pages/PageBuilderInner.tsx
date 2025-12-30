@@ -31,7 +31,6 @@ const nodeTypes = {
   output: OutputNode,
   text: TextNode,
   section: SectionNode,
-  columnsSection: ColumnsSectionNode,
   button: ButtonNode,
 };
 
@@ -58,13 +57,8 @@ export default function PageBuilderInner() {
     handlePageRename,
   } = useSiteState(id);
 
-  const {
-    onNodesChange,
-    onEdgesChange,
-    onConnect,
-    addNode,
-    updateColumnsCount,
-  } = useNodeOperations(activePage, updateActivePage);
+  const { onNodesChange, onEdgesChange, onConnect, addNode } =
+    useNodeOperations(activePage, updateActivePage);
 
   const {
     registerColumnRect,
@@ -75,6 +69,8 @@ export default function PageBuilderInner() {
     handleNodeDragStop,
     viewportVersion,
   } = useColumnDropZones(site, setSite, nodes, setNodes);
+
+  const hasFrame = nodes.some((n: any) => n.type === "section");
 
   const { save, handleExportHTML, runWorkflow, isExecuting, dialogProps } =
     useWorkflowOperations(id, site, activePage, setNodes);
@@ -129,55 +125,70 @@ export default function PageBuilderInner() {
 
       <div className={`visualbuilder-root ${selectedNode ? "panel-open" : ""}`}>
         <div className="visualbuilder-canvas">
-          <NodeToolbar addNode={addNode} mode={MODE} />
+          <NodeToolbar addNode={addNode} mode={MODE} hasFrame={hasFrame} />
 
-          <ReactFlow
-            nodes={nodes
-              .filter((n: any) => !n.data?._ownedByColumn)
-              .map((n: any) => {
-                if (n.type === "columnsSection") {
-                  const hasChildren =
-                    Object.values(n.data?.children ?? {}).flat().length > 0;
-                  return {
-                    ...n,
-                    draggable: !hasChildren,
-                    // dragHandle: ".columns-drag-handle",
-                    data: {
-                      ...n.data,
-                      _allNodes: nodes,
-                      _nodePosition: n.position,
-                      _onAddNodeToColumn: (nodeId: string, colIndex: number) =>
-                        addNodeToColumn(n.id, nodeId, colIndex),
-                      _onRemoveNodeFromColumn: removeNodeFromColumn,
-                      _registerColumnRect: (colIndex: number, rect: DOMRect) =>
-                        registerColumnRect(n.id, colIndex, rect),
-                      _viewportVersion: viewportVersion,
-                    },
-                  };
-                }
-                return n;
-              })}
-            edges={MODE === "builder" ? [] : edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
-            onConnect={MODE === "builder" ? () => {} : onConnect}
-            isValidConnection={() => MODE === "workflow"}
-            nodesConnectable={MODE === "workflow"}
-            nodesDraggable={true}
-            onNodeDrag={(_, node) => handleNodeDrag(node)}
-            onNodeDragStop={(_, node) => handleNodeDragStop(_, node)}
-            defaultEdgeOptions={{
-              style: { stroke: "transparent" },
-              animated: false,
-            }}
-            fitView
-            style={{ width: "100%", height: "100%" }}
-            onMoveEnd={handleMoveEnd}
-          >
-            <Background />
-            <Controls />
-          </ReactFlow>
+          {!hasFrame ? (
+            <div
+              className="empty-canvas"
+              style={{
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "column",
+                gap: 12,
+                color: "#6b7280",
+              }}
+            >
+              <h2>Add a Frame to get started</h2>
+              <button
+                className="btn-primary"
+                onClick={() => addNode("section", "Frame")}
+              >
+                ➕ Add Frame
+              </button>
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={nodes
+                .filter((n: any) => !n.data?._ownedByColumn)
+                .map((n: any) => {
+                  if (n.type === "section") {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        _allNodes: nodes,
+                        _registerColumnRect: registerColumnRect,
+                        _viewportVersion: viewportVersion,
+                      },
+                    };
+                  }
+                  return n;
+                })}
+              edges={MODE === "builder" ? [] : edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onNodeClick={(_, node) => setSelectedNode(node)}
+              onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
+              onConnect={MODE === "builder" ? () => {} : onConnect}
+              isValidConnection={() => MODE === "workflow"}
+              nodesConnectable={MODE === "workflow"}
+              nodesDraggable={true}
+              onNodeDrag={(_, node) => handleNodeDrag(node)}
+              onNodeDragStop={(event, node) => handleNodeDragStop(event, node)}
+              defaultEdgeOptions={{
+                style: { stroke: "transparent" },
+                animated: false,
+              }}
+              fitView
+              style={{ width: "100%", height: "100%" }}
+              onMoveEnd={handleMoveEnd}
+            >
+              <Background />
+              <Controls />
+            </ReactFlow>
+          )}
         </div>
 
         {selectedNode && (
@@ -192,7 +203,6 @@ export default function PageBuilderInner() {
                   node?.type === "columnsSection" &&
                   newData.columns !== node.data.columns
                 ) {
-                  updateColumnsCount(id, newData.columns);
                   return;
                 }
 
@@ -203,7 +213,9 @@ export default function PageBuilderInner() {
                 );
               }}
               edges={edges}
-              nodes={nodes}
+              nodes={nodes.filter(
+                (n: any) => n.type === "section" || !n.parentId
+              )}
             />
           </div>
         )}

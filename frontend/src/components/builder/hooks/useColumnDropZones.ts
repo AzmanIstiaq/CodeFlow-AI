@@ -17,6 +17,7 @@ export function useColumnDropZones(
   const pendingDetachRef = useRef<string | null>(null);
 
   const handleNodeDragStop = (_: any, node: any) => {
+    if (!node || !node.id || !node.type) return;
     if (pendingDetachRef.current === node.id) {
       pendingDetachRef.current = null;
       removeNodeFromColumn(node.id);
@@ -33,26 +34,11 @@ export function useColumnDropZones(
     colIndex: number,
     rect: DOMRect
   ) => {
-    const topLeft = screenToFlowPosition({
-      x: rect.left,
-      y: rect.top,
-    });
-
-    const bottomRight = screenToFlowPosition({
-      x: rect.right,
-      y: rect.bottom,
-    });
-
     if (!columnRectsRef.current[sectionId]) {
       columnRectsRef.current[sectionId] = {};
     }
 
-    columnRectsRef.current[sectionId][colIndex] = {
-      left: topLeft.x,
-      top: topLeft.y,
-      right: bottomRight.x,
-      bottom: bottomRight.y,
-    };
+    columnRectsRef.current[sectionId][colIndex] = rect;
   };
 
   /* -------------------------------------------
@@ -107,8 +93,6 @@ export function useColumnDropZones(
         return node;
       })
     );
-
-    requestAnimationFrame(() => (reactFlow as any).updateNodeInternals(nodeId));
   };
 
   /* -------------------------------------------
@@ -129,6 +113,7 @@ export function useColumnDropZones(
 
       return nds.map((node) => {
         if (node.id === nodeId) {
+          const { _ownedByColumn, _columnIndex, ...restData } = node.data || {};
           return {
             ...node,
             position: {
@@ -136,11 +121,7 @@ export function useColumnDropZones(
               y: basePos.y + 50,
             },
             draggable: true,
-            data: {
-              ...node.data,
-              _ownedByColumn: undefined,
-              _columnIndex: undefined,
-            },
+            data: restData,
           };
         }
 
@@ -172,6 +153,7 @@ export function useColumnDropZones(
    * ------------------------------------------- */
 
   const handleNodeDrag = (node: any) => {
+    if (!node || !node.id || !node.type) return;
     if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return;
     if (!node.positionAbsolute || !node.width || !node.height) return;
 

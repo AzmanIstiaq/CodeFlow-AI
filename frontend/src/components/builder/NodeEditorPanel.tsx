@@ -179,6 +179,35 @@ export default function NodeSettingsPanel({
       {node.type === "section" && (
         <>
           <div className="panel-section">
+            <label>Columns</label>
+            <input
+              type="range"
+              min="1"
+              max="6"
+              value={localData.columns?.count ?? 1}
+              onChange={(e) => {
+                const count = Number(e.target.value);
+
+                setLocalData((prev: any) => ({
+                  ...prev,
+                  columns: {
+                    ...(prev.columns ?? {}),
+                    count,
+                  },
+                }));
+
+                updateNodeData(node.id, {
+                  ...node.data,
+                  columns: {
+                    ...(node.data.columns ?? {}),
+                    count,
+                  },
+                });
+              }}
+            />
+            <small>{localData.columns?.count ?? 1} columns</small>
+          </div>
+          <div className="panel-section">
             <label>Alignment</label>
             <select
               className="input-field"
@@ -227,91 +256,6 @@ export default function NodeSettingsPanel({
               min="0"
               max="100"
               value={localData.padding || 40}
-              onChange={(e) =>
-                handleChange("padding", parseInt(e.target.value))
-              }
-            />
-            <small>Range: 0px to 100px</small>
-          </div>
-
-          <div className="panel-section">
-            <label>Background Color</label>
-            <input
-              className="input-field"
-              type="color"
-              value={localData.backgroundColor || "#000000"}
-              onChange={(e) => handleChange("backgroundColor", e.target.value)}
-            />
-          </div>
-        </>
-      )}
-
-      {node.type === "columnsSection" && (
-        <>
-          <div className="panel-section">
-            <label>Number of Columns</label>
-            <input
-              className="number-field"
-              type="range"
-              min="1"
-              max="6"
-              value={localData.columns || 2}
-              onChange={(e) =>
-                handleChange("columns", parseInt(e.target.value))
-              }
-            />
-            <small>{localData.columns || 2} columns</small>
-          </div>
-
-          <div className="panel-section">
-            <label>Gap (spacing between columns)</label>
-            <input
-              className="number-field"
-              type="range"
-              min="0"
-              max="48"
-              value={localData.gap || 24}
-              onChange={(e) => handleChange("gap", parseInt(e.target.value))}
-            />
-            <small>{localData.gap || 24}px</small>
-          </div>
-
-          <div className="panel-section">
-            <label>Alignment</label>
-            <select
-              className="input-field"
-              value={localData.align || "start"}
-              onChange={(e) => handleChange("align", e.target.value)}
-            >
-              <option value="start">Left</option>
-              <option value="center">Center</option>
-            </select>
-          </div>
-
-          <div className="panel-section">
-            <label>Max Width (content width)</label>
-            <input
-              className="number-field"
-              type="range"
-              min="600"
-              max="1200"
-              step="40"
-              value={localData.maxWidth || 960}
-              onChange={(e) =>
-                handleChange("maxWidth", parseInt(e.target.value))
-              }
-            />
-            <small>{localData.maxWidth || 960}px</small>
-          </div>
-
-          <div className="panel-section">
-            <label>Padding</label>
-            <input
-              className="number-field"
-              type="number"
-              min="0"
-              max="100"
-              value={localData.padding || 32}
               onChange={(e) =>
                 handleChange("padding", parseInt(e.target.value))
               }
