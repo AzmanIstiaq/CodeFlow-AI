@@ -39,8 +39,8 @@ export default function SectionNode({
   const childrenByColumn = Array.from({ length: columnCount }, (_, col) =>
     (data._allNodes ?? []).filter(
       (n) =>
-        n.parentId === id &&
-        n.data?.layout?.column === col &&
+        n.data?._ownedByColumn === id &&
+        n.data?._columnIndex === col &&
         n.type !== "columnsSection"
     )
   );
