@@ -34,11 +34,26 @@ export function useColumnDropZones(
     colIndex: number,
     rect: DOMRect
   ) => {
+    const topLeft = screenToFlowPosition({
+      x: rect.left,
+      y: rect.top,
+    });
+
+    const bottomRight = screenToFlowPosition({
+      x: rect.right,
+      y: rect.bottom,
+    });
+
     if (!columnRectsRef.current[sectionId]) {
       columnRectsRef.current[sectionId] = {};
     }
 
-    columnRectsRef.current[sectionId][colIndex] = rect;
+    columnRectsRef.current[sectionId][colIndex] = {
+      left: topLeft.x,
+      top: topLeft.y,
+      right: bottomRight.x,
+      bottom: bottomRight.y,
+    };
   };
 
   /* -------------------------------------------
