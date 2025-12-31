@@ -14,7 +14,7 @@ export default function PageTabs({
   activePageId,
   onPageSelect,
   onPageAdd,
-  onPageRename,
+  onPageRename: _onPageRename,
   onPageDelete,
 }: PageTabsProps) {
   return (

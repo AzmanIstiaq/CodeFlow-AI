@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react";
 import type { Node, Edge } from "reactflow";
 
+interface ColumnWarning {
+  show: boolean;
+  message: string;
+}
+
 interface NodeSettingsPanelProps {
   node: Node<any> | null;
   updateNodeData: (id: string, data: any) => void;
+  updateNodes?: (updater: (nodes: any[]) => any[]) => void;
   closePanel: () => void;
   edges?: Edge[];
   nodes?: Node[];
@@ -12,11 +18,13 @@ interface NodeSettingsPanelProps {
 export default function NodeSettingsPanel({
   node,
   updateNodeData,
+  updateNodes,
   closePanel,
   edges = [],
   nodes = [],
 }: NodeSettingsPanelProps) {
   const [localData, setLocalData] = useState<any>({});
+  const [columnWarning, setColumnWarning] = useState<ColumnWarning>({ show: false, message: "" });
 
   // Initialize local state when node changes
   useEffect(() => {
@@ -52,6 +60,16 @@ export default function NodeSettingsPanel({
           ×
         </button>
       </div>
+
+      {/* Column information */}
+      {node.data?._ownedByColumn && (
+        <div className="panel-breadcrumb" style={{ backgroundColor: "#dbeafe", color: "#1e40af", padding: "8px 12px", borderRadius: "6px", marginBottom: "12px" }}>
+          📍 Column: <strong>Column {(node.data._columnIndex ?? 0) + 1}</strong>
+          {nodes.find((n) => n.id === node.data._ownedByColumn)?.data?.label && (
+            <span> in <strong>{nodes.find((n) => n.id === node.data._ownedByColumn)?.data?.label}</strong></span>
+          )}
+        </div>
+      )}
 
       {/* Breadcrumb for containment */}
       {parentSection && (
@@ -186,26 +204,109 @@ export default function NodeSettingsPanel({
               max="6"
               value={localData.columns?.count ?? 1}
               onChange={(e) => {
-                const count = Number(e.target.value);
+                const newCount = Number(e.target.value);
+                const currentCount = localData.columns?.count ?? 1;
+
+                // Check if reducing columns
+                if (newCount < currentCount) {
+                  // Check if any nodes exist in columns that would be removed
+                  const nodesInRemovedColumns = nodes.filter((n: any) => 
+                    n.data?._ownedByColumn === node.id && 
+                    n.data?._columnIndex >= newCount
+                  );
+
+                  if (nodesInRemovedColumns.length > 0) {
+                    setColumnWarning({
+                      show: true,
+                      message: `Cannot reduce to ${newCount} column${newCount > 1 ? 's' : ''}. Please remove ${nodesInRemovedColumns.length} node${nodesInRemovedColumns.length > 1 ? 's' : ''} from column${currentCount > newCount + 1 ? 's' : ''} ${newCount + 1}${currentCount > newCount + 1 ? `-${currentCount}` : ''} first.`
+                    });
+                    return;
+                  }
+                }
+
+                // Clear warning if valid change
+                setColumnWarning({ show: false, message: "" });
+
+                // Update section data first
+                const newSectionData = {
+                  ...node.data,
+                  columns: {
+                    ...(node.data.columns ?? {}),
+                    count: newCount,
+                  },
+                };
+
+                // Redistribute nodes across new column layout (both increasing and decreasing)
+                if (updateNodes && newCount !== currentCount) {
+                  updateNodes((allNodes: any[]) => {
+                    // Find the section node to get its position
+                    const sectionNode = allNodes.find((n: any) => n.id === node.id);
+                    if (!sectionNode) return allNodes;
+
+                    const frameWidth = 1280;
+                    const newColumnWidth = frameWidth / newCount;
+                    const sectionX = sectionNode.position?.x ?? 0;
+
+                    return allNodes.map((n: any) => {
+                      // Update the section node with new column count
+                      if (n.id === node.id) {
+                        return {
+                          ...n,
+                          data: newSectionData,
+                        };
+                      }
+
+                      // Only update nodes in this section
+                      if (n.data?._ownedByColumn !== node.id) return n;
+
+                      // Keep node in its current column index (already validated above)
+                      const columnIndex = n.data._columnIndex ?? 0;
+                      
+                      // Calculate new X position based on new column width
+                      // Position = section X + (column width * column index) + left padding
+                      const newX = sectionX + (newColumnWidth * columnIndex) + 32;
+
+                      return {
+                        ...n,
+                        position: {
+                          ...n.position,
+                          x: newX,
+                        },
+                        data: {
+                          ...n.data,
+                          _columnIndex: columnIndex,
+                        },
+                      };
+                    });
+                  });
+                } else {
+                  // If not redistributing, still update section data
+                  updateNodeData(node.id, newSectionData);
+                }
 
                 setLocalData((prev: any) => ({
                   ...prev,
                   columns: {
                     ...(prev.columns ?? {}),
-                    count,
+                    count: newCount,
                   },
                 }));
-
-                updateNodeData(node.id, {
-                  ...node.data,
-                  columns: {
-                    ...(node.data.columns ?? {}),
-                    count,
-                  },
-                });
               }}
             />
             <small>{localData.columns?.count ?? 1} columns</small>
+            {columnWarning.show && (
+              <div style={{
+                marginTop: "8px",
+                padding: "8px 12px",
+                backgroundColor: "#fef2f2",
+                border: "1px solid #fca5a5",
+                borderRadius: "4px",
+                color: "#991b1b",
+                fontSize: "12px"
+              }}>
+                ⚠️ {columnWarning.message}
+              </div>
+            )}
           </div>
           <div className="panel-section">
             <label>Alignment</label>

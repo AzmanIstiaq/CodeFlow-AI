@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import ReactFlow, { Background, Controls, useReactFlow } from "reactflow";
+import ReactFlow, { Background, Controls } from "reactflow";
 import type { Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -11,15 +11,14 @@ import AINode from "../components/builder/Nodes/AINode";
 import OutputNode from "../components/builder/Nodes/OutputNode";
 import TextNode from "../components/builder/Nodes/TextNode";
 import SectionNode from "../components/builder/Nodes/SectionNode";
-import ColumnsSectionNode from "../components/builder/Nodes/ColumnsSectionNode";
 import ButtonNode from "../components/builder/Nodes/ButtonNode";
 import NodeEditorPanel from "../components/builder/NodeEditorPanel";
-import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkFlowDialog";
+import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkflowDialog";
 
 import { useSiteState } from "../components/builder/hooks/useSiteState";
 import { useNodeOperations } from "../components/builder/hooks/useNodeOperations";
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
-import { useWorkflowOperations } from "../components/builder/hooks/useWorkFlowOperations";
+import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOperations";
 
 // Mode: "workflow" for AI execution, "builder" for page building
 const MODE: "workflow" | "builder" = "builder";
@@ -35,7 +34,6 @@ const nodeTypes = {
 };
 
 export default function PageBuilderInner() {
-  const reactFlow = useReactFlow();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const id = searchParams.get("id");
@@ -62,18 +60,18 @@ export default function PageBuilderInner() {
 
   const {
     registerColumnRect,
-    addNodeToColumn,
-    removeNodeFromColumn,
     handleMoveEnd,
     handleNodeDrag,
     handleNodeDragStop,
     viewportVersion,
-  } = useColumnDropZones(site, setSite, nodes, setNodes);
+    hoverState,
+  } = useColumnDropZones(setSite, nodes, setNodes);
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
   const { save, handleExportHTML, runWorkflow, isExecuting, dialogProps } =
     useWorkflowOperations(id, site, activePage, setNodes);
+
 
   return (
     <>
@@ -150,21 +148,25 @@ export default function PageBuilderInner() {
             </div>
           ) : (
             <ReactFlow
-              nodes={nodes
-                .filter((n: any) => !n.data?._ownedByColumn)
-                .map((n: any) => {
+              nodes={nodes.map((n: any) => {
                   if (n.type === "section") {
                     return {
                       ...n,
+                      zIndex: 0,
+                      draggable: false,
                       data: {
                         ...n.data,
                         _allNodes: nodes,
                         _registerColumnRect: registerColumnRect,
                         _viewportVersion: viewportVersion,
+                        _hoverState: hoverState,
                       },
                     };
                   }
-                  return n;
+                  return {
+                    ...n,
+                    zIndex: 1,
+                  };
                 })}
               edges={MODE === "builder" ? [] : edges}
               nodeTypes={nodeTypes}
@@ -175,6 +177,7 @@ export default function PageBuilderInner() {
               isValidConnection={() => MODE === "workflow"}
               nodesConnectable={MODE === "workflow"}
               nodesDraggable={true}
+              onNodeDragStart={(_, node) => setSelectedNode(node)}
               onNodeDrag={(_, node) => handleNodeDrag(node)}
               onNodeDragStop={(event, node) => handleNodeDragStop(event, node)}
               defaultEdgeOptions={{
@@ -194,7 +197,7 @@ export default function PageBuilderInner() {
         {selectedNode && (
           <div className="node-editor-panel">
             <NodeEditorPanel
-              node={selectedNode}
+              node={nodes.find((n: any) => n.id === selectedNode.id) || selectedNode}
               closePanel={() => setSelectedNode(null)}
               updateNodeData={(id: string, newData: any) => {
                 const node = nodes.find((n: any) => n.id === id);
@@ -212,10 +215,11 @@ export default function PageBuilderInner() {
                   )
                 );
               }}
+              updateNodes={(updater: (nodes: any[]) => any[]) => {
+                setNodes(updater);
+              }}
               edges={edges}
-              nodes={nodes.filter(
-                (n: any) => n.type === "section" || !n.parentId
-              )}
+              nodes={nodes}
             />
           </div>
         )}

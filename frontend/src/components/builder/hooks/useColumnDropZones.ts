@@ -1,10 +1,9 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useReactFlow } from "reactflow";
 import type { SiteSchema } from "../../../types/siteSchema";
 import { INVALID_COLUMN_CHILD_TYPES } from "../utils/nodeHelpers";
 
 export function useColumnDropZones(
-  site: SiteSchema,
   setSite: React.Dispatch<React.SetStateAction<SiteSchema>>,
   nodes: any[],
   setNodes: (updater: any) => void
@@ -15,14 +14,38 @@ export function useColumnDropZones(
   const viewportVersionRef = useRef(0);
   const columnRectsRef = useRef<Record<string, Record<number, any>>>({});
   const pendingDetachRef = useRef<string | null>(null);
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [hoverState, setHoverState] = useState<{
+    sectionId: string | null;
+    columnIndex: number | null;
+  }>({ sectionId: null, columnIndex: null });
 
   const handleNodeDragStop = (_: any, node: any) => {
     if (!node || !node.id || !node.type) return;
-    if (pendingDetachRef.current === node.id) {
-      pendingDetachRef.current = null;
+    
+    // Check if node was actually dragged (not just clicked)
+    const wasDragged = dragStartPosRef.current && (
+      Math.abs(node.position.x - dragStartPosRef.current.x) > 5 ||
+      Math.abs(node.position.y - dragStartPosRef.current.y) > 5
+    );
+    
+    // Snap to hovered column on release
+    if (hoverState.sectionId && hoverState.columnIndex !== null) {
+      if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) {
+        setHoverState({ sectionId: null, columnIndex: null });
+        dragStartPosRef.current = null;
+        return;
+      }
+      addNodeToColumn(hoverState.sectionId, node.id, hoverState.columnIndex);
+    } else if (node.data?._ownedByColumn && wasDragged) {
+      // Only detach if node was actually dragged outside (not just clicked)
       removeNodeFromColumn(node.id);
-      pendingDetachRef.current = null;
     }
+    
+    // Clear hover state and drag start position
+    setHoverState({ sectionId: null, columnIndex: null });
+    pendingDetachRef.current = null;
+    dragStartPosRef.current = null;
   };
 
   /* -------------------------------------------
@@ -65,15 +88,42 @@ export function useColumnDropZones(
     nodeId: string,
     columnIndex: number
   ) => {
-    setNodes((nds: any[]) =>
-      nds.map((node) => {
+    const columnRect = columnRectsRef.current[columnsSectionId]?.[columnIndex];
+    
+    setNodes((nds: any[]) => {
+      // Find the section and existing children in target column
+      const section = nds.find((n) => n.id === columnsSectionId);
+      const existingChildren = section?.data?.children?.[columnIndex] || [];
+      
+      // Calculate Y position based on last node in column
+      let yPosition = columnRect ? columnRect.top + 40 : 0; // Account for column top padding
+      if (existingChildren.length > 0) {
+        // Find the last child node and position below it
+        const lastChildId = existingChildren[existingChildren.length - 1];
+        const lastChild = nds.find((n) => n.id === lastChildId);
+        if (lastChild) {
+          yPosition = lastChild.position.y + 80; // Stack 80px below the last node
+        }
+      }
+
+      return nds.map((node) => {
         // Dropped node
         if (node.id === nodeId) {
           if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return node;
 
+          // Calculate position inside the column
+          let newPosition = node.position;
+          if (columnRect) {
+            newPosition = {
+              x: columnRect.left + 32, // Account for column left padding
+              y: yPosition,
+            };
+          }
+
           return {
             ...node,
-            draggable: false,
+            position: newPosition,
+            draggable: true,
             data: {
               ...node.data,
               _ownedByColumn: columnsSectionId,
@@ -82,8 +132,8 @@ export function useColumnDropZones(
           };
         }
 
-        // Update columnsSection children
-        if (node.type === "columnsSection") {
+        // Update section with columns
+        if (node.type === "section" && node.data?.columns && node.id === columnsSectionId) {
           const children = { ...(node.data?.children ?? {}) };
 
           // Remove node from ALL columns (prevents duplicates)
@@ -92,9 +142,7 @@ export function useColumnDropZones(
           });
 
           // Add to target column
-          if (node.id === columnsSectionId) {
-            children[columnIndex] = [...(children[columnIndex] ?? []), nodeId];
-          }
+          children[columnIndex] = [...(children[columnIndex] ?? []), nodeId];
 
           return {
             ...node,
@@ -106,8 +154,8 @@ export function useColumnDropZones(
         }
 
         return node;
-      })
-    );
+      });
+    });
   };
 
   /* -------------------------------------------
@@ -116,31 +164,18 @@ export function useColumnDropZones(
 
   const removeNodeFromColumn = (nodeId: string) => {
     setNodes((nds: any[]) => {
-      const parentSection = nds.find(
-        (n) =>
-          n.type === "columnsSection" &&
-          Object.values(n.data?.children ?? {}).some((arr: any) =>
-            arr.includes(nodeId)
-          )
-      );
-
-      const basePos = parentSection?.position ?? { x: 200, y: 200 };
-
       return nds.map((node) => {
         if (node.id === nodeId) {
           const { _ownedByColumn, _columnIndex, ...restData } = node.data || {};
           return {
             ...node,
-            position: {
-              x: basePos.x + 400,
-              y: basePos.y + 50,
-            },
+            // Keep the current position - don't move it
             draggable: true,
             data: restData,
           };
         }
 
-        if (node.type === "columnsSection") {
+        if (node.type === "section" && node.data?.columns) {
           const children = { ...(node.data?.children ?? {}) };
 
           Object.keys(children).forEach((k) => {
@@ -168,6 +203,11 @@ export function useColumnDropZones(
    * ------------------------------------------- */
 
   const handleNodeDrag = (node: any) => {
+    // Track drag start position on first drag event
+    if (!dragStartPosRef.current) {
+      dragStartPosRef.current = { x: node.position.x, y: node.position.y };
+    }
+    
     if (!node || !node.id || !node.type) return;
     if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return;
     if (!node.positionAbsolute || !node.width || !node.height) return;
@@ -199,19 +239,15 @@ export function useColumnDropZones(
       if (targetSection) break;
     }
 
-    // Drop into column
+    // Update hover state for visual feedback
     if (
-      targetSection &&
-      targetColIndex !== null &&
-      (node.data?._ownedByColumn !== targetSection ||
-        node.data?._columnIndex !== targetColIndex)
+      targetSection !== hoverState.sectionId ||
+      targetColIndex !== hoverState.columnIndex
     ) {
-      addNodeToColumn(targetSection, node.id, targetColIndex);
-    }
-
-    // Dragged outside column → mark for detach
-    if (!targetSection && node.data?._ownedByColumn) {
-      pendingDetachRef.current = node.id;
+      setHoverState({
+        sectionId: targetSection,
+        columnIndex: targetColIndex,
+      });
     }
   };
 
@@ -226,8 +262,9 @@ export function useColumnDropZones(
 
   useEffect(() => {
     nodes.forEach((node: any) => {
-      if (node.type === "columnsSection" && node.data?.columns) {
-        for (let i = 0; i < node.data.columns; i++) {
+      if (node.type === "section" && node.data?.columns) {
+        const columnCount = node.data.columns.count || node.data.columns;
+        for (let i = 0; i < columnCount; i++) {
           const el = document.getElementById(`column-${node.id}-${i}`);
           if (el) {
             registerColumnRect(node.id, i, el.getBoundingClientRect());
@@ -258,5 +295,6 @@ export function useColumnDropZones(
     handleNodeDrag,
     handleNodeDragStop,
     viewportVersion: viewportVersionRef.current,
+    hoverState,
   };
 }

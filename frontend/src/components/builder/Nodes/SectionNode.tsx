@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "reactflow";
+import { useMemo } from "react";
 import ColumnsSectionNode from "./ColumnsSectionNode";
 
 export type SectionNodeData = {
@@ -31,6 +32,10 @@ export default function SectionNode({
       rect: DOMRect
     ) => void;
     _viewportVersion?: number;
+    _hoverState?: {
+      sectionId: string | null;
+      columnIndex: number | null;
+    };
   }
 >) {
   const columnCount = data.columns?.count ?? 0;
@@ -45,39 +50,52 @@ export default function SectionNode({
     )
   );
 
+  // Calculate dynamic height based on child nodes - only grow when needed
+  // Memoize based on child node count to prevent recalculation during drag
+  const childNodes = (data._allNodes ?? []).filter(
+    (n) => n.data?._ownedByColumn === id
+  );
+  
+  const calculatedHeight = useMemo(() => {
+    const minHeight = 720; // Full screen height
+    let height = minHeight;
+    
+    if (childNodes.length > 0) {
+      // Get the lowest node position
+      const maxY = Math.max(...childNodes.map((n: any) => n.position.y));
+      // Calculate exact height needed: node position + button height (35px)
+      const requiredHeight = maxY + 35;
+      
+      // Only grow if content exceeds minimum height, use exact required height
+      if (requiredHeight > minHeight) {
+        height = requiredHeight;
+      }
+    }
+    
+    return height;
+  }, [childNodes.length, id]);
+
   return (
     <div
       style={{
         background: data.backgroundColor ?? "#ffffff",
-        width: data.maxWidth || 1200,
-        minHeight: "80vh",
+        width: 1280, // Full screen width
+        height: calculatedHeight,
         margin: "0 auto",
-        padding: data.padding ?? 64,
-
+        padding: 0,
+        borderRadius: 8,
         pointerEvents: "none",
         boxShadow: selected
-          ? "0 0 0 2px #3b82f6"
-          : "0 8px 30px rgba(0,0,0,0.08)",
-        transition: "box-shadow 0.2s ease",
+          ? "0 0 0 3px #3b82f6"
+          : "0 4px 20px rgba(0,0,0,0.1)",
+        transition: "box-shadow 0.2s ease, height 0.3s ease",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {/* Header */}
-      {data.label && (
-        <div
-          style={{
-            fontSize: 12,
-            color: "#6b7280",
-            marginBottom: 16,
-            userSelect: "none",
-          }}
-        >
-          {data.isParentOfSelected && "🔗 "}
-          {data.label}
-        </div>
-      )}
 
-      {/* Content */}
-      {data.columns ? (
+      {data.columns && (
         <ColumnsSectionNode
           id={id}
           columns={data.columns.count}
@@ -85,20 +103,8 @@ export default function SectionNode({
           childrenByColumn={childrenByColumn}
           registerColumnRect={data._registerColumnRect!}
           viewportVersion={data._viewportVersion}
+          hoverState={data._hoverState}
         />
-      ) : (
-        <div
-          style={{
-            border: "1.5px dashed #3b82f6",
-            borderRadius: 8,
-            padding: 24,
-            textAlign: "center",
-            color: "#3b82f6",
-            opacity: 0.6,
-          }}
-        >
-          Drop content here
-        </div>
       )}
 
       {/* ReactFlow handles (kept invisible) */}

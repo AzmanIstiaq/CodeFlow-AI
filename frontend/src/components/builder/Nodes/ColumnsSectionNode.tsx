@@ -11,6 +11,10 @@ type ColumnsSectionNodeProps = {
     rect: DOMRect
   ) => void;
   viewportVersion?: number;
+  hoverState?: {
+    sectionId: string | null;
+    columnIndex: number | null;
+  };
 };
 
 export default function ColumnsSectionNode({
@@ -20,10 +24,12 @@ export default function ColumnsSectionNode({
   childrenByColumn,
   registerColumnRect,
   viewportVersion,
+  hoverState,
 }: ColumnsSectionNodeProps) {
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // Register column rects on layout effect
+  // Note: frameHeight intentionally excluded from deps to prevent re-registration during drag
   useLayoutEffect(() => {
     requestAnimationFrame(() => {
       Object.entries(columnRefs.current).forEach(([colIndex, el]) => {
@@ -39,16 +45,18 @@ export default function ColumnsSectionNode({
         pointerEvents: "auto",
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, 1fr)`,
-        gap,
+        gap: 0,
         width: "100%",
-        minHeight: "60vh",
-        borderTop: "1.5px solid rgba(59,130,246,0.6)",
-        borderBottom: "1.5px solid rgba(59,130,246,0.6)",
+        height: "100%",
       }}
     >
-      {Array.from({ length: columns }).map((_, colIndex) => (
+      {Array.from({ length: columns }).map((_, colIndex) => {
+        const isHovered = hoverState?.sectionId === id && hoverState?.columnIndex === colIndex;
+        
+        return (
         <div
           key={colIndex}
+          id={`column-${id}-${colIndex}`}
           ref={(el) => {
             columnRefs.current[colIndex] = el;
           }}
@@ -57,29 +65,14 @@ export default function ColumnsSectionNode({
             position: "relative",
             zIndex: 10,
             pointerEvents: "auto",
-            minHeight: "100%",
-            padding: 24,
-            borderLeft:
-              colIndex === 0 ? "none" : "1.5px dotted rgba(59,130,246,0.6)",
+            padding: "40px 32px",
+            backgroundColor: isHovered ? "rgba(59,130,246,0.15)" : "transparent",
+            border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : undefined,
+            borderRadius: isHovered ? 8 : 0,
+            transition: "all 0.2s ease",
           }}
         >
-          {childrenByColumn[colIndex]?.length ? (
-            childrenByColumn[colIndex].map((node) => (
-              <div
-                key={node.id}
-                style={{
-                  padding: 12,
-                  borderRadius: 6,
-                  background: "rgba(59,130,246,0.08)",
-                  fontSize: 12,
-                }}
-              >
-                <strong>{node.type}</strong>
-                {node.data?.label && ` — ${node.data.label}`}
-                {node.data?.text && ` — ${node.data.text}`}
-              </div>
-            ))
-          ) : (
+          {!childrenByColumn[colIndex]?.length && (
             <div
               style={{
                 marginTop: 40,
@@ -94,7 +87,8 @@ export default function ColumnsSectionNode({
             </div>
           )}
         </div>
-      ))}
+      );
+      })}
     </div>
   );
 }

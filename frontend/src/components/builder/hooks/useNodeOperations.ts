@@ -30,6 +30,17 @@ export function useNodeOperations(
   // NODE CHANGE HANDLER
   // -------------------------------
   const onNodesChange = (changes: any) => {
+    // Preserve column ownership data before applying changes
+    const columnDataMap = new Map();
+    nodes.forEach((n: any) => {
+      if (n.data?._ownedByColumn) {
+        columnDataMap.set(n.id, {
+          _ownedByColumn: n.data._ownedByColumn,
+          _columnIndex: n.data._columnIndex,
+        });
+      }
+    });
+
     let newNodes = applyNodeChanges(changes, nodes);
 
     const hasDeletes = changes.some((c: any) => c.type === "remove");
@@ -38,16 +49,25 @@ export function useNodeOperations(
     }
 
     const updatedNodes = newNodes.map((n: any) => {
+      // Restore column ownership data if it was lost
+      const columnData = columnDataMap.get(n.id);
+      const dataWithColumn = columnData
+        ? { ...n.data, ...columnData }
+        : n.data;
+
       if (n.type === "section") {
         const hasSelectedChild = newNodes.some(
           (child: any) => child.parentId === n.id && child.selected
         );
         return {
           ...n,
-          data: { ...n.data, isParentOfSelected: hasSelectedChild },
+          data: { ...dataWithColumn, isParentOfSelected: hasSelectedChild },
         };
       }
-      return n;
+      return {
+        ...n,
+        data: dataWithColumn,
+      };
     });
 
     updateActivePage({ nodes: updatedNodes });
@@ -116,11 +136,16 @@ export function useNodeOperations(
 
     // ---------------- TEXT ----------------
     if (type === "text") {
+      const textCount = nodes.filter((n: any) => n.type === "text" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
       const newNode = {
         id,
         type: "text",
-        parentId: section.id,
-        position: { x: 0, y: 0 },
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (textCount * 80) 
+        },
+        draggable: true,
         data: {
           text: "Sample Text",
           fontSize: 14,
@@ -135,11 +160,16 @@ export function useNodeOperations(
 
     // ---------------- BUTTON ----------------
     if (type === "button") {
+      const buttonCount = nodes.filter((n: any) => n.type === "button" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
       const newNode = {
         id,
         type: "button",
-        parentId: section.id,
-        position: { x: 0, y: 0 },
+        position: { 
+          x: section.position.x + sectionWidth + 250, 
+          y: section.position.y + 100 + (buttonCount * 80) 
+        },
+        draggable: true,
         data: {
           label: "Click Me",
           href: "#",
