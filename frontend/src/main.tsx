@@ -7,6 +7,7 @@ import "./styles/vendor.css";
 import "./styles/bootstrap-overrides.css";
 import "./styles/landing.css";
 import "./styles/builder.css";
+import "./styles/visualbuilder.css";
 import "./styles/dashboard.css";
 import App from "./App.tsx";
 

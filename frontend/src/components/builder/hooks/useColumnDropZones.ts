@@ -91,32 +91,21 @@ export function useColumnDropZones(
     const columnRect = columnRectsRef.current[columnsSectionId]?.[columnIndex];
     
     setNodes((nds: any[]) => {
-      // Find the section and existing children in target column
-      const section = nds.find((n) => n.id === columnsSectionId);
-      const existingChildren = section?.data?.children?.[columnIndex] || [];
-      
-      // Calculate Y position based on last node in column
-      let yPosition = columnRect ? columnRect.top + 40 : 0; // Account for column top padding
-      if (existingChildren.length > 0) {
-        // Find the last child node and position below it
-        const lastChildId = existingChildren[existingChildren.length - 1];
-        const lastChild = nds.find((n) => n.id === lastChildId);
-        if (lastChild) {
-          yPosition = lastChild.position.y + 80; // Stack 80px below the last node
-        }
-      }
-
       return nds.map((node) => {
-        // Dropped node
+        // Dropped node - keep its current position but mark it as owned by column
         if (node.id === nodeId) {
           if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return node;
 
-          // Calculate position inside the column
+          // Keep the current position where user dropped it
+          // Only constrain X to be within column bounds
           let newPosition = node.position;
           if (columnRect) {
+            // Constrain X to column bounds with padding
+            const minX = columnRect.left + 16;
+            const maxX = columnRect.right - 16;
             newPosition = {
-              x: columnRect.left + 32, // Account for column left padding
-              y: yPosition,
+              x: Math.max(minX, Math.min(maxX, node.position.x)),
+              y: node.position.y, // Keep Y position exactly where dropped
             };
           }
 

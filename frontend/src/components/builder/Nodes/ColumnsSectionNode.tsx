@@ -5,6 +5,10 @@ type ColumnsSectionNodeProps = {
   columns: number;
   gap: number;
   childrenByColumn: any[][];
+  backgroundColor?: string;
+  backgroundImage?: string;
+  backgroundSize?: string;
+  backgroundPosition?: string;
   registerColumnRect: (
     sectionId: string,
     columnIndex: number,
@@ -22,6 +26,10 @@ export default function ColumnsSectionNode({
   columns,
   gap,
   childrenByColumn,
+  backgroundColor,
+  backgroundImage,
+  backgroundSize,
+  backgroundPosition,
   registerColumnRect,
   viewportVersion,
   hoverState,
@@ -48,6 +56,11 @@ export default function ColumnsSectionNode({
         gap: 0,
         width: "100%",
         height: "100%",
+        backgroundColor: backgroundColor || "transparent",
+        backgroundImage: backgroundImage ? `url(${backgroundImage})` : "none",
+        backgroundSize: backgroundSize || "cover",
+        backgroundPosition: backgroundPosition || "center",
+        backgroundRepeat: "no-repeat",
       }}
     >
       {Array.from({ length: columns }).map((_, colIndex) => {

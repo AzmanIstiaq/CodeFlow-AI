@@ -1,0 +1,37 @@
+/* Hide ReactFlow attribution and default UI elements */
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__panel {
+  display: none !important;
+}
+
+.react-flow__controls {
+  display: none !important;
+}
+
+.react-flow__background {
+  display: none !important;
+}
+
+/* Clean up ReactFlow selection box */
+.react-flow__selection {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid #3b82f6;
+}
+
+/* Hide ReactFlow minimap if present */
+.react-flow__minimap {
+  display: none !important;
+}
+
+/* Clean node selection styling */
+.react-flow__node.selected {
+  box-shadow: none !important;
+}
+
+/* Remove default edge styling */
+.react-flow__edge-path {
+  stroke: transparent !important;
+}

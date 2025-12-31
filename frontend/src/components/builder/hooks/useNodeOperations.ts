@@ -148,8 +148,21 @@ export function useNodeOperations(
         draggable: true,
         data: {
           text: "Sample Text",
-          fontSize: 14,
+          fontSize: 16,
           color: "#111827",
+          fontWeight: 400,
+          fontFamily: "inherit",
+          textAlign: "left",
+          lineHeight: 1.6,
+          letterSpacing: 0,
+          opacity: 1,
+          rotation: 0,
+          textShadow: "none",
+          backgroundColor: "transparent",
+          padding: 16,
+          borderRadius: 0,
+          border: "none",
+          width: 200,
           layout: undefined,
         },
       };
@@ -175,6 +188,97 @@ export function useNodeOperations(
           href: "#",
           variant: "primary",
           layout: undefined,
+          borderRadius: 8,
+          opacity: 1,
+          rotation: 0,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- IMAGE ----------------
+    if (type === "image") {
+      const imageCount = nodes.filter((n: any) => n.type === "image" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "image",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (imageCount * 250) 
+        },
+        draggable: true,
+        data: {
+          src: "https://via.placeholder.com/300x200",
+          alt: "Image",
+          width: 300,
+          height: 200,
+          borderRadius: 0,
+          opacity: 1,
+          rotation: 0,
+          objectFit: "cover",
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- CONTAINER ----------------
+    if (type === "container") {
+      const containerCount = nodes.filter((n: any) => n.type === "container" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "container",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (containerCount * 350) 
+        },
+        draggable: true,
+        data: {
+          label: "Container",
+          width: 400,
+          height: 300,
+          backgroundColor: "#f3f4f6",
+          borderRadius: 8,
+          padding: 20,
+          opacity: 1,
+          rotation: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-start",
+          alignItems: "flex-start",
+          gap: 12,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- SHAPE ----------------
+    if (type === "shape") {
+      const shapeCount = nodes.filter((n: any) => n.type === "shape" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "shape",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (shapeCount * 150) 
+        },
+        draggable: true,
+        data: {
+          shapeType: "rectangle",
+          width: 100,
+          height: 100,
+          backgroundColor: "#3b82f6",
+          borderRadius: 0,
+          opacity: 1,
+          rotation: 0,
         },
       };
 

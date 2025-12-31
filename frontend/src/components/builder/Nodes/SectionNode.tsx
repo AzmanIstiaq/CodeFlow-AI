@@ -9,6 +9,9 @@ export type SectionNodeData = {
   align: "start" | "center";
   maxWidth: number;
   backgroundColor: string;
+  backgroundImage?: string;
+  backgroundSize?: string;
+  backgroundPosition?: string;
   order: number;
   isParentOfSelected?: boolean;
 
@@ -63,8 +66,8 @@ export default function SectionNode({
     if (childNodes.length > 0) {
       // Get the lowest node position
       const maxY = Math.max(...childNodes.map((n: any) => n.position.y));
-      // Calculate exact height needed: node position + button height (35px)
-      const requiredHeight = maxY + 35;
+      // Calculate exact height needed: node position + node height (44px for buttons/text)
+      const requiredHeight = maxY + 44;
       
       // Only grow if content exceeds minimum height, use exact required height
       if (requiredHeight > minHeight) {
@@ -98,9 +101,13 @@ export default function SectionNode({
       {data.columns && (
         <ColumnsSectionNode
           id={id}
-          columns={data.columns.count}
-          gap={data.columns.gap}
+          columns={columnCount}
+          gap={data.columns?.gap ?? 16}
           childrenByColumn={childrenByColumn}
+          backgroundColor={data.backgroundColor}
+          backgroundImage={data.backgroundImage}
+          backgroundSize={data.backgroundSize}
+          backgroundPosition={data.backgroundPosition}
           registerColumnRect={data._registerColumnRect!}
           viewportVersion={data._viewportVersion}
           hoverState={data._hoverState}

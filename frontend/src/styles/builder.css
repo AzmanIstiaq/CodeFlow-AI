@@ -14,13 +14,9 @@
   z-index: 1002;
 }
 
-/* Page Tabs */
+/* Page Tabs - removed, integrated into MenuBar */
 .page-tabs {
-  position: fixed;
-  top: 60px;
-  left: 0;
-  right: 0;
-  height: 48px;
+  display: none;
   background: #16161e;
   border-bottom: 1px solid #2a2a3e;
   z-index: 1001;
@@ -161,10 +157,10 @@
 
 .visualbuilder-root {
   position: fixed;
-  top: 108px; /* 60px nav + 48px tabs */
+  top: 60px; /* 60px header */
   left: 0;
   width: 100vw;
-  height: calc(100vh - 108px);
+  height: calc(100vh - 60px);
   display: flex;
   overflow: hidden;
   z-index: 0;
@@ -283,58 +279,7 @@
    NODE EDITOR PANEL - Right Sidebar for Editing Nodes
    ===================================================== */
 
-.node-editor-panel {
-  position: fixed;
-  top: 108px; /* 60px nav + 48px tabs */
-  right: 0;
-  height: calc(100vh - 108px);
-  width: 320px;
-  background: #121212;
-  color: white;
-  padding: 20px;
-  border-left: 1px solid #333;
-  overflow-y: auto;
-  z-index: 2000;
-  box-sizing: border-box;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-/* Panel header with title and close button */
-.node-editor-panel .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-shrink: 0;
-}
-
-.node-editor-panel .panel-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-/* Panel labels */
-.node-editor-panel label {
-  display: block;
-  margin-bottom: 6px;
-  color: #ddd;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-/* Breadcrumb for containment */
-.panel-breadcrumb {
-  padding: 12px 0;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #333;
-  color: #888;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+/* Node editor panel styles moved to visualbuilder.css for consistency */
 
 .panel-breadcrumb strong {
   /* color: #00d4ff; */
