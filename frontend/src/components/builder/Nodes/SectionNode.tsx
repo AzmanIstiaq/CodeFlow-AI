@@ -1,4 +1,4 @@
-import { Handle, Position, type NodeProps } from "reactflow";
+import { type NodeProps } from "reactflow";
 import { useMemo } from "react";
 import ColumnsSectionNode from "./ColumnsSectionNode";
 
@@ -87,7 +87,8 @@ export default function SectionNode({
         margin: "0 auto",
         padding: 0,
         borderRadius: 8,
-        pointerEvents: "none",
+        pointerEvents: "auto",
+        cursor: "pointer",
         boxShadow: selected
           ? "0 0 0 3px #3b82f6"
           : "0 4px 20px rgba(0,0,0,0.1)",
@@ -113,10 +114,6 @@ export default function SectionNode({
           hoverState={data._hoverState}
         />
       )}
-
-      {/* ReactFlow handles (kept invisible) */}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }

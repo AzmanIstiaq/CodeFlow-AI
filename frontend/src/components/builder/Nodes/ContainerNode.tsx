@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type ContainerNodeData = {
   label: string;
@@ -50,8 +49,6 @@ export default function ContainerNode({ data, selected }: Props) {
       <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>
         {data.label || "Container"}
       </div>
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

@@ -1,10 +1,8 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useReactFlow } from "reactflow";
-import type { SiteSchema } from "../../../types/siteSchema";
 import { INVALID_COLUMN_CHILD_TYPES } from "../utils/nodeHelpers";
 
 export function useColumnDropZones(
-  setSite: React.Dispatch<React.SetStateAction<SiteSchema>>,
   nodes: any[],
   setNodes: (updater: any) => void
 ) {
@@ -21,10 +19,10 @@ export function useColumnDropZones(
   }>({ sectionId: null, columnIndex: null });
 
   const handleNodeDragStop = (_: any, node: any) => {
-    if (!node || !node.id || !node.type) return;
+    if (!node || !node.id || !node.type || !node.position) return;
     
     // Check if node was actually dragged (not just clicked)
-    const wasDragged = dragStartPosRef.current && (
+    const wasDragged = dragStartPosRef.current && node.position && (
       Math.abs(node.position.x - dragStartPosRef.current.x) > 5 ||
       Math.abs(node.position.y - dragStartPosRef.current.y) > 5
     );
@@ -52,7 +50,7 @@ export function useColumnDropZones(
    * Column Rect Registration
    * ------------------------------------------- */
 
-  const registerColumnRect = (
+  const registerColumnRect = useCallback((
     sectionId: string,
     colIndex: number,
     rect: DOMRect
@@ -77,7 +75,7 @@ export function useColumnDropZones(
       right: bottomRight.x,
       bottom: bottomRight.y,
     };
-  };
+  }, [screenToFlowPosition]);
 
   /* -------------------------------------------
    * Add Node To Column
@@ -261,20 +259,12 @@ export function useColumnDropZones(
         }
       }
     });
-  }, [nodes, viewportVersionRef.current]);
+  }, [nodes, viewportVersionRef.current, registerColumnRect]);
 
   /* -------------------------------------------
    * Sync ReactFlow → Site (Persistence Only)
    * ------------------------------------------- */
-
-  useEffect(() => {
-    setSite((prev) => ({
-      ...prev,
-      pages: prev.pages.map((p) =>
-        p.id === prev.activePageId ? { ...p, nodes } : p
-      ),
-    }));
-  }, [nodes]);
+  // Note: Site sync is now handled in PageBuilderInner to avoid infinite loops
 
   return {
     registerColumnRect,

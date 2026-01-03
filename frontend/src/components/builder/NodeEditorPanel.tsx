@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import type { Node, Edge } from "reactflow";
-import CollapsibleSection from "./CollapsibleSection";
 import { 
   TextNodeEditor, 
   ButtonNodeEditor,
@@ -31,13 +30,12 @@ interface NodeSettingsPanelProps {
 export default function NodeSettingsPanel({
   node,
   updateNodeData,
-  updateNodes,
   closePanel,
   edges = [],
   nodes = [],
 }: NodeSettingsPanelProps) {
   const [localData, setLocalData] = useState<any>({});
-  const [columnWarning, setColumnWarning] = useState<ColumnWarning>({ show: false, message: "" });
+  const [columnWarning] = useState<ColumnWarning>({ show: false, message: "" });
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = (sectionId: string) => {
@@ -112,11 +110,17 @@ export default function NodeSettingsPanel({
               type="range"
               min="1"
               max="6"
-              value={localData.columns || 1}
-              onChange={(e) => handleChange("columns", parseInt(e.target.value))}
+              value={typeof localData.columns === 'object' ? (localData.columns?.count || 1) : (localData.columns || 1)}
+              onChange={(e) => {
+                const newCount = parseInt(e.target.value);
+                handleChange("columns", typeof localData.columns === 'object' 
+                  ? { ...localData.columns, count: newCount }
+                  : { count: newCount, gap: 24 }
+                );
+              }}
               className="range-slider"
             />
-            <div className="range-value">{localData.columns || 1} column(s)</div>
+            <div className="range-value">{typeof localData.columns === 'object' ? (localData.columns?.count || 1) : (localData.columns || 1)} column(s)</div>
           </div>
 
           <div className="panel-field">

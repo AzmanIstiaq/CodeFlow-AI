@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type ImageNodeData = {
   src: string;
@@ -43,8 +42,6 @@ export default function ImageNode({ data, selected }: Props) {
           outlineOffset: "2px",
         }}
       />
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

@@ -56,8 +56,6 @@ export default function MenuBar({
   activePageId,
   onPageSelect,
   onPageAdd,
-  onPageRename,
-  onPageDelete,
   onUndo,
   onRedo,
   onCut,

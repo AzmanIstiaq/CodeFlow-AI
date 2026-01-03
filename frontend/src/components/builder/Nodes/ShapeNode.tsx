@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type ShapeNodeData = {
   shapeType: "rectangle" | "circle" | "triangle";
@@ -53,8 +52,6 @@ export default function ShapeNode({ data, selected }: Props) {
   return (
     <div style={{ position: "relative" }}>
       <div style={getShapeStyle()} />
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

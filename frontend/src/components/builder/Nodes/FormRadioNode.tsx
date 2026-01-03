@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type FormRadioNodeData = {
   label: string;
@@ -88,8 +87,6 @@ export default function FormRadioNode({ data, selected }: Props) {
           ))}
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

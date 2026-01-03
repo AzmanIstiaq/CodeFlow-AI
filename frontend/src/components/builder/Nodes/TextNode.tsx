@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type TextNodeData = {
   text: string;
@@ -62,8 +61,6 @@ export default function TextNode({ data, selected }: PropsWithSelected) {
       ) : (
         data.text
       )}
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
   

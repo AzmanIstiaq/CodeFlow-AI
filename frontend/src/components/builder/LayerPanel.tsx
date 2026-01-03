@@ -21,7 +21,6 @@ export default function LayerPanel({
   onUpdateNode,
 }: LayerPanelProps) {
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const getNodeIcon = (type: string) => {
     const iconStyle = { width: 16, height: 16, strokeWidth: 2, stroke: "currentColor", fill: "none" };
     
@@ -94,14 +93,12 @@ export default function LayerPanel({
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(index);
   };
 
   const handleDragLeave = () => {
-    setDragOverIndex(null);
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
@@ -110,12 +107,10 @@ export default function LayerPanel({
       onReorderNodes(draggedNode, targetIndex);
     }
     setDraggedNode(null);
-    setDragOverIndex(null);
   };
 
   const handleDragEnd = () => {
     setDraggedNode(null);
-    setDragOverIndex(null);
   };
 
   return (
@@ -159,7 +154,7 @@ export default function LayerPanel({
             key={node.id}
             draggable={canDrag}
             onDragStart={(e) => handleDragStart(e, node)}
-            onDragOver={(e) => handleDragOver(e, index)}
+            onDragOver={(e) => handleDragOver(e)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}
             onDragEnd={handleDragEnd}

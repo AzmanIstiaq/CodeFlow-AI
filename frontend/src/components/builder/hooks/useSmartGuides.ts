@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { Node } from "reactflow";
 
 const SNAP_THRESHOLD = 5; // pixels
+const GRID_SIZE = 8; // Default grid size for snapping
 
 interface Guide {
   vertical: number[];
@@ -17,7 +18,7 @@ interface GuideWithBounds extends Guide {
   };
 }
 
-export function useSmartGuides(nodes: Node[]) {
+export function useSmartGuides(nodes: Node[], gridEnabled: boolean = false) {
   const [activeGuides, setActiveGuides] = useState<GuideWithBounds>({
     vertical: [],
     horizontal: [],
@@ -178,6 +179,8 @@ export function useSmartGuides(nodes: Node[]) {
       const guides = detectGuides(draggedNode);
       let snappedX = position.x;
       let snappedY = position.y;
+      let snappedToGuideX = false;
+      let snappedToGuideY = false;
 
       const draggedBounds = {
         left: position.x,
@@ -188,41 +191,56 @@ export function useSmartGuides(nodes: Node[]) {
         centerY: position.y + draggedNode.height / 2,
       };
 
-      // Snap to vertical guides
+      // Priority 1: Snap to smart guides (alignment with other elements)
       for (const guideX of guides.vertical) {
         if (Math.abs(draggedBounds.left - guideX) < SNAP_THRESHOLD) {
           snappedX = guideX;
+          snappedToGuideX = true;
           break;
         }
         if (Math.abs(draggedBounds.right - guideX) < SNAP_THRESHOLD) {
           snappedX = guideX - draggedNode.width;
+          snappedToGuideX = true;
           break;
         }
         if (Math.abs(draggedBounds.centerX - guideX) < SNAP_THRESHOLD) {
           snappedX = guideX - draggedNode.width / 2;
+          snappedToGuideX = true;
           break;
         }
       }
 
-      // Snap to horizontal guides
       for (const guideY of guides.horizontal) {
         if (Math.abs(draggedBounds.top - guideY) < SNAP_THRESHOLD) {
           snappedY = guideY;
+          snappedToGuideY = true;
           break;
         }
         if (Math.abs(draggedBounds.bottom - guideY) < SNAP_THRESHOLD) {
           snappedY = guideY - draggedNode.height;
+          snappedToGuideY = true;
           break;
         }
         if (Math.abs(draggedBounds.centerY - guideY) < SNAP_THRESHOLD) {
           snappedY = guideY - draggedNode.height / 2;
+          snappedToGuideY = true;
           break;
+        }
+      }
+
+      // Priority 2: Snap to grid (only if grid is enabled and not already snapped to guides)
+      if (gridEnabled) {
+        if (!snappedToGuideX) {
+          snappedX = Math.round(position.x / GRID_SIZE) * GRID_SIZE;
+        }
+        if (!snappedToGuideY) {
+          snappedY = Math.round(position.y / GRID_SIZE) * GRID_SIZE;
         }
       }
 
       return { x: snappedX, y: snappedY };
     },
-    [detectGuides]
+    [detectGuides, gridEnabled]
   );
 
   const handleDrag = useCallback(

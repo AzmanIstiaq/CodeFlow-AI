@@ -285,6 +285,59 @@ export function useNodeOperations(
       setNodes((nds: any) => [...nds, newNode]);
       return;
     }
+
+    // ---------------- FORM INPUT ----------------
+    if (type === "formInput") {
+      const formInputCount = nodes.filter((n: any) => n.type === "formInput" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "formInput",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (formInputCount * 100) 
+        },
+        draggable: true,
+        data: {
+          placeholder: "Enter text...",
+          inputType: "text",
+          width: 300,
+          fontSize: 14,
+          padding: 10,
+          required: false,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- FORM TEXTAREA ----------------
+    if (type === "formTextarea") {
+      const formTextareaCount = nodes.filter((n: any) => n.type === "formTextarea" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "formTextarea",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (formTextareaCount * 150) 
+        },
+        draggable: true,
+        data: {
+          placeholder: "Enter your message...",
+          width: 300,
+          height: 100,
+          fontSize: 14,
+          padding: 10,
+          required: false,
+          rows: 4,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
   };
 
   return {

@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type FormCheckboxNodeData = {
   label: string;
@@ -51,8 +50,6 @@ export default function FormCheckboxNode({ data, selected }: Props) {
           {data.required && <span style={{ color: "#ef4444" }}> *</span>}
         </label>
       </div>
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { Handle, Position } from "reactflow";
 
 export type FormSelectNodeData = {
   label: string;
@@ -71,8 +70,6 @@ export default function FormSelectNode({ data, selected }: Props) {
           ))}
         </select>
       </div>
-      <Handle type="source" position={Position.Bottom} />
-      <Handle type="target" position={Position.Top} />
     </div>
   );
 }

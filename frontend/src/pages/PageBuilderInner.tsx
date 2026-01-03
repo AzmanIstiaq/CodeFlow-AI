@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow } from "reactflow";
 import ReactFlow from "reactflow";
@@ -7,7 +7,6 @@ import "reactflow/dist/style.css";
 import "../styles/reactflow-overrides.css";
 
 import NodeToolbar from "../components/builder/NodeToolbar";
-import PageTabs from "../components/builder/PageTabs";
 import StartNode from "../components/builder/Nodes/StartNode";
 import AINode from "../components/builder/Nodes/AINode";
 import OutputNode from "../components/builder/Nodes/OutputNode";
@@ -59,6 +58,111 @@ const nodeTypes = {
   formSelect: FormSelectNode,
 };
 
+// Helper function to get default data for each node type
+const getDefaultNodeData = (type: string, label: string) => {
+  switch (type) {
+    case "text":
+      return {
+        text: "Sample Text",
+        fontSize: 16,
+        color: "#111827",
+        fontWeight: 400,
+        fontFamily: "inherit",
+        textAlign: "left",
+        lineHeight: 1.6,
+        letterSpacing: 0,
+        opacity: 1,
+        rotation: 0,
+        textShadow: "none",
+        backgroundColor: "transparent",
+        padding: 16,
+        borderRadius: 0,
+        border: "none",
+        width: 200,
+      };
+    case "button":
+      return {
+        label: "Click Me",
+        href: "#",
+        variant: "primary",
+        borderRadius: 8,
+        opacity: 1,
+        rotation: 0,
+      };
+    case "image":
+      return {
+        src: "https://via.placeholder.com/300x200",
+        alt: "Image",
+        width: 300,
+        height: 200,
+        borderRadius: 0,
+        opacity: 1,
+        rotation: 0,
+        objectFit: "cover",
+      };
+    case "container":
+      return {
+        label: "Container",
+        width: 400,
+        height: 300,
+        backgroundColor: "#f3f4f6",
+        borderRadius: 8,
+        padding: 20,
+        opacity: 1,
+        rotation: 0,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        gap: 12,
+      };
+    case "shape":
+      return {
+        shapeType: "rectangle",
+        width: 100,
+        height: 100,
+        backgroundColor: "#3b82f6",
+        borderRadius: 0,
+        opacity: 1,
+        rotation: 0,
+      };
+    case "formInput":
+      return {
+        placeholder: "Enter text...",
+        inputType: "text",
+        width: 300,
+        fontSize: 14,
+        padding: 10,
+        required: false,
+      };
+    case "formTextarea":
+      return {
+        placeholder: "Enter your message...",
+        width: 300,
+        height: 100,
+        fontSize: 14,
+        padding: 10,
+        required: false,
+        rows: 4,
+      };
+    case "section":
+      return {
+        label,
+        padding: 40,
+        gap: 24,
+        align: "start",
+        maxWidth: 1200,
+        backgroundColor: "#000000",
+        columns: {
+          count: 1,
+          gap: 24,
+        },
+      };
+    default:
+      return { label };
+  }
+};
+
 export default function PageBuilderInner() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -69,6 +173,10 @@ export default function PageBuilderInner() {
   const [clipboard, setClipboard] = useState<any[]>([]);
   const [showGrid, setShowGrid] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [placementMode, setPlacementMode] = useState<{ type: string; label: string } | null>(null);
+  const [drawingMode, setDrawingMode] = useState<{ type: string; label: string; start: { x: number; y: number } } | null>(null);
+  const [drawingPreview, setDrawingPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const isDrawingRef = useRef(false);
 
   // 🎯 Clean hook-based architecture
   const {
@@ -95,20 +203,103 @@ export default function PageBuilderInner() {
     handleNodeDragStop,
     viewportVersion,
     hoverState,
-  } = useColumnDropZones(setSite, nodes, setNodes);
+  } = useColumnDropZones(nodes, setNodes);
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
-  const { save, handleExportHTML, runWorkflow, isExecuting, dialogProps } =
+  const { save, handleExportHTML, dialogProps } =
     useWorkflowOperations(id, site, activePage, setNodes);
 
-  // Smart guides for alignment
-  const { activeGuides, handleDrag: handleGuideDrag, clearGuides } = useSmartGuides(nodes);
+  // Smart guides for alignment with grid snapping
+  const { activeGuides, handleDrag: handleGuideDrag, clearGuides, snapToGuides } = useSmartGuides(nodes, showGrid);
   const reactFlowInstance = useReactFlow();
   const viewport = reactFlowInstance.getViewport();
 
   // History (undo/redo) - keyboard shortcuts handled in useHistory hook
   useHistory(nodes, setNodes);
+
+  // Handle ESC key to cancel placement mode or drawing mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (placementMode) setPlacementMode(null);
+        if (drawingMode) {
+          setDrawingMode(null);
+          setDrawingPreview(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [placementMode, drawingMode]);
+
+  // Drawing mode handlers using global mouse events
+  useEffect(() => {
+    if (!drawingMode) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      setDrawingMode({ ...drawingMode, start: position });
+      isDrawingRef.current = true;
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isDrawingRef.current || !drawingMode.start) return;
+      
+      const currentPos = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      
+      const x = Math.min(drawingMode.start.x, currentPos.x);
+      const y = Math.min(drawingMode.start.y, currentPos.y);
+      const width = Math.abs(currentPos.x - drawingMode.start.x);
+      const height = Math.abs(currentPos.y - drawingMode.start.y);
+      
+      setDrawingPreview({ x, y, width, height });
+    };
+
+    const handleMouseUp = () => {
+      isDrawingRef.current = false;
+      if (!drawingMode.start || !drawingPreview || drawingPreview.width < 10 || drawingPreview.height < 10) {
+        setDrawingMode(null);
+        setDrawingPreview(null);
+        return;
+      }
+      
+      const nodeId = `${drawingMode.type}-${Date.now()}`;
+      const newNode: any = {
+        id: nodeId,
+        type: drawingMode.type,
+        position: { x: drawingPreview.x, y: drawingPreview.y },
+        draggable: true,
+        data: {
+          ...getDefaultNodeData(drawingMode.type, drawingMode.label),
+          width: Math.round(drawingPreview.width),
+          height: Math.round(drawingPreview.height),
+        },
+      };
+      
+      setNodes((nds: any) => [...nds, newNode]);
+      setDrawingMode(null);
+      setDrawingPreview(null);
+      setSelectedNode(newNode);
+      setSelectedNodes([newNode]);
+    };
+
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [drawingMode, drawingPreview, reactFlowInstance, setNodes, setSelectedNode, setSelectedNodes]);
 
   // Alignment and distribution handlers
   const handleAlign = (type: string) => {
@@ -502,7 +693,54 @@ export default function PageBuilderInner() {
           />
         )}
         <div className="visualbuilder-canvas">
-          <NodeToolbar addNode={addNode} mode={MODE} hasFrame={hasFrame} />
+          {placementMode && (
+            <div style={{
+              position: "absolute",
+              top: 20,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#3b82f6",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 6,
+              zIndex: 1000,
+              fontSize: 14,
+              fontWeight: 500,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}>
+              Click on canvas to place {placementMode.label} • Press ESC to cancel
+            </div>
+          )}
+          {drawingMode && (
+            <div style={{
+              position: "absolute",
+              top: 20,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#10b981",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 6,
+              zIndex: 1000,
+              fontSize: 14,
+              fontWeight: 500,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}>
+              Click and drag to draw {drawingMode.label} • Press ESC to cancel
+            </div>
+          )}
+          <NodeToolbar 
+            addNode={(type, label) => {
+              // Use drawing mode for shapes and containers
+              if (type === 'shape' || type === 'container') {
+                setDrawingMode({ type, label, start: { x: 0, y: 0 } });
+              } else {
+                setPlacementMode({ type, label });
+              }
+            }}
+            mode={MODE} 
+            hasFrame={hasFrame} 
+          />
 
           {!hasFrame ? (
             <div
@@ -528,6 +766,21 @@ export default function PageBuilderInner() {
           ) : (
             <>
             <SmartGuides guides={activeGuides} viewport={viewport} />
+            {drawingPreview && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: drawingPreview.x * viewport.zoom + viewport.x,
+                  top: drawingPreview.y * viewport.zoom + viewport.y,
+                  width: drawingPreview.width * viewport.zoom,
+                  height: drawingPreview.height * viewport.zoom,
+                  border: "2px dashed #3b82f6",
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                  pointerEvents: "none",
+                  zIndex: 1000,
+                }}
+              />
+            )}
             {showGrid && (
               <div
                 style={{
@@ -540,7 +793,7 @@ export default function PageBuilderInner() {
                     linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px),
                     linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px)
                   `,
-                  backgroundSize: "20px 20px",
+                  backgroundSize: "8px 8px",
                   pointerEvents: "none",
                   zIndex: 0,
                 }}
@@ -569,7 +822,6 @@ export default function PageBuilderInner() {
                   }
                   return {
                     ...n,
-                    zIndex: 1,
                     selected: isSelected,
                     draggable: !n.data?.locked,
                   };
@@ -577,17 +829,43 @@ export default function PageBuilderInner() {
               edges={MODE === "builder" ? [] : edges}
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
-              onNodeClick={(_, node) => {
-                setSelectedNode(node);
-                setSelectedNodes([node]);
+              onNodeClick={(event, node) => {
+                if (placementMode) {
+                  // Get click position in flow coordinates
+                  const position = reactFlowInstance.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                  
+                  // Create node at clicked position
+                  const nodeId = `${placementMode.type}-${Date.now()}`;
+                  const newNode: any = {
+                    id: nodeId,
+                    type: placementMode.type,
+                    position,
+                    draggable: true,
+                    data: getDefaultNodeData(placementMode.type, placementMode.label),
+                  };
+                  
+                  setNodes((nds: any) => [...nds, newNode]);
+                  setPlacementMode(null);
+                  setSelectedNode(newNode);
+                  setSelectedNodes([newNode]);
+                } else {
+                  setSelectedNode(node);
+                  setSelectedNodes([node]);
+                }
               }}
               onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
               onConnect={MODE === "builder" ? () => {} : onConnect}
               isValidConnection={() => MODE === "workflow"}
               nodesConnectable={MODE === "workflow"}
-              nodesDraggable={true}
-              elementsSelectable={true}
+              nodesDraggable={!drawingMode}
+              elementsSelectable={!drawingMode}
               selectNodesOnDrag={false}
+              elevateNodesOnSelect={false}
+              panOnDrag={drawingMode ? false : true}
+              zoomOnScroll={!drawingMode}
               onNodeDragStart={(_, node) => {
                 setSelectedNode(node);
                 setSelectedNodes([node]);
@@ -600,9 +878,32 @@ export default function PageBuilderInner() {
                 handleNodeDragStop(event, node);
                 clearGuides();
               }}
-              onPaneClick={() => {
-                setSelectedNode(null);
-                setSelectedNodes([]);
+              onPaneClick={(event) => {
+                if (placementMode) {
+                  // Get click position in flow coordinates
+                  const position = reactFlowInstance.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                  
+                  // Create node at clicked position
+                  const nodeId = `${placementMode.type}-${Date.now()}`;
+                  const newNode: any = {
+                    id: nodeId,
+                    type: placementMode.type,
+                    position,
+                    draggable: true,
+                    data: getDefaultNodeData(placementMode.type, placementMode.label),
+                  };
+                  
+                  setNodes((nds: any) => [...nds, newNode]);
+                  setPlacementMode(null);
+                  setSelectedNode(newNode);
+                  setSelectedNodes([newNode]);
+                } else {
+                  setSelectedNode(null);
+                  setSelectedNodes([]);
+                }
               }}
               multiSelectionKeyCode="Shift"
               defaultEdgeOptions={{
@@ -610,7 +911,11 @@ export default function PageBuilderInner() {
                 animated: false,
               }}
               fitView
-              style={{ width: "100%", height: "100%" }}
+              style={{ 
+                width: "100%", 
+                height: "100%",
+                cursor: placementMode ? "crosshair" : drawingMode ? "crosshair" : "default"
+              }}
               onMoveEnd={handleMoveEnd}
             >
             </ReactFlow>

@@ -3,7 +3,7 @@ interface GridBackgroundProps {
   showGrid: boolean;
 }
 
-export default function GridBackground({ gridSize = 20, showGrid }: GridBackgroundProps) {
+export default function GridBackground({ gridSize = 8, showGrid }: GridBackgroundProps) {
   if (!showGrid) return null;
 
   return (
