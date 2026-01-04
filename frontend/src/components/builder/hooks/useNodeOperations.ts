@@ -146,6 +146,9 @@ export function useNodeOperations(
           y: section.position.y + 100 + (textCount * 80) 
         },
         draggable: true,
+        style: {
+          width: 200,
+        },
         data: {
           text: "Sample Text",
           fontSize: 16,
@@ -183,6 +186,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (buttonCount * 80) 
         },
         draggable: true,
+        style: {
+          width: 150,
+          height: 44,
+        },
         data: {
           label: "Click Me",
           href: "#",
@@ -191,6 +198,8 @@ export function useNodeOperations(
           borderRadius: 8,
           opacity: 1,
           rotation: 0,
+          width: 150,
+          height: 44,
         },
       };
 
@@ -210,6 +219,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (imageCount * 250) 
         },
         draggable: true,
+        style: {
+          width: 300,
+          height: 200,
+        },
         data: {
           src: "https://via.placeholder.com/300x200",
           alt: "Image",
@@ -238,6 +251,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (containerCount * 350) 
         },
         draggable: true,
+        style: {
+          width: 400,
+          height: 300,
+        },
         data: {
           label: "Container",
           width: 400,
@@ -271,6 +288,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (shapeCount * 150) 
         },
         draggable: true,
+        style: {
+          width: 100,
+          height: 100,
+        },
         data: {
           shapeType: "rectangle",
           width: 100,
@@ -298,6 +319,9 @@ export function useNodeOperations(
           y: section.position.y + 100 + (formInputCount * 100) 
         },
         draggable: true,
+        style: {
+          width: 300,
+        },
         data: {
           placeholder: "Enter text...",
           inputType: "text",
@@ -324,6 +348,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (formTextareaCount * 150) 
         },
         draggable: true,
+        style: {
+          width: 300,
+          height: 100,
+        },
         data: {
           placeholder: "Enter your message...",
           width: 300,

@@ -86,7 +86,6 @@ export default function SectionNode({
         height: calculatedHeight,
         margin: "0 auto",
         padding: 0,
-        borderRadius: 8,
         pointerEvents: "auto",
         cursor: "pointer",
         boxShadow: selected

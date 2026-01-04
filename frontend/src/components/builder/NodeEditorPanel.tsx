@@ -21,7 +21,7 @@ interface ColumnWarning {
 interface NodeSettingsPanelProps {
   node: Node<any> | null;
   updateNodeData: (id: string, data: any) => void;
-  updateNodes?: (updater: (nodes: any[]) => any[]) => void;
+  updateNodes: (updater: (nodes: any[]) => any[]) => void;
   closePanel: () => void;
   edges?: Edge[];
   nodes?: Node[];
@@ -30,6 +30,7 @@ interface NodeSettingsPanelProps {
 export default function NodeSettingsPanel({
   node,
   updateNodeData,
+  updateNodes,
   closePanel,
   edges = [],
   nodes = [],
@@ -47,9 +48,21 @@ export default function NodeSettingsPanel({
 
   useEffect(() => {
     if (node) {
-      setLocalData(node.data || {});
+      // Always sync localData with node.data to reflect resize changes
+      // Merge style dimensions into localData if they exist and differ from data
+      const updatedData = { ...node.data };
+      
+      // If style has width/height, use those values (they're more up-to-date during resize)
+      if (node.style?.width !== undefined) {
+        updatedData.width = typeof node.style.width === 'number' ? node.style.width : parseInt(node.style.width);
+      }
+      if (node.style?.height !== undefined) {
+        updatedData.height = typeof node.style.height === 'number' ? node.style.height : parseInt(node.style.height);
+      }
+      
+      setLocalData(updatedData);
     }
-  }, [node]);
+  }, [node?.id, node?.data?.width, node?.data?.height, node?.style?.width, node?.style?.height]);
 
   if (!node) return null;
 
@@ -60,6 +73,24 @@ export default function NodeSettingsPanel({
 
   const handleSave = () => {
     updateNodeData(node.id, localData);
+    
+    // Also update node.style if width or height changed
+    if (localData.width !== undefined || localData.height !== undefined) {
+      updateNodes((nds: any[]) =>
+        nds.map((n: any) =>
+          n.id === node.id
+            ? {
+                ...n,
+                style: {
+                  ...n.style,
+                  ...(localData.width !== undefined ? { width: localData.width } : {}),
+                  ...(localData.height !== undefined ? { height: localData.height } : {}),
+                },
+              }
+            : n
+        )
+      );
+    }
   };
 
   const handleChange = (field: string, value: any) => {

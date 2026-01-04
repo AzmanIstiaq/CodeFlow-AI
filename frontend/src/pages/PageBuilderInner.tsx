@@ -177,6 +177,8 @@ export default function PageBuilderInner() {
   const [drawingMode, setDrawingMode] = useState<{ type: string; label: string; start: { x: number; y: number } } | null>(null);
   const [drawingPreview, setDrawingPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const isDrawingRef = useRef(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isEditingRadius, setIsEditingRadius] = useState(false);
 
   // 🎯 Clean hook-based architecture
   const {
@@ -276,6 +278,10 @@ export default function PageBuilderInner() {
         type: drawingMode.type,
         position: { x: drawingPreview.x, y: drawingPreview.y },
         draggable: true,
+        style: {
+          width: Math.round(drawingPreview.width),
+          height: Math.round(drawingPreview.height),
+        },
         data: {
           ...getDefaultNodeData(drawingMode.type, drawingMode.label),
           width: Math.round(drawingPreview.width),
@@ -824,6 +830,72 @@ export default function PageBuilderInner() {
                     ...n,
                     selected: isSelected,
                     draggable: !n.data?.locked,
+                    data: {
+                      ...n.data,
+                      _onResizeStart: () => setIsResizing(true),
+                      _onResizeEnd: () => setIsResizing(false),
+                      _onRadiusStart: () => setIsEditingRadius(true),
+                      _onRadiusEnd: () => setIsEditingRadius(false),
+                      _onResize: (_event: any, params: any) => {
+                        setNodes((nds: any) =>
+                          nds.map((node: any) =>
+                            node.id === n.id
+                              ? {
+                                  ...node,
+                                  position: {
+                                    x: params.x,
+                                    y: params.y,
+                                  },
+                                  style: {
+                                    ...node.style,
+                                    width: params.width,
+                                    height: params.height,
+                                  },
+                                  data: {
+                                    ...node.data,
+                                    width: Math.round(params.width),
+                                    height: Math.round(params.height),
+                                  },
+                                }
+                              : node
+                          )
+                        );
+                      },
+                      _onRadiusChange: (radius: number, corner?: string) => {
+                        setNodes((nds: any) =>
+                          nds.map((node: any) => {
+                            if (node.id !== n.id) return node;
+                            
+                            if (corner) {
+                              // Individual corner editing (Ctrl pressed)
+                              const currentRadius = typeof node.data.borderRadius === 'number' 
+                                ? { topLeft: node.data.borderRadius, topRight: node.data.borderRadius, bottomLeft: node.data.borderRadius, bottomRight: node.data.borderRadius }
+                                : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0, ...node.data.borderRadius };
+                              
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  borderRadius: {
+                                    ...currentRadius,
+                                    [corner]: radius,
+                                  },
+                                },
+                              };
+                            } else {
+                              // All corners (no Ctrl)
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  borderRadius: radius,
+                                },
+                              };
+                            }
+                          })
+                        );
+                      },
+                    },
                   };
                 })}
               edges={MODE === "builder" ? [] : edges}
@@ -839,12 +911,17 @@ export default function PageBuilderInner() {
                   
                   // Create node at clicked position
                   const nodeId = `${placementMode.type}-${Date.now()}`;
+                  const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
                   const newNode: any = {
                     id: nodeId,
                     type: placementMode.type,
                     position,
                     draggable: true,
-                    data: getDefaultNodeData(placementMode.type, placementMode.label),
+                    style: defaultData.width ? { 
+                      width: defaultData.width,
+                      ...(defaultData.height ? { height: defaultData.height } : {})
+                    } : undefined,
+                    data: defaultData,
                   };
                   
                   setNodes((nds: any) => [...nds, newNode]);
@@ -860,7 +937,7 @@ export default function PageBuilderInner() {
               onConnect={MODE === "builder" ? () => {} : onConnect}
               isValidConnection={() => MODE === "workflow"}
               nodesConnectable={MODE === "workflow"}
-              nodesDraggable={!drawingMode}
+              nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
               elementsSelectable={!drawingMode}
               selectNodesOnDrag={false}
               elevateNodesOnSelect={false}
@@ -888,12 +965,17 @@ export default function PageBuilderInner() {
                   
                   // Create node at clicked position
                   const nodeId = `${placementMode.type}-${Date.now()}`;
+                  const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
                   const newNode: any = {
                     id: nodeId,
                     type: placementMode.type,
                     position,
                     draggable: true,
-                    data: getDefaultNodeData(placementMode.type, placementMode.label),
+                    style: defaultData.width ? { 
+                      width: defaultData.width,
+                      ...(defaultData.height ? { height: defaultData.height } : {})
+                    } : undefined,
+                    data: defaultData,
                   };
                   
                   setNodes((nds: any) => [...nds, newNode]);

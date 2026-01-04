@@ -1,3 +1,4 @@
+import { NodeResizer } from "reactflow";
 
 export type FormInputNodeData = {
   placeholder: string;
@@ -19,13 +20,27 @@ type Props = {
 
 export default function FormInputNode({ data, selected }: Props) {
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ 
+      position: "relative",
+      width: "100%",
+      height: "100%",
+    }}>
+      <NodeResizer 
+        isVisible={selected} 
+        minWidth={100} 
+        minHeight={30}
+        keepAspectRatio={false}
+        onResizeStart={(data as any)._onResizeStart}
+        onResizeEnd={(data as any)._onResizeEnd}
+        onResize={(data as any)._onResize}
+      />
       <input
         type={data.inputType || "text"}
         placeholder={data.placeholder || "Enter text..."}
         readOnly
         style={{
-          width: data.width || 300,
+          width: "100%",
+          height: "100%",
           fontSize: data.fontSize || 14,
           padding: data.padding || 10,
           background: "transparent",
@@ -34,6 +49,7 @@ export default function FormInputNode({ data, selected }: Props) {
           fontFamily: "inherit",
           cursor: "move",
           pointerEvents: "auto",
+          boxSizing: "border-box",
         }}
       />
     </div>

@@ -1,3 +1,4 @@
+import { NodeResizer } from "reactflow";
 
 export type FormTextareaNodeData = {
   placeholder: string;
@@ -20,23 +21,37 @@ type Props = {
 
 export default function FormTextareaNode({ data, selected }: Props) {
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ 
+      position: "relative",
+      width: "100%",
+      height: "100%",
+    }}>
+      <NodeResizer 
+        isVisible={selected} 
+        minWidth={100} 
+        minHeight={60}
+        keepAspectRatio={false}
+        onResizeStart={(data as any)._onResizeStart}
+        onResizeEnd={(data as any)._onResizeEnd}
+        onResize={(data as any)._onResize}
+      />
       <textarea
         placeholder={data.placeholder || "Enter your message..."}
         readOnly
         rows={data.rows || 4}
         style={{
-          width: data.width || 300,
-          height: data.height || 100,
+          width: "100%",
+          height: "100%",
           fontSize: data.fontSize || 14,
           padding: data.padding || 10,
           background: "transparent",
           border: selected ? "2px dotted #3b82f6" : "none",
           outline: "none",
-          resize: "vertical",
+          resize: "none",
           fontFamily: "inherit",
           cursor: "move",
           pointerEvents: "auto",
+          boxSizing: "border-box",
         }}
       />
     </div>

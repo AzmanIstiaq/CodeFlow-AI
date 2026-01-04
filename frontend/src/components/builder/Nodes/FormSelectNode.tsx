@@ -1,3 +1,4 @@
+import { NodeResizer } from "reactflow";
 
 export type FormSelectNodeData = {
   label: string;
@@ -23,6 +24,14 @@ export default function FormSelectNode({ data, selected }: Props) {
   
   return (
     <div style={{ position: "relative" }}>
+      <NodeResizer 
+        isVisible={selected} 
+        minWidth={100} 
+        minHeight={40}
+        onResizeStart={(data as any)._onResizeStart}
+        onResizeEnd={(data as any)._onResizeEnd}
+        onResize={(data as any)._onResize}
+      />
       <div
         style={{
           display: "flex",

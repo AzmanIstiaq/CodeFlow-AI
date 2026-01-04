@@ -1,3 +1,4 @@
+import { NodeResizer } from "reactflow";
 
 export type FormCheckboxNodeData = {
   label: string;
@@ -17,6 +18,14 @@ type Props = {
 export default function FormCheckboxNode({ data, selected }: Props) {
   return (
     <div style={{ position: "relative" }}>
+      <NodeResizer 
+        isVisible={selected} 
+        minWidth={100} 
+        minHeight={30}
+        onResizeStart={(data as any)._onResizeStart}
+        onResizeEnd={(data as any)._onResizeEnd}
+        onResize={(data as any)._onResize}
+      />
       <div
         style={{
           display: "flex",
