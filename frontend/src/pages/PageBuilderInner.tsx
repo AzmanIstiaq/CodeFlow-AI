@@ -21,7 +21,7 @@ import FormTextareaNode from "../components/builder/Nodes/FormTextareaNode";
 import FormCheckboxNode from "../components/builder/Nodes/FormCheckboxNode";
 import FormRadioNode from "../components/builder/Nodes/FormRadioNode";
 import FormSelectNode from "../components/builder/Nodes/FormSelectNode";
-import NodeEditorPanel from "../components/builder/NodeEditorPanel";
+import { InspectorPanel } from "../components/builder/Inspector";
 import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkflowDialog";
 import LayerPanel from "../components/builder/LayerPanel";
 import AlignmentToolbar from "../components/builder/AlignmentToolbar";
@@ -213,7 +213,7 @@ export default function PageBuilderInner() {
     useWorkflowOperations(id, site, activePage, setNodes);
 
   // Smart guides for alignment with grid snapping
-  const { activeGuides, handleDrag: handleGuideDrag, clearGuides, snapToGuides } = useSmartGuides(nodes, showGrid);
+  const { activeGuides, handleDrag: handleGuideDrag, clearGuides } = useSmartGuides(nodes, showGrid);
   const reactFlowInstance = useReactFlow();
   const viewport = reactFlowInstance.getViewport();
 
@@ -1005,34 +1005,75 @@ export default function PageBuilderInner() {
           )}
         </div>
 
-        {selectedNode && (
-          <div className="node-editor-panel">
-            <NodeEditorPanel
-              node={nodes.find((n: any) => n.id === selectedNode.id) || selectedNode}
-              closePanel={() => setSelectedNode(null)}
-              updateNodeData={(id: string, newData: any) => {
-                const node = nodes.find((n: any) => n.id === id);
-
-                if (
-                  node?.type === "columnsSection" &&
-                  newData.columns !== node.data.columns
-                ) {
-                  return;
-                }
-
-                setNodes((nds: any) =>
-                  nds.map((n: any) =>
-                    n.id === id ? { ...n, data: newData } : n
-                  )
-                );
-              }}
-              updateNodes={(updater: (nodes: any[]) => any[]) => {
-                setNodes(updater);
-              }}
-              edges={edges}
-              nodes={nodes}
-            />
-          </div>
+        {selectedNodes.length > 0 && (
+          <InspectorPanel
+            selectedNodes={selectedNodes}
+            updateNode={(id: string, updates: any) => {
+              setNodes((nds: any) =>
+                nds.map((n: any) => {
+                  if (n.id === id) {
+                    return {
+                      ...n,
+                      data: { ...n.data, ...updates },
+                      position: updates.position !== undefined ? updates.position : n.position,
+                      style: {
+                        ...n.style,
+                        ...(updates.width !== undefined ? { width: updates.width } : {}),
+                        ...(updates.height !== undefined ? { height: updates.height } : {}),
+                      },
+                    };
+                  }
+                  return n;
+                })
+              );
+              setSelectedNodes(prev =>
+                prev.map(sn => {
+                  const updated = nodes.find(n => n.id === sn.id);
+                  return updated || sn;
+                })
+              );
+            }}
+            updateNodes={(ids: string[], updates: any) => {
+              setNodes((nds: any) =>
+                nds.map((n: any) => {
+                  if (ids.includes(n.id)) {
+                    return {
+                      ...n,
+                      data: { ...n.data, ...updates },
+                      position: updates.position !== undefined ? updates.position : n.position,
+                      style: {
+                        ...n.style,
+                        ...(updates.width !== undefined ? { width: updates.width } : {}),
+                        ...(updates.height !== undefined ? { height: updates.height } : {}),
+                      },
+                    };
+                  }
+                  return n;
+                })
+              );
+              setSelectedNodes(prev =>
+                prev.map(sn => {
+                  const updated = nodes.find(n => n.id === sn.id);
+                  return updated || sn;
+                })
+              );
+            }}
+            deleteNode={(id: string) => {
+              setNodes((nds: any) => nds.filter((n: any) => n.id !== id));
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+            deleteNodes={(ids: string[]) => {
+              setNodes((nds: any) => nds.filter((n: any) => !ids.includes(n.id)));
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+            allNodes={nodes}
+            onClose={() => {
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+          />
         )}
       </div>
     </>
