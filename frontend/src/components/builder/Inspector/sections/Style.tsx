@@ -8,7 +8,6 @@ export default function Style({
   updateNodes,
 }: SectionProps) {
   const [isOpen, setIsOpen] = useState(true);
-  const [perCorner, setPerCorner] = useState(false);
   const isMultiSelect = selectedNodes.length > 1;
   const node = selectedNodes[0];
 
@@ -18,9 +17,9 @@ export default function Style({
     if (isMultiSelect) {
       const values = selectedNodes.map(n => n.data?.[field]);
       const allSame = values.every(v => v === values[0]);
-      return allSame ? values[0] || defaultValue : "—";
+      return allSame ? (values[0] !== undefined ? values[0] : defaultValue) : "—";
     }
-    return node.data?.[field] || defaultValue;
+    return node.data?.[field] !== undefined ? node.data[field] : defaultValue;
   };
 
   const handleChange = (field: string, value: any) => {
@@ -36,6 +35,43 @@ export default function Style({
   const borderWidth = getValue("borderWidth", 0);
   const borderRadius = getValue("borderRadius", 0);
   const opacity = getValue("opacity", 100);
+  
+  // Determine if we're in per-corner mode based on current value
+  const perCorner = typeof borderRadius === "object" && borderRadius !== null;
+  
+  // Helper to get border radius values
+  const getBorderRadiusValue = () => {
+    if (typeof borderRadius === "object" && borderRadius !== null) {
+      return {
+        topLeft: borderRadius.topLeft ?? 0,
+        topRight: borderRadius.topRight ?? 0,
+        bottomLeft: borderRadius.bottomLeft ?? 0,
+        bottomRight: borderRadius.bottomRight ?? 0,
+      };
+    }
+    return typeof borderRadius === "number" ? borderRadius : 0;
+  };
+  
+  const togglePerCorner = () => {
+    if (perCorner) {
+      // Switching from per-corner to uniform
+      const corners = getBorderRadiusValue() as any;
+      const allEqual = corners.topLeft === corners.topRight && 
+                       corners.topRight === corners.bottomLeft && 
+                       corners.bottomLeft === corners.bottomRight;
+      const uniformValue = allEqual ? corners.topLeft : corners.topLeft;
+      handleChange("borderRadius", uniformValue);
+    } else {
+      // Switching from uniform to per-corner
+      const currentValue = typeof borderRadius === "number" ? borderRadius : 0;
+      handleChange("borderRadius", {
+        topLeft: currentValue,
+        topRight: currentValue,
+        bottomLeft: currentValue,
+        bottomRight: currentValue,
+      });
+    }
+  };
 
   return (
     <div className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}>
@@ -79,7 +115,7 @@ export default function Style({
               {!isMultiSelect && (
                 <Toggle
                   checked={perCorner}
-                  onChange={setPerCorner}
+                  onChange={togglePerCorner}
                   label="Per corner"
                 />
               )}
@@ -98,41 +134,61 @@ export default function Style({
               <div className="inspector-corner-grid">
                 <NumberInput
                   label="TL"
-                  value={typeof borderRadius === "object" ? borderRadius.topLeft || 0 : borderRadius}
-                  onChange={(v) => handleChange("borderRadius", {
-                    ...(typeof borderRadius === "object" ? borderRadius : {}),
-                    topLeft: v
-                  })}
+                  value={(getBorderRadiusValue() as any).topLeft}
+                  onChange={(v) => {
+                    const current = getBorderRadiusValue() as any;
+                    handleChange("borderRadius", {
+                      topLeft: v,
+                      topRight: current.topRight,
+                      bottomLeft: current.bottomLeft,
+                      bottomRight: current.bottomRight,
+                    });
+                  }}
                   min={0}
                   max={100}
                 />
                 <NumberInput
                   label="TR"
-                  value={typeof borderRadius === "object" ? borderRadius.topRight || 0 : borderRadius}
-                  onChange={(v) => handleChange("borderRadius", {
-                    ...(typeof borderRadius === "object" ? borderRadius : {}),
-                    topRight: v
-                  })}
+                  value={(getBorderRadiusValue() as any).topRight}
+                  onChange={(v) => {
+                    const current = getBorderRadiusValue() as any;
+                    handleChange("borderRadius", {
+                      topLeft: current.topLeft,
+                      topRight: v,
+                      bottomLeft: current.bottomLeft,
+                      bottomRight: current.bottomRight,
+                    });
+                  }}
                   min={0}
                   max={100}
                 />
                 <NumberInput
                   label="BL"
-                  value={typeof borderRadius === "object" ? borderRadius.bottomLeft || 0 : borderRadius}
-                  onChange={(v) => handleChange("borderRadius", {
-                    ...(typeof borderRadius === "object" ? borderRadius : {}),
-                    bottomLeft: v
-                  })}
+                  value={(getBorderRadiusValue() as any).bottomLeft}
+                  onChange={(v) => {
+                    const current = getBorderRadiusValue() as any;
+                    handleChange("borderRadius", {
+                      topLeft: current.topLeft,
+                      topRight: current.topRight,
+                      bottomLeft: v,
+                      bottomRight: current.bottomRight,
+                    });
+                  }}
                   min={0}
                   max={100}
                 />
                 <NumberInput
                   label="BR"
-                  value={typeof borderRadius === "object" ? borderRadius.bottomRight || 0 : borderRadius}
-                  onChange={(v) => handleChange("borderRadius", {
-                    ...(typeof borderRadius === "object" ? borderRadius : {}),
-                    bottomRight: v
-                  })}
+                  value={(getBorderRadiusValue() as any).bottomRight}
+                  onChange={(v) => {
+                    const current = getBorderRadiusValue() as any;
+                    handleChange("borderRadius", {
+                      topLeft: current.topLeft,
+                      topRight: current.topRight,
+                      bottomLeft: current.bottomLeft,
+                      bottomRight: v,
+                    });
+                  }}
                   min={0}
                   max={100}
                 />

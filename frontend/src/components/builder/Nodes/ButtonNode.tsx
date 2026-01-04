@@ -54,7 +54,7 @@ export default function ButtonNode({ data, selected }: Props) {
         width: "100%",
         height: "100%",
         padding: data.padding || "12px 24px",
-        borderRadius: getBorderRadius() || 8,
+        borderRadius: getBorderRadius(),
         border: data.border || "none",
         cursor: "grab",
         background: bg,

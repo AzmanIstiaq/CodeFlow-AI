@@ -44,13 +44,27 @@ export default function InlineNumberInput({
     }
   };
 
-  const handleBlur = () => {
-    const num = parseFloat(localValue);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    
+    // Parse and update immediately if valid number
+    const num = parseFloat(newValue);
     if (!isNaN(num)) {
       let clamped = num;
       if (min !== undefined) clamped = Math.max(clamped, min);
       if (max !== undefined) clamped = Math.min(clamped, max);
       onChange(clamped);
+    }
+  };
+
+  const handleBlur = () => {
+    // On blur, clean up the display value
+    const num = parseFloat(localValue);
+    if (!isNaN(num)) {
+      let clamped = num;
+      if (min !== undefined) clamped = Math.max(clamped, min);
+      if (max !== undefined) clamped = Math.min(clamped, max);
       setLocalValue(String(clamped));
     } else {
       setLocalValue(String(value));
@@ -63,7 +77,7 @@ export default function InlineNumberInput({
       <input
         type="text"
         value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         disabled={disabled}

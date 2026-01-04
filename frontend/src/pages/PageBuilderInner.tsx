@@ -32,6 +32,10 @@ import { useKeyboardShortcuts } from "../components/builder/hooks/useKeyboardSho
 import { useSmartGuides } from "../components/builder/hooks/useSmartGuides";
 import { useHistory } from "../components/builder/hooks/useHistory";
 
+import { useCanvasDrawing } from "./canvas/useCanvasDrawing";
+import { useCanvasActions } from "./canvas/useCanvasActions";
+import { useCanvasLayers } from "./canvas/useCanvasLayers";
+
 import { useSiteState } from "../components/builder/hooks/useSiteState";
 import { useNodeOperations } from "../components/builder/hooks/useNodeOperations";
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
@@ -220,359 +224,62 @@ export default function PageBuilderInner() {
   // History (undo/redo) - keyboard shortcuts handled in useHistory hook
   useHistory(nodes, setNodes);
 
-  // Handle ESC key to cancel placement mode or drawing mode
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (placementMode) setPlacementMode(null);
-        if (drawingMode) {
-          setDrawingMode(null);
-          setDrawingPreview(null);
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [placementMode, drawingMode]);
+  // Canvas drawing (ESC key + drawing mode)
+  useCanvasDrawing({
+    placementMode,
+    setPlacementMode,
+    drawingMode,
+    setDrawingMode,
+    drawingPreview,
+    setDrawingPreview,
+    isDrawingRef,
+    reactFlowInstance,
+    setNodes,
+    setSelectedNode,
+    setSelectedNodes,
+    getDefaultNodeData,
+  });
 
-  // Drawing mode handlers using global mouse events
-  useEffect(() => {
-    if (!drawingMode) return;
+  // Canvas actions (alignment, distribution, copy/paste, etc.)
+  const {
+    handleAlign,
+    handleDistribute,
+    handleDuplicate,
+    handleDelete,
+    handleCopy,
+    handlePaste,
+    handleSelectAll,
+    handleDeselect,
+    handleSetColumns,
+    handleCut,
+  } = useCanvasActions({
+    selectedNodes,
+    selectedNode,
+    setNodes,
+    setSelectedNode,
+    setSelectedNodes,
+    clipboard,
+    setClipboard,
+    nodes,
+  });
 
-    const handleMouseDown = (event: MouseEvent) => {
-      const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      setDrawingMode({ ...drawingMode, start: position });
-      isDrawingRef.current = true;
-    };
-
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!isDrawingRef.current || !drawingMode.start) return;
-      
-      const currentPos = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      
-      const x = Math.min(drawingMode.start.x, currentPos.x);
-      const y = Math.min(drawingMode.start.y, currentPos.y);
-      const width = Math.abs(currentPos.x - drawingMode.start.x);
-      const height = Math.abs(currentPos.y - drawingMode.start.y);
-      
-      setDrawingPreview({ x, y, width, height });
-    };
-
-    const handleMouseUp = () => {
-      isDrawingRef.current = false;
-      if (!drawingMode.start || !drawingPreview || drawingPreview.width < 10 || drawingPreview.height < 10) {
-        setDrawingMode(null);
-        setDrawingPreview(null);
-        return;
-      }
-      
-      const nodeId = `${drawingMode.type}-${Date.now()}`;
-      const newNode: any = {
-        id: nodeId,
-        type: drawingMode.type,
-        position: { x: drawingPreview.x, y: drawingPreview.y },
-        draggable: true,
-        style: {
-          width: Math.round(drawingPreview.width),
-          height: Math.round(drawingPreview.height),
-        },
-        data: {
-          ...getDefaultNodeData(drawingMode.type, drawingMode.label),
-          width: Math.round(drawingPreview.width),
-          height: Math.round(drawingPreview.height),
-        },
-      };
-      
-      setNodes((nds: any) => [...nds, newNode]);
-      setDrawingMode(null);
-      setDrawingPreview(null);
-      setSelectedNode(newNode);
-      setSelectedNodes([newNode]);
-    };
-
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [drawingMode, drawingPreview, reactFlowInstance, setNodes, setSelectedNode, setSelectedNodes]);
-
-  // Alignment and distribution handlers
-  const handleAlign = (type: string) => {
-    if (selectedNodes.length < 2) return;
-
-    const positions = selectedNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-    let newX: number, newY: number;
-
-    switch (type) {
-      case "left":
-        newX = Math.min(...positions.map(p => p.x));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: newX } }
-              : n
-          )
-        );
-        break;
-      case "right":
-        newX = Math.max(...positions.map(p => p.x));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: newX } }
-              : n
-          )
-        );
-        break;
-      case "center-h":
-        const avgX = positions.reduce((sum, p) => sum + p.x, 0) / positions.length;
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: avgX } }
-              : n
-          )
-        );
-        break;
-      case "top":
-        newY = Math.min(...positions.map(p => p.y));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: newY } }
-              : n
-          )
-        );
-        break;
-      case "bottom":
-        newY = Math.max(...positions.map(p => p.y));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: newY } }
-              : n
-          )
-        );
-        break;
-      case "center-v":
-        const avgY = positions.reduce((sum, p) => sum + p.y, 0) / positions.length;
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: avgY } }
-              : n
-          )
-        );
-        break;
-    }
-  };
-
-  const handleDistribute = (type: string) => {
-    if (selectedNodes.length < 3) return;
-
-    const sorted = [...selectedNodes].sort((a, b) =>
-      type === "horizontal" ? a.position.x - b.position.x : a.position.y - b.position.y
-    );
-
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const totalSpace =
-      type === "horizontal"
-        ? last.position.x - first.position.x
-        : last.position.y - first.position.y;
-    const gap = totalSpace / (sorted.length - 1);
-
-    setNodes((nds: any) =>
-      nds.map((n: any) => {
-        const index = sorted.findIndex(sn => sn.id === n.id);
-        if (index === -1 || index === 0 || index === sorted.length - 1) return n;
-
-        return {
-          ...n,
-          position:
-            type === "horizontal"
-              ? { ...n.position, x: first.position.x + gap * index }
-              : { ...n.position, y: first.position.y + gap * index },
-        };
-      })
-    );
-  };
-
-  const handleDuplicate = () => {
-    const nodesToDuplicate = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToDuplicate.length === 0) return;
-
-    const newNodes = nodesToDuplicate.map((node: any) => ({
-      ...node,
-      id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      position: { x: node.position.x + 20, y: node.position.y + 20 },
-      selected: false,
-    }));
-
-    setNodes((nds: any) => [...nds, ...newNodes]);
-  };
-
-  const handleDelete = () => {
-    const nodesToDelete = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToDelete.length === 0) return;
-
-    const idsToDelete = nodesToDelete.map(n => n.id);
-    setNodes((nds: any) => nds.filter((n: any) => !idsToDelete.includes(n.id)));
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleCopy = () => {
-    const nodesToCopy = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToCopy.length === 0) return;
-    setClipboard(nodesToCopy);
-  };
-
-  const handlePaste = () => {
-    if (clipboard.length === 0) return;
-
-    const newNodes = clipboard.map((node: any) => ({
-      ...node,
-      id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      position: { x: node.position.x + 40, y: node.position.y + 40 },
-      selected: false,
-    }));
-
-    setNodes((nds: any) => [...nds, ...newNodes]);
-  };
-
-  const handleSelectAll = () => {
-    const selectableNodes = nodes.filter((n: any) => n.type !== "section");
-    setSelectedNodes(selectableNodes);
-  };
-
-  const handleDeselect = () => {
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleSetColumns = (count: number) => {
-    if (selectedNodes.length === 1 && selectedNodes[0].type === "section") {
-      const sectionId = selectedNodes[0].id;
-      setNodes((nds: any) =>
-        nds.map((n: any) =>
-          n.id === sectionId
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  columns: {
-                    count,
-                    gap: n.data.columns?.gap || 24,
-                  },
-                },
-              }
-            : n
-        )
-      );
-    }
-  };
-
-  const handleCut = () => {
-    handleCopy();
-    handleDelete();
-  };
-
-  const handleLock = () => {
-    const nodesToLock = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToLock.length === 0) return;
-    
-    setNodes((nds: any) =>
-      nds.map((n: any) =>
-        nodesToLock.some(sn => sn.id === n.id)
-          ? { ...n, data: { ...n.data, locked: true }, draggable: false }
-          : n
-      )
-    );
-  };
-
-  const handleHide = () => {
-    const nodesToHide = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToHide.length === 0) return;
-    
-    setNodes((nds: any) =>
-      nds.map((n: any) =>
-        nodesToHide.some(sn => sn.id === n.id)
-          ? { ...n, data: { ...n.data, hidden: true } }
-          : n
-      )
-    );
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleBringToFront = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      const maxZIndex = Math.max(...nds.map((n: any) => n.zIndex || 0));
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: maxZIndex + 1 }
-          : n
-      );
-    });
-  };
-
-  const handleBringForward = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: (n.zIndex || 0) + 1 }
-          : n
-      );
-    });
-  };
-
-  const handleSendBackward = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: Math.max(0, (n.zIndex || 0) - 1) }
-          : n
-      );
-    });
-  };
-
-  const handleSendToBack = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: 0 }
-          : n
-      );
-    });
-  };
-
-  const handleZoomTo100 = () => {
-    reactFlowInstance.setViewport({ x: 0, y: 0, zoom: 1 });
-  };
+  // Canvas layers (lock, hide, z-index, zoom)
+  const {
+    handleLock,
+    handleHide,
+    handleBringToFront,
+    handleBringForward,
+    handleSendBackward,
+    handleSendToBack,
+    handleZoomTo100,
+  } = useCanvasLayers({
+    selectedNodes,
+    selectedNode,
+    setNodes,
+    setSelectedNode,
+    setSelectedNodes,
+    reactFlowInstance,
+  });
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -1007,10 +714,11 @@ export default function PageBuilderInner() {
 
         {selectedNodes.length > 0 && (
           <InspectorPanel
-            selectedNodes={selectedNodes}
+            selectedNodes={selectedNodes.map(sn => nodes.find((n: any) => n.id === sn.id) || sn)}
+            allNodes={nodes}
             updateNode={(id: string, updates: any) => {
-              setNodes((nds: any) =>
-                nds.map((n: any) => {
+              setNodes((nds: any) => {
+                const updatedNodes = nds.map((n: any) => {
                   if (n.id === id) {
                     return {
                       ...n,
@@ -1024,18 +732,22 @@ export default function PageBuilderInner() {
                     };
                   }
                   return n;
-                })
-              );
-              setSelectedNodes(prev =>
-                prev.map(sn => {
-                  const updated = nodes.find(n => n.id === sn.id);
-                  return updated || sn;
-                })
-              );
+                });
+                
+                // Update selectedNodes with fresh data from the new nodes array
+                setSelectedNodes(prev =>
+                  prev.map(sn => {
+                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                    return updated || sn;
+                  })
+                );
+                
+                return updatedNodes;
+              });
             }}
             updateNodes={(ids: string[], updates: any) => {
-              setNodes((nds: any) =>
-                nds.map((n: any) => {
+              setNodes((nds: any) => {
+                const updatedNodes = nds.map((n: any) => {
                   if (ids.includes(n.id)) {
                     return {
                       ...n,
@@ -1049,14 +761,18 @@ export default function PageBuilderInner() {
                     };
                   }
                   return n;
-                })
-              );
-              setSelectedNodes(prev =>
-                prev.map(sn => {
-                  const updated = nodes.find(n => n.id === sn.id);
-                  return updated || sn;
-                })
-              );
+                });
+                
+                // Update selectedNodes with fresh data from the new nodes array
+                setSelectedNodes(prev =>
+                  prev.map(sn => {
+                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                    return updated || sn;
+                  })
+                );
+                
+                return updatedNodes;
+              });
             }}
             deleteNode={(id: string) => {
               setNodes((nds: any) => nds.filter((n: any) => n.id !== id));
@@ -1068,7 +784,6 @@ export default function PageBuilderInner() {
               setSelectedNodes([]);
               setSelectedNode(null);
             }}
-            allNodes={nodes}
             onClose={() => {
               setSelectedNodes([]);
               setSelectedNode(null);

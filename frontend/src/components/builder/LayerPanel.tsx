@@ -116,7 +116,7 @@ export default function LayerPanel({
   return (
     <div
       style={{
-        width: 240,
+        width: 260,
         backgroundColor: "#ffffff",
         borderRight: "1px solid #e5e7eb",
         display: "flex",
@@ -127,13 +127,14 @@ export default function LayerPanel({
     >
       <div
         style={{
-          padding: "10px 12px",
+          padding: "12px",
           borderBottom: "1px solid #e5e7eb",
-          fontWeight: 500,
+          fontWeight: 600,
           fontSize: 11,
           color: "#6b7280",
           textTransform: "uppercase",
           letterSpacing: "0.5px",
+          background: "#fafafa",
         }}
       >
         Layers
@@ -142,7 +143,7 @@ export default function LayerPanel({
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "8px",
+          padding: "4px",
         }}
       >
         {sortedNodes.map((node, index) => {
@@ -159,36 +160,91 @@ export default function LayerPanel({
             onDrop={(e) => handleDrop(e, index)}
             onDragEnd={handleDragEnd}
             onClick={() => onNodeSelect(node)}
+            className="layer-row"
             style={{
               padding: "6px 8px",
-              marginBottom: 2,
-              borderRadius: 4,
+              marginBottom: 1,
+              borderRadius: 6,
               cursor: canDrag ? "grab" : "pointer",
               backgroundColor:
-                selectedNode?.id === node.id ? "#e0e7ff" : 
+                selectedNode?.id === node.id ? "#eff6ff" : 
                 isDragging ? "#f3f4f6" :
                 "transparent",
               border: "none",
               borderLeft: selectedNode?.id === node.id ? "2px solid #3b82f6" : "2px solid transparent",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: 12,
-              transition: "all 0.1s ease",
-              opacity: isDragging ? 0.4 : 1,
+              gap: 8,
+              fontSize: 13,
+              transition: "background-color 0.15s ease, border-color 0.15s ease",
+              opacity: isDragging ? 0.5 : 1,
+              minHeight: 32,
             }}
             onMouseEnter={(e) => {
               if (selectedNode?.id !== node.id && !isDragging) {
-                e.currentTarget.style.backgroundColor = "#f3f4f6";
+                e.currentTarget.style.backgroundColor = "#f9fafb";
+              }
+              const actions = e.currentTarget.querySelector('.layer-actions') as HTMLElement;
+              if (actions) {
+                actions.style.opacity = '1';
+              }
+              const deleteBtn = e.currentTarget.querySelector('.layer-delete') as HTMLElement;
+              if (deleteBtn) {
+                deleteBtn.style.opacity = '1';
               }
             }}
             onMouseLeave={(e) => {
               if (selectedNode?.id !== node.id && !isDragging) {
                 e.currentTarget.style.backgroundColor = "transparent";
               }
+              const actions = e.currentTarget.querySelector('.layer-actions') as HTMLElement;
+              if (actions && selectedNode?.id !== node.id) {
+                actions.style.opacity = '0.6';
+              }
+              const deleteBtn = e.currentTarget.querySelector('.layer-delete') as HTMLElement;
+              if (deleteBtn) {
+                deleteBtn.style.opacity = '0';
+              }
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {/* Icon + Name (Left) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+              <span 
+                style={{ 
+                  color: selectedNode?.id === node.id ? "#3b82f6" : "#9ca3af", 
+                  display: "flex",
+                  flexShrink: 0,
+                  transition: "color 0.15s ease",
+                }}
+              >
+                {getNodeIcon(node.type || "")}
+              </span>
+              <span
+                style={{
+                  color: node.data?.hidden ? "#9ca3af" : (selectedNode?.id === node.id ? "#111827" : "#4b5563"),
+                  fontWeight: selectedNode?.id === node.id ? 500 : 400,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontStyle: node.data?.hidden ? "italic" : "normal",
+                  transition: "color 0.15s ease",
+                }}
+              >
+                {getNodeLabel(node)}
+              </span>
+            </div>
+
+            {/* Actions (Right) */}
+            <div 
+              className="layer-actions"
+              style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: 2,
+                opacity: selectedNode?.id === node.id ? 1 : 0.6,
+                transition: "opacity 0.15s ease",
+              }}
+            >
               {/* Visibility toggle */}
               <button
                 onClick={(e) => {
@@ -203,7 +259,17 @@ export default function LayerPanel({
                   color: node.data?.hidden ? "#d1d5db" : "#6b7280",
                   display: "flex",
                   alignItems: "center",
-                  opacity: node.data?.hidden ? 0.5 : 1,
+                  borderRadius: 4,
+                  transition: "background-color 0.15s ease, color 0.15s ease",
+                  width: 24,
+                  height: 24,
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#f3f4f6";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
                 }}
                 title={node.data?.hidden ? "Show" : "Hide"}
               >
@@ -234,6 +300,17 @@ export default function LayerPanel({
                   color: node.data?.locked ? "#3b82f6" : "#6b7280",
                   display: "flex",
                   alignItems: "center",
+                  borderRadius: 4,
+                  transition: "background-color 0.15s ease, color 0.15s ease",
+                  width: 24,
+                  height: 24,
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#f3f4f6";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
                 }}
                 title={node.data?.locked ? "Unlock" : "Lock"}
               >
@@ -249,55 +326,46 @@ export default function LayerPanel({
                   </svg>
                 )}
               </button>
+
+              {/* Delete button (appears on hover) */}
+              {node.type !== "section" && (
+                <button
+                  className="layer-delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNodeDelete(node.id);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 4,
+                    color: "#6b7280",
+                    display: "flex",
+                    alignItems: "center",
+                    borderRadius: 4,
+                    transition: "background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease",
+                    width: 24,
+                    height: 24,
+                    justifyContent: "center",
+                    opacity: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#fef2f2";
+                    e.currentTarget.style.color = "#ef4444";
+                    e.currentTarget.style.opacity = "1";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "#6b7280";
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: selectedNode?.id === node.id ? "#3b82f6" : "#6b7280", display: "flex" }}>
-                {getNodeIcon(node.type || "")}
-              </span>
-              <span
-                style={{
-                  color: selectedNode?.id === node.id ? "#111827" : "#4b5563",
-                  fontWeight: selectedNode?.id === node.id ? 500 : 400,
-                  maxWidth: 140,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {getNodeLabel(node)}
-              </span>
-            </div>
-            {node.type !== "section" && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNodeDelete(node.id);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 4,
-                  opacity: 0,
-                  transition: "opacity 0.1s ease",
-                  color: "#6b7280",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = "1";
-                  e.currentTarget.style.color = "#ef4444";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = "0";
-                  e.currentTarget.style.color = "#6b7280";
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
-            )}
           </div>
         );
         })}

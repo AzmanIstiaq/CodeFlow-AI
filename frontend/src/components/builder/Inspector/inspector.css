@@ -8,7 +8,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
   font-size: 13px;
 }
 
@@ -187,6 +186,7 @@
   font-size: 13px;
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
   background: #f9fafb;
+  color: #111827;
 }
 
 .color-hex:focus {
@@ -327,6 +327,7 @@
   font-size: 13px;
   background: #f9fafb;
   cursor: pointer;
+  color: #111827;
 }
 
 .select-input select:focus {
@@ -410,6 +411,7 @@
   border-radius: 6px;
   font-size: 13px;
   background: #f9fafb;
+  color: #111827;
 }
 
 .text-input input:focus {
@@ -445,6 +447,7 @@
   font-size: 13px;
   background: #f9fafb;
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  color: #111827;
 }
 
 .number-input input:focus {
