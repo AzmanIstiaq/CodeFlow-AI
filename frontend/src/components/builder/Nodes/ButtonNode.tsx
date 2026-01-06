@@ -1,3 +1,6 @@
+import { useInlineEdit } from "../hooks/useInlineEdit";
+import type { NodeProps } from "reactflow";
+
 export type ButtonNodeData = {
   label: string;
   href?: string;
@@ -14,24 +17,38 @@ export type ButtonNodeData = {
   boxShadow: string;
   border: string;
   width: number;
+  onUpdateText?: (text: string) => void;
 };
 
-type Props = {
-  data: ButtonNodeData;
-  selected?: boolean;
-};
-
-export default function ButtonNode({ data, selected }: Props) {
+export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeData>) {
   const defaultBg = data.variant === "secondary" ? "#374151" : "#3b82f6";
   const bg = data.backgroundColor || defaultBg;
 
+  const {
+    isEditing,
+    value,
+    inputRef,
+    startEditing,
+    handleKeyDown,
+    handleBlur,
+    handleChange,
+  } = useInlineEdit(data.label, (newValue) => {
+    if (data.onUpdateText) {
+      data.onUpdateText(newValue);
+    }
+  });
+
   const buttonContent = (
     <button
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        startEditing();
+      }}
       style={{
         padding: data.padding || "12px 24px",
         borderRadius: data.borderRadius ?? 8,
         border: data.border || "none",
-        cursor: "grab",
+        cursor: isEditing ? "text" : "grab",
         background: bg,
         color: data.textColor || "#ffffff",
         fontWeight: data.fontWeight || 600,
@@ -48,9 +65,36 @@ export default function ButtonNode({ data, selected }: Props) {
         boxShadow: data.boxShadow || "none",
         outline: selected ? "2px solid #3b82f6" : "none",
         outlineOffset: "2px",
+        pointerEvents: "auto",
       }}
     >
-      {data.label}
+      {isEditing ? (
+        <input
+          ref={inputRef as React.RefObject<HTMLInputElement>}
+          type="text"
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "inherit",
+            fontWeight: "inherit",
+            fontSize: "inherit",
+            fontFamily: "inherit",
+            textAlign: "center",
+            width: "100%",
+            padding: 0,
+            cursor: "text",
+          }}
+        />
+      ) : (
+        data.label
+      )}
     </button>
   );
 

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useReactFlow } from "reactflow";
+import { useReactFlow, useViewport } from "reactflow";
 import ReactFlow from "reactflow";
 import type { Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
@@ -103,9 +103,44 @@ export default function PageBuilderInner() {
     useWorkflowOperations(id, site, activePage, setNodes);
 
   // Smart guides for alignment
-  const { activeGuides, handleDrag: handleGuideDrag, clearGuides } = useSmartGuides(nodes);
   const reactFlowInstance = useReactFlow();
-  const viewport = reactFlowInstance.getViewport();
+  // Use useViewport hook to get reactive viewport that updates on pan/zoom
+  const viewport = useViewport();
+  const {
+    activeGuides,
+    handleDrag: handleGuideDrag,
+    clearGuides,
+    snapToGuides,
+    setOverrideKey,
+    setSnapThreshold,
+    setGridSnap,
+  } = useSmartGuides(nodes, reactFlowInstance);
+  
+  // Track currently dragging node for snapping
+  const draggingNodeRef = useRef<ReactFlowNode | null>(null);
+  
+  // Handle override key (Ctrl/Cmd) for free movement
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        setOverrideKey(true);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) {
+        setOverrideKey(false);
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [setOverrideKey]);
 
   // History (undo/redo) - keyboard shortcuts handled in useHistory hook
   useHistory(nodes, setNodes);
@@ -572,6 +607,44 @@ export default function PageBuilderInner() {
                     zIndex: 1,
                     selected: isSelected,
                     draggable: !n.data?.locked,
+                    data: {
+                      ...n.data,
+                      onUpdateText: (newText: string) => {
+                        setNodes((nds: any) =>
+                          nds.map((node: any) => {
+                            if (node.id === n.id) {
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  // Update label for buttons, text for text nodes, placeholder for form inputs
+                                  ...(node.type === "button" ? { label: newText } : {}),
+                                  ...(node.type === "text" ? { text: newText } : {}),
+                                  ...(node.type === "formInput" ? { placeholder: newText } : {}),
+                                },
+                              };
+                            }
+                            return node;
+                          })
+                        );
+                      },
+                      onUpdateLabel: (newText: string) => {
+                        setNodes((nds: any) =>
+                          nds.map((node: any) => {
+                            if (node.id === n.id) {
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  label: newText,
+                                },
+                              };
+                            }
+                            return node;
+                          })
+                        );
+                      },
+                    },
                   };
                 })}
               edges={MODE === "builder" ? [] : edges}
@@ -591,14 +664,51 @@ export default function PageBuilderInner() {
               onNodeDragStart={(_, node) => {
                 setSelectedNode(node);
                 setSelectedNodes([node]);
+                draggingNodeRef.current = node;
               }}
               onNodeDrag={(_, node) => {
                 handleNodeDrag(node);
                 handleGuideDrag(node);
               }}
               onNodeDragStop={(event, node) => {
+                // Apply snapping on drag stop
+                if (node.positionAbsolute && node.width && node.height) {
+                  const snapped = snapToGuides(node, {
+                    x: node.positionAbsolute.x,
+                    y: node.positionAbsolute.y,
+                  });
+                  
+                  if (snapped.snapped) {
+                    // Calculate the new position based on the snapped absolute position
+                    // positionAbsolute accounts for parent transforms, so we need to use it directly
+                    const currentAbsoluteX = node.positionAbsolute.x;
+                    const currentAbsoluteY = node.positionAbsolute.y;
+                    const deltaX = snapped.x - currentAbsoluteX;
+                    const deltaY = snapped.y - currentAbsoluteY;
+                    
+                    // Update the node's position (relative to parent or flow)
+                    setNodes((nds: any) =>
+                      nds.map((n: any) => {
+                        if (n.id === node.id) {
+                          // If node has a parent, we need to account for parent position
+                          // For now, assume position is in flow coordinates
+                          return {
+                            ...n,
+                            position: {
+                              x: n.position.x + deltaX,
+                              y: n.position.y + deltaY,
+                            },
+                          };
+                        }
+                        return n;
+                      })
+                    );
+                  }
+                }
+                
                 handleNodeDragStop(event, node);
                 clearGuides();
+                draggingNodeRef.current = null;
               }}
               onPaneClick={() => {
                 setSelectedNode(null);

@@ -1,4 +1,6 @@
 import { Handle, Position } from "reactflow";
+import type { NodeProps } from "reactflow";
+import { useInlineEdit } from "../hooks/useInlineEdit";
 
 export type TextNodeData = {
   text: string;
@@ -19,17 +21,29 @@ export type TextNodeData = {
   borderRadius: number;
   border: string;
   width: number;
+  onUpdateText?: (text: string) => void;
 };
 
-type Props = {
-  data: TextNodeData;
-};
-
-type PropsWithSelected = Props & { selected?: boolean };
-
-export default function TextNode({ data, selected }: PropsWithSelected) {
+export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>) {
+  const {
+    isEditing,
+    value,
+    inputRef,
+    startEditing,
+    handleKeyDown,
+    handleBlur,
+    handleChange,
+  } = useInlineEdit(data.text, (newValue) => {
+    if (data.onUpdateText) {
+      data.onUpdateText(newValue);
+    }
+  });
   const content = (
     <div
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        startEditing();
+      }}
       style={{
         fontSize: data.fontSize || 16,
         color: data.color,
@@ -40,7 +54,7 @@ export default function TextNode({ data, selected }: PropsWithSelected) {
         letterSpacing: `${data.letterSpacing || 0}px`,
         textDecoration: data.textDecoration || "none",
         padding: data.padding || 16,
-        cursor: "grab",
+        cursor: isEditing ? "text" : "grab",
         minHeight: "44px",
         display: "flex",
         alignItems: "center",
@@ -53,9 +67,38 @@ export default function TextNode({ data, selected }: PropsWithSelected) {
         width: data.width || "auto",
         outline: selected ? "2px solid #3b82f6" : "none",
         outlineOffset: "2px",
+        pointerEvents: "auto",
       }}
     >
-      {data.link ? (
+      {isEditing ? (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "inherit",
+            fontWeight: "inherit",
+            fontSize: "inherit",
+            fontFamily: "inherit",
+            textAlign: data.textAlign || "left",
+            lineHeight: data.lineHeight || 1.6,
+            letterSpacing: `${data.letterSpacing || 0}px`,
+            textDecoration: data.textDecoration || "none",
+            width: "100%",
+            minHeight: "44px",
+            padding: 0,
+            cursor: "text",
+            resize: "none",
+          }}
+        />
+      ) : data.link ? (
         <a href={data.link} style={{ color: "inherit", textDecoration: "inherit" }}>
           {data.text}
         </a>
