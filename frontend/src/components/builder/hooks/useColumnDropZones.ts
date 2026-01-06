@@ -18,7 +18,7 @@ export function useColumnDropZones(
     columnIndex: number | null;
   }>({ sectionId: null, columnIndex: null });
 
-  const handleNodeDragStop = (_: any, node: any) => {
+  const handleNodeDragStop = (event: any, node: any) => {
     if (!node || !node.id || !node.type || !node.position) return;
     
     // Check if node was actually dragged (not just clicked)
@@ -34,7 +34,15 @@ export function useColumnDropZones(
         dragStartPosRef.current = null;
         return;
       }
-      addNodeToColumn(hoverState.sectionId, node.id, hoverState.columnIndex);
+      const clientX = event?.clientX;
+      const clientY = event?.clientY;
+      const dropPoint =
+        typeof clientX === "number" && typeof clientY === "number"
+          ? screenToFlowPosition({ x: clientX, y: clientY })
+          : node.positionAbsolute
+          ? { x: node.positionAbsolute.x, y: node.positionAbsolute.y }
+          : node.position;
+      addNodeToColumn(hoverState.sectionId, node.id, hoverState.columnIndex, dropPoint);
     } else if (node.data?._ownedByColumn && wasDragged) {
       // Only detach if node was actually dragged outside (not just clicked)
       removeNodeFromColumn(node.id);
@@ -84,11 +92,17 @@ export function useColumnDropZones(
   const addNodeToColumn = (
     columnsSectionId: string,
     nodeId: string,
-    columnIndex: number
+    columnIndex: number,
+    dropPoint?: { x: number; y: number }
   ) => {
     const columnRect = columnRectsRef.current[columnsSectionId]?.[columnIndex];
-    
+
     setNodes((nds: any[]) => {
+      const ownerNode = nds.find((n) => n.id === columnsSectionId);
+      const isRowOwner = ownerNode?.type === "row";
+      const columnWidth = columnRect ? columnRect.right - columnRect.left : 0;
+      const rowTop = columnRect ? columnRect.top : 0;
+
       return nds.map((node) => {
         // Dropped node - keep its current position but mark it as owned by column
         if (node.id === nodeId) {
@@ -97,30 +111,44 @@ export function useColumnDropZones(
           // Keep the current position where user dropped it
           // Only constrain X to be within column bounds
           let newPosition = node.position;
-          if (columnRect) {
-            // Constrain X to column bounds with padding
-            const minX = columnRect.left + 16;
-            const maxX = columnRect.right - 16;
-            newPosition = {
-              x: Math.max(minX, Math.min(maxX, node.position.x)),
-              y: node.position.y, // Keep Y position exactly where dropped
-            };
+          if (columnRect && dropPoint) {
+            const localX = Math.max(0, Math.min(columnWidth, dropPoint.x - columnRect.left));
+            const localY = dropPoint.y - rowTop;
+            newPosition = isRowOwner
+              ? {
+                  x: columnWidth * columnIndex + localX,
+                  y: localY,
+                }
+              : {
+                x: dropPoint.x,
+                y: dropPoint.y,
+              };
           }
 
           return {
             ...node,
             position: newPosition,
             draggable: true,
+            ...(isRowOwner ? { parentNode: columnsSectionId } : {}),
             data: {
               ...node.data,
               _ownedByColumn: columnsSectionId,
               _columnIndex: columnIndex,
+              ...(isRowOwner ? { _rowId: columnsSectionId } : {}),
+              ...(isRowOwner && dropPoint && columnRect
+                ? { _localY: dropPoint.y - rowTop }
+                : {}),
+              ...(isRowOwner ? { columnIndex } : {}),
             },
           };
         }
 
-        // Update section with columns
-        if (node.type === "section" && node.data?.columns && node.id === columnsSectionId) {
+        // Update owner with columns
+        if (
+          (node.type === "section" || node.type === "row") &&
+          node.data?.columns &&
+          node.id === columnsSectionId
+        ) {
           const children = { ...(node.data?.children ?? {}) };
 
           // Remove node from ALL columns (prevents duplicates)
@@ -153,16 +181,31 @@ export function useColumnDropZones(
     setNodes((nds: any[]) => {
       return nds.map((node) => {
         if (node.id === nodeId) {
-          const { _ownedByColumn, _columnIndex, ...restData } = node.data || {};
+          const ownedBy = node.data?._ownedByColumn;
+          const { _ownedByColumn, _columnIndex, columnIndex, _rowId, _localY, ...restData } = node.data || {};
+          const parent = nds.find((n) => n.id === ownedBy);
+          const section = parent?.parentNode
+            ? nds.find((n) => n.id === parent.parentNode)
+            : null;
+          const parentPosition = parent?.position ?? { x: 0, y: 0 };
+          const sectionPosition = section?.position ?? { x: 0, y: 0 };
+          const absolutePosition = node.parentNode === ownedBy
+            ? {
+                x: (node.position?.x ?? 0) + parentPosition.x + sectionPosition.x,
+                y: (node.position?.y ?? 0) + parentPosition.y + sectionPosition.y,
+              }
+            : node.position;
           return {
             ...node,
             // Keep the current position - don't move it
             draggable: true,
+            parentNode: node.parentNode === ownedBy ? undefined : node.parentNode,
+            position: absolutePosition,
             data: restData,
           };
         }
 
-        if (node.type === "section" && node.data?.columns) {
+        if ((node.type === "section" || node.type === "row") && node.data?.columns) {
           const children = { ...(node.data?.children ?? {}) };
 
           Object.keys(children).forEach((k) => {
@@ -238,6 +281,26 @@ export function useColumnDropZones(
     }
   };
 
+  const findDropTarget = useCallback((point: { x: number; y: number }) => {
+    for (const [sectionId, columns] of Object.entries(columnRectsRef.current)) {
+      for (const [colIndex, rect] of Object.entries(columns)) {
+        const inside =
+          point.x >= rect.left &&
+          point.x <= rect.right &&
+          point.y >= rect.top &&
+          point.y <= rect.bottom;
+        if (inside) {
+          return {
+            ownerId: sectionId,
+            columnIndex: Number(colIndex),
+            rect,
+          };
+        }
+      }
+    }
+    return null;
+  }, []);
+
   /* -------------------------------------------
    * Viewport / Rect Recalculation
    * ------------------------------------------- */
@@ -249,7 +312,7 @@ export function useColumnDropZones(
 
   useEffect(() => {
     nodes.forEach((node: any) => {
-      if (node.type === "section" && node.data?.columns) {
+      if ((node.type === "section" || node.type === "row") && node.data?.columns) {
         const columnCount = node.data.columns.count || node.data.columns;
         for (let i = 0; i < columnCount; i++) {
           const el = document.getElementById(`column-${node.id}-${i}`);
@@ -275,5 +338,6 @@ export function useColumnDropZones(
     handleNodeDragStop,
     viewportVersion: viewportVersionRef.current,
     hoverState,
+    findDropTarget,
   };
 }

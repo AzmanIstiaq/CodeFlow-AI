@@ -7,6 +7,7 @@ interface SelectionHeaderProps {
   updateNode: (id: string, updates: any) => void;
   updateNodes: (ids: string[], updates: any) => void;
   onClose: () => void;
+  allNodes?: Node[];
 }
 
 export default function SelectionHeader({
@@ -14,6 +15,7 @@ export default function SelectionHeader({
   updateNode,
   updateNodes,
   onClose,
+  allNodes,
 }: SelectionHeaderProps) {
   const [nodeName, setNodeName] = useState("");
   const isMultiSelect = selectedNodes.length > 1;
@@ -56,9 +58,20 @@ export default function SelectionHeader({
     }
   };
 
+  const getRowLabel = () => {
+    if (!node || node.type !== "row" || !allNodes) return "Row";
+    const parentId = (node as any).parentNode;
+    const rows = allNodes
+      .filter((n) => n.type === "row" && (n as any).parentNode === parentId)
+      .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+    const index = rows.findIndex((r) => r.id === node.id);
+    return index >= 0 ? `Row ${index + 1}` : "Row";
+  };
+
   const getNodeTypeName = (type: string) => {
     const typeMap: Record<string, string> = {
       section: "Frame",
+      row: getRowLabel(),
       text: "Text",
       button: "Button",
       image: "Image",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow } from "reactflow";
 import ReactFlow from "reactflow";
@@ -21,6 +21,7 @@ import FormTextareaNode from "../components/builder/Nodes/FormTextareaNode";
 import FormCheckboxNode from "../components/builder/Nodes/FormCheckboxNode";
 import FormRadioNode from "../components/builder/Nodes/FormRadioNode";
 import FormSelectNode from "../components/builder/Nodes/FormSelectNode";
+import RowNode from "../components/builder/Nodes/RowNode";
 import { InspectorPanel } from "../components/builder/Inspector";
 import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkflowDialog";
 import LayerPanel from "../components/builder/LayerPanel";
@@ -51,6 +52,7 @@ const nodeTypes = {
   output: OutputNode,
   text: TextNode,
   section: SectionNode,
+  row: RowNode,
   button: ButtonNode,
   image: ImageNode,
   container: ContainerNode,
@@ -60,7 +62,15 @@ const nodeTypes = {
   formCheckbox: FormCheckboxNode,
   formRadio: FormRadioNode,
   formSelect: FormSelectNode,
+
 };
+
+// Enforce consistent layering across all node operations.
+const normalizeZIndex = (nodeList: any[]) =>
+  nodeList.map((node: any) => {
+    const zIndex = node.type === "section" ? 0 : node.type === "row" ? 1 : 10;
+    return node.zIndex === zIndex ? node : { ...node, zIndex };
+  });
 
 // Helper function to get default data for each node type
 const getDefaultNodeData = (type: string, label: string) => {
@@ -157,10 +167,6 @@ const getDefaultNodeData = (type: string, label: string) => {
         align: "start",
         maxWidth: 1200,
         backgroundColor: "#000000",
-        columns: {
-          count: 1,
-          gap: 24,
-        },
       };
     default:
       return { label };
@@ -199,6 +205,14 @@ export default function PageBuilderInner() {
     handlePageRename,
   } = useSiteState(id);
 
+  // Normalize zIndex on every node update to keep rows below content.
+  const setNodesNormalized = (updater: any) => {
+    setNodes((nds: any) => {
+      const next = typeof updater === "function" ? updater(nds) : updater;
+      return Array.isArray(next) ? normalizeZIndex(next) : next;
+    });
+  };
+
   const { onNodesChange, onEdgesChange, onConnect, addNode } =
     useNodeOperations(activePage, updateActivePage);
 
@@ -209,12 +223,13 @@ export default function PageBuilderInner() {
     handleNodeDragStop,
     viewportVersion,
     hoverState,
-  } = useColumnDropZones(nodes, setNodes);
+    findDropTarget,
+  } = useColumnDropZones(nodes, setNodesNormalized);
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
   const { save, handleExportHTML, dialogProps } =
-    useWorkflowOperations(id, site, activePage, setNodes);
+    useWorkflowOperations(id, site, activePage, setNodesNormalized);
 
   // Smart guides for alignment with grid snapping
   const { activeGuides, handleDrag: handleGuideDrag, clearGuides } = useSmartGuides(nodes, showGrid);
@@ -222,7 +237,7 @@ export default function PageBuilderInner() {
   const viewport = reactFlowInstance.getViewport();
 
   // History (undo/redo) - keyboard shortcuts handled in useHistory hook
-  useHistory(nodes, setNodes);
+  useHistory(nodes, setNodesNormalized);
 
   // Canvas drawing (ESC key + drawing mode)
   useCanvasDrawing({
@@ -234,7 +249,7 @@ export default function PageBuilderInner() {
     setDrawingPreview,
     isDrawingRef,
     reactFlowInstance,
-    setNodes,
+    setNodes: setNodesNormalized,
     setSelectedNode,
     setSelectedNodes,
     getDefaultNodeData,
@@ -255,7 +270,7 @@ export default function PageBuilderInner() {
   } = useCanvasActions({
     selectedNodes,
     selectedNode,
-    setNodes,
+    setNodes: setNodesNormalized,
     setSelectedNode,
     setSelectedNodes,
     clipboard,
@@ -275,7 +290,7 @@ export default function PageBuilderInner() {
   } = useCanvasLayers({
     selectedNodes,
     selectedNode,
-    setNodes,
+    setNodes: setNodesNormalized,
     setSelectedNode,
     setSelectedNodes,
     reactFlowInstance,
@@ -294,6 +309,101 @@ export default function PageBuilderInner() {
 
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
+
+  const rowLayoutById = useMemo(() => {
+    const layout = new Map<string, { x: number; y: number; width: number }>();
+    const sections = nodes.filter((n: any) => n.type === "section");
+
+    sections.forEach((section: any) => {
+      const sectionPadding = 0;
+      const sectionGap = 0;
+      const sectionWidth = section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
+
+      const rows = nodes
+        .filter((n: any) => n.type === "row" && n.parentNode === section.id)
+        .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+
+      let currentY = sectionPadding;
+      rows.forEach((row: any) => {
+        const isOnlyRow = rows.length === 1;
+        layout.set(row.id, { x: 0, y: currentY, width: sectionWidth });
+        const rowHeight = isOnlyRow
+          ? section.data?.pageHeight ?? row.data?.rowHeight ?? row.height ?? 0
+          : row.data?.rowHeight ?? row.height ?? 0;
+        currentY += rowHeight + sectionGap;
+      });
+    });
+
+    return layout;
+  }, [nodes]);
+
+  const placeNodeAtEvent = (event: any) => {
+    if (!placementMode) return false;
+    const flowPoint = reactFlowInstance.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const target = findDropTarget(flowPoint);
+    if (!target) return false;
+
+    const { ownerId, columnIndex, rect } = target;
+    const columnWidth = rect.right - rect.left;
+    const localX = Math.max(0, Math.min(columnWidth, flowPoint.x - rect.left));
+    const localY = flowPoint.y - rect.top;
+
+    const nodeId = `${placementMode.type}-${Date.now()}`;
+    const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
+    const newNode: any = {
+      id: nodeId,
+      type: placementMode.type,
+      parentNode: ownerId,
+      position: {
+        x: columnWidth * columnIndex + localX,
+        y: localY,
+      },
+      draggable: true,
+      style: defaultData.width ? {
+        width: defaultData.width,
+        ...(defaultData.height ? { height: defaultData.height } : {}),
+      } : undefined,
+      data: {
+        ...defaultData,
+        _rowId: ownerId,
+        _ownedByColumn: ownerId,
+        _columnIndex: columnIndex,
+        _localY: localY,
+        columnIndex,
+      },
+    };
+
+    setNodesNormalized((nds: any) => [...nds, newNode]);
+    setPlacementMode(null);
+    setSelectedNode(newNode);
+    setSelectedNodes([newNode]);
+    return true;
+  };
+
+  const selectFrameAtPoint = (event: any) => {
+    const flowPoint = reactFlowInstance.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const frame = nodes.find((n: any) => n.type === "section");
+    if (!frame) return false;
+    const width = frame.width ?? frame.data?.pageWidth ?? 0;
+    const height = frame.height ?? frame.data?.pageHeight ?? 0;
+    const within =
+      flowPoint.x >= frame.position.x &&
+      flowPoint.x <= frame.position.x + width &&
+      flowPoint.y >= frame.position.y &&
+      flowPoint.y <= frame.position.y + height;
+    if (within) {
+      setSelectedNode(frame);
+      setSelectedNodes([frame]);
+      return true;
+    }
+    return false;
+  };
 
   return (
     <>
@@ -350,14 +460,41 @@ export default function PageBuilderInner() {
         />
         {hasFrame && (
           <LayerPanel
-            nodes={nodes}
+            nodes={normalizeZIndex(nodes)}
             selectedNode={selectedNode}
             onNodeSelect={(node) => {
+              if (node.type === "row") {
+                const parentSection = nodes.find(
+                  (n: any) => n.type === "section" && n.id === node.parentNode
+                );
+                if (parentSection) {
+                  setSelectedNode(parentSection);
+                  setSelectedNodes([parentSection]);
+                }
+                return;
+              }
               setSelectedNode(node);
               setSelectedNodes([node]);
             }}
             onNodeDelete={(nodeId) => {
-              setNodes((nds: any) => nds.filter((n: any) => n.id !== nodeId));
+              const target = nodes.find((n: any) => n.id === nodeId);
+              if (target?.type === "section") return;
+              if (target?.type === "row") {
+                setNodesNormalized((nds: any) =>
+                  nds.filter(
+                    (n: any) =>
+                      n.id !== nodeId &&
+                      n.parentNode !== nodeId &&
+                      n.data?._rowId !== nodeId
+                  )
+                );
+                if (selectedNode?.id === nodeId) {
+                  setSelectedNode(null);
+                }
+                setSelectedNodes((sns) => sns.filter((n) => n.id !== nodeId));
+                return;
+              }
+              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== nodeId));
               if (selectedNode?.id === nodeId) {
                 setSelectedNode(null);
               }
@@ -366,7 +503,7 @@ export default function PageBuilderInner() {
             onNodeVisibilityToggle={() => {}}
             onNodeLock={() => {}}
             onUpdateNode={(nodeId: string, updates: any) => {
-              setNodes((nds: any) =>
+              setNodesNormalized((nds: any) =>
                 nds.map((n: any) => {
                   if (n.id === nodeId) {
                     return {
@@ -381,7 +518,7 @@ export default function PageBuilderInner() {
               );
             }}
             onReorderNodes={(nodeId: string, targetIndex: number) => {
-              setNodes((nds: any) => {
+              setNodesNormalized((nds: any) => {
                 const nodesCopy = [...nds];
                 const draggedIndex = nodesCopy.findIndex((n) => n.id === nodeId);
                 if (draggedIndex === -1) return nds;
@@ -391,11 +528,10 @@ export default function PageBuilderInner() {
                 
                 // Insert at target index
                 nodesCopy.splice(targetIndex, 0, draggedNode);
-                
-                // Update z-index/order for all nodes
+
+                // Update order only; zIndex is normalized separately.
                 return nodesCopy.map((node, index) => ({
                   ...node,
-                  zIndex: node.type === "section" ? 0 : index + 1,
                   data: {
                     ...node.data,
                     order: index,
@@ -515,9 +651,13 @@ export default function PageBuilderInner() {
             <ZoomControls showGrid={showGrid} onToggleGrid={() => setShowGrid(!showGrid)} />
             <ReactFlow
               nodes={nodes
+                // Render order must respect zIndex to keep rows below content nodes.
                 .filter((n: any) => !n.data?.hidden)
+                .sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
                 .map((n: any) => {
-                  const isSelected = selectedNode?.id === n.id || selectedNodes.some(sn => sn.id === n.id);
+                  const isSelected =
+                    selectedNode?.id === n.id ||
+                    selectedNodes.some((sn) => sn.id === n.id);
                   if (n.type === "section") {
                     return {
                       ...n,
@@ -530,6 +670,61 @@ export default function PageBuilderInner() {
                         _registerColumnRect: registerColumnRect,
                         _viewportVersion: viewportVersion,
                         _hoverState: hoverState,
+                      },
+                      style: {
+                        ...n.style,
+                        zIndex: 0,
+                      },
+                    };
+                  }
+                  if (n.type === "row") {
+                    const layout = rowLayoutById.get(n.id);
+                    return {
+                      ...n,
+                      zIndex: 1,
+                      draggable: false,
+                      selectable: false,
+                      position: layout ? { x: layout.x, y: layout.y } : n.position,
+                      selected: isSelected,
+                      data: {
+                        ...n.data,
+                        _allNodes: nodes,
+                        _registerColumnRect: registerColumnRect,
+                        _viewportVersion: viewportVersion,
+                        _hoverState: hoverState,
+                        _onColumnClick: (event: any) => {
+                          if (placementMode) {
+                            placeNodeAtEvent(event);
+                            return;
+                          }
+                          const parentSection = nodes.find(
+                            (node: any) => node.type === "section" && node.id === n.parentNode
+                          );
+                          if (parentSection) {
+                            setSelectedNode(parentSection);
+                            setSelectedNodes([parentSection]);
+                          }
+                        },
+                        _onRowMeasure: (rowId: string, height: number) => {
+                          setNodesNormalized((nds: any) =>
+                            nds.map((node: any) => {
+                              if (node.id !== rowId) return node;
+                              if (node.data?.rowHeight === height) return node;
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  rowHeight: height,
+                                },
+                              };
+                            })
+                          );
+                        },
+                      },
+                      style: {
+                        ...n.style,
+                        zIndex: 1,
+                        width: layout?.width ?? n.style?.width,
                       },
                     };
                   }
@@ -544,7 +739,7 @@ export default function PageBuilderInner() {
                       _onRadiusStart: () => setIsEditingRadius(true),
                       _onRadiusEnd: () => setIsEditingRadius(false),
                       _onResize: (_event: any, params: any) => {
-                        setNodes((nds: any) =>
+                        setNodesNormalized((nds: any) =>
                           nds.map((node: any) =>
                             node.id === n.id
                               ? {
@@ -557,6 +752,7 @@ export default function PageBuilderInner() {
                                     ...node.style,
                                     width: params.width,
                                     height: params.height,
+                                    zIndex: n.zIndex ?? 10,
                                   },
                                   data: {
                                     ...node.data,
@@ -569,7 +765,7 @@ export default function PageBuilderInner() {
                         );
                       },
                       _onRadiusChange: (radius: number, corner?: string) => {
-                        setNodes((nds: any) =>
+                        setNodesNormalized((nds: any) =>
                           nds.map((node: any) => {
                             if (node.id !== n.id) return node;
                             
@@ -603,42 +799,33 @@ export default function PageBuilderInner() {
                         );
                       },
                     },
+                    style: {
+                      ...n.style,
+                      zIndex: n.zIndex ?? 10,
+                    },
                   };
                 })}
               edges={MODE === "builder" ? [] : edges}
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
               onNodeClick={(event, node) => {
-                if (placementMode) {
-                  // Get click position in flow coordinates
-                  const position = reactFlowInstance.screenToFlowPosition({
-                    x: event.clientX,
-                    y: event.clientY,
-                  });
-                  
-                  // Create node at clicked position
-                  const nodeId = `${placementMode.type}-${Date.now()}`;
-                  const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
-                  const newNode: any = {
-                    id: nodeId,
-                    type: placementMode.type,
-                    position,
-                    draggable: true,
-                    style: defaultData.width ? { 
-                      width: defaultData.width,
-                      ...(defaultData.height ? { height: defaultData.height } : {})
-                    } : undefined,
-                    data: defaultData,
-                  };
-                  
-                  setNodes((nds: any) => [...nds, newNode]);
-                  setPlacementMode(null);
-                  setSelectedNode(newNode);
-                  setSelectedNodes([newNode]);
-                } else {
-                  setSelectedNode(node);
-                  setSelectedNodes([node]);
+                if (node.type === "row") {
+                  const parentSection = nodes.find(
+                    (n: any) => n.type === "section" && n.id === node.parentNode
+                  );
+                  if (parentSection) {
+                    setSelectedNode(parentSection);
+                    setSelectedNodes([parentSection]);
+                  }
+                  return;
                 }
+                event.stopPropagation();
+                if (placementMode) {
+                  placeNodeAtEvent(event);
+                  return;
+                }
+                setSelectedNode(node);
+                setSelectedNodes([node]);
               }}
               onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
               onConnect={MODE === "builder" ? () => {} : onConnect}
@@ -646,11 +833,12 @@ export default function PageBuilderInner() {
               nodesConnectable={MODE === "workflow"}
               nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
               elementsSelectable={!drawingMode}
-              selectNodesOnDrag={false}
+              selectNodesOnDrag={true}
               elevateNodesOnSelect={false}
               panOnDrag={drawingMode ? false : true}
               zoomOnScroll={!drawingMode}
               onNodeDragStart={(_, node) => {
+                if (node.type === "row") return;
                 setSelectedNode(node);
                 setSelectedNodes([node]);
               }}
@@ -664,32 +852,10 @@ export default function PageBuilderInner() {
               }}
               onPaneClick={(event) => {
                 if (placementMode) {
-                  // Get click position in flow coordinates
-                  const position = reactFlowInstance.screenToFlowPosition({
-                    x: event.clientX,
-                    y: event.clientY,
-                  });
-                  
-                  // Create node at clicked position
-                  const nodeId = `${placementMode.type}-${Date.now()}`;
-                  const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
-                  const newNode: any = {
-                    id: nodeId,
-                    type: placementMode.type,
-                    position,
-                    draggable: true,
-                    style: defaultData.width ? { 
-                      width: defaultData.width,
-                      ...(defaultData.height ? { height: defaultData.height } : {})
-                    } : undefined,
-                    data: defaultData,
-                  };
-                  
-                  setNodes((nds: any) => [...nds, newNode]);
-                  setPlacementMode(null);
-                  setSelectedNode(newNode);
-                  setSelectedNodes([newNode]);
-                } else {
+                  placeNodeAtEvent(event);
+                  return;
+                }
+                if (!selectFrameAtPoint(event)) {
                   setSelectedNode(null);
                   setSelectedNodes([]);
                 }
@@ -717,7 +883,7 @@ export default function PageBuilderInner() {
             selectedNodes={selectedNodes.map(sn => nodes.find((n: any) => n.id === sn.id) || sn)}
             allNodes={nodes}
             updateNode={(id: string, updates: any) => {
-              setNodes((nds: any) => {
+              setNodesNormalized((nds: any) => {
                 const updatedNodes = nds.map((n: any) => {
                   if (n.id === id) {
                     return {
@@ -746,17 +912,22 @@ export default function PageBuilderInner() {
               });
             }}
             updateNodes={(ids: string[], updates: any) => {
-              setNodes((nds: any) => {
+              setNodesNormalized((nds: any) => {
+                const { __addNode, ...restUpdates } = updates || {};
+                if (__addNode) {
+                  return [...nds, __addNode];
+                }
+
                 const updatedNodes = nds.map((n: any) => {
                   if (ids.includes(n.id)) {
                     return {
                       ...n,
-                      data: { ...n.data, ...updates },
-                      position: updates.position !== undefined ? updates.position : n.position,
+                      data: { ...n.data, ...restUpdates },
+                      position: restUpdates.position !== undefined ? restUpdates.position : n.position,
                       style: {
                         ...n.style,
-                        ...(updates.width !== undefined ? { width: updates.width } : {}),
-                        ...(updates.height !== undefined ? { height: updates.height } : {}),
+                        ...(restUpdates.width !== undefined ? { width: restUpdates.width } : {}),
+                        ...(restUpdates.height !== undefined ? { height: restUpdates.height } : {}),
                       },
                     };
                   }
@@ -775,12 +946,12 @@ export default function PageBuilderInner() {
               });
             }}
             deleteNode={(id: string) => {
-              setNodes((nds: any) => nds.filter((n: any) => n.id !== id));
+              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== id));
               setSelectedNodes([]);
               setSelectedNode(null);
             }}
             deleteNodes={(ids: string[]) => {
-              setNodes((nds: any) => nds.filter((n: any) => !ids.includes(n.id)));
+              setNodesNormalized((nds: any) => nds.filter((n: any) => !ids.includes(n.id)));
               setSelectedNodes([]);
               setSelectedNode(null);
             }}

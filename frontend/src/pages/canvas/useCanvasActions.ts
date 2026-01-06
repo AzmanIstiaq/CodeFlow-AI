@@ -127,7 +127,12 @@ export function useCanvasActions({
     const nodesToDuplicate = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
     if (nodesToDuplicate.length === 0) return;
 
-    const newNodes = nodesToDuplicate.map((node: any) => ({
+    const filtered = nodesToDuplicate.filter(
+      (node: any) => node.type !== "section" && node.type !== "row"
+    );
+    if (filtered.length === 0) return;
+
+    const newNodes = filtered.map((node: any) => ({
       ...node,
       id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       position: { x: node.position.x + 20, y: node.position.y + 20 },
@@ -141,7 +146,12 @@ export function useCanvasActions({
     const nodesToDelete = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
     if (nodesToDelete.length === 0) return;
 
-    const idsToDelete = nodesToDelete.map(n => n.id);
+    const filtered = nodesToDelete.filter(
+      (node: any) => node.type !== "section" && node.type !== "row"
+    );
+    if (filtered.length === 0) return;
+
+    const idsToDelete = filtered.map(n => n.id);
     setNodes((nds: any) => nds.filter((n: any) => !idsToDelete.includes(n.id)));
     setSelectedNode(null);
     setSelectedNodes([]);
@@ -150,13 +160,20 @@ export function useCanvasActions({
   const handleCopy = () => {
     const nodesToCopy = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
     if (nodesToCopy.length === 0) return;
-    setClipboard(nodesToCopy);
+    const filtered = nodesToCopy.filter(
+      (node: any) => node.type !== "section" && node.type !== "row"
+    );
+    if (filtered.length === 0) return;
+    setClipboard(filtered);
   };
 
   const handlePaste = () => {
-    if (clipboard.length === 0) return;
+    const pasteable = clipboard.filter(
+      (node: any) => node.type !== "section" && node.type !== "row"
+    );
+    if (pasteable.length === 0) return;
 
-    const newNodes = clipboard.map((node: any) => ({
+    const newNodes = pasteable.map((node: any) => ({
       ...node,
       id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       position: { x: node.position.x + 40, y: node.position.y + 40 },
@@ -167,7 +184,9 @@ export function useCanvasActions({
   };
 
   const handleSelectAll = () => {
-    const selectableNodes = nodes.filter((n: any) => n.type !== "section");
+    const selectableNodes = nodes.filter(
+      (n: any) => n.type !== "section" && n.type !== "row"
+    );
     setSelectedNodes(selectableNodes);
   };
 
@@ -199,8 +218,16 @@ export function useCanvasActions({
   };
 
   const handleCut = () => {
-    handleCopy();
-    handleDelete();
+    const nodesToCut = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
+    if (nodesToCut.length === 0) return;
+    const filtered = nodesToCut.filter(
+      (node: any) => node.type !== "section" && node.type !== "row"
+    );
+    if (filtered.length === 0) return;
+    setClipboard(filtered);
+    setNodes((nds: any) => nds.filter((n: any) => !filtered.some((f: any) => f.id === n.id)));
+    setSelectedNode(null);
+    setSelectedNodes([]);
   };
 
   return {

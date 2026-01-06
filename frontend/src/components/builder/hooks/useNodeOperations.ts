@@ -117,10 +117,6 @@ export function useNodeOperations(
           maxWidth: 1200,
           backgroundColor: "#000000",
           order: sectionCount,
-          columns: {
-            count: 1,
-            gap: 24,
-          },
         },
       };
 

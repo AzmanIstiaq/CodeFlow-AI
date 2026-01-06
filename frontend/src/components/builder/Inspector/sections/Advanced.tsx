@@ -22,10 +22,12 @@ export default function Advanced({
 
   const handleDelete = () => {
     if (isMultiSelect) {
+      if (selectedNodes.some(n => n.type === "section")) return;
       if (confirm(`Delete ${selectedNodes.length} layers?`)) {
         deleteNodes(selectedNodes.map(n => n.id));
       }
     } else {
+      if (node.type === "section") return;
       if (confirm(`Delete ${node.data?.label || node.id}?`)) {
         deleteNode(node.id);
       }
@@ -54,18 +56,22 @@ export default function Advanced({
     }
   };
 
-  const parentNode = allNodes?.find(n => 
+  const parentNode = allNodes?.find(n =>
     n.id === node.data?._ownedByColumn
   );
 
+  const isDeleteBlocked = isMultiSelect
+    ? selectedNodes.some(n => n.type === "section")
+    : node.type === "section";
+
   return (
     <div className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}>
-      <div 
+      <div
         className="inspector-section-title"
         onClick={() => setIsOpen(!isOpen)}
       >
         Advanced
-        <span className="inspector-section-toggle">{isOpen ? "▼" : "▶"}</span>
+        <span className="inspector-section-toggle">{isOpen ? "ƒ-¬" : "ƒ-"}</span>
       </div>
       
       {isOpen && (
@@ -95,13 +101,15 @@ export default function Advanced({
             >
               Reset Styles
             </button>
-            
-            <IconButton
-              icon="🗑"
-              onClick={handleDelete}
-              variant="danger"
-              tooltip={isMultiSelect ? "Delete selected layers" : "Delete layer"}
-            />
+
+            {!isDeleteBlocked && (
+              <IconButton
+                icon="dY-`"
+                onClick={handleDelete}
+                variant="danger"
+                tooltip={isMultiSelect ? "Delete selected layers" : "Delete layer"}
+              />
+            )}
           </div>
         </div>
       )}

@@ -81,14 +81,14 @@ export default function LayerPanel({
   const sortedNodes = [...nodes].sort((a, b) => {
     if (a.type === "section") return -1;
     if (b.type === "section") return 1;
-    // Sort by z-index or order if available
-    const orderA = a.data?.order ?? a.zIndex ?? 0;
-    const orderB = b.data?.order ?? b.zIndex ?? 0;
-    return orderA - orderB;
+    // Highest zIndex first so content stays above layout rows.
+    const orderA = a.zIndex ?? a.data?.order ?? 0;
+    const orderB = b.zIndex ?? b.data?.order ?? 0;
+    return orderB - orderA;
   });
 
   const handleDragStart = (e: React.DragEvent, node: Node) => {
-    if (node.type === "section") return; // Don't allow dragging section nodes
+    if (node.type === "section" || node.type === "row") return; // Layout nodes cannot be reordered
     setDraggedNode(node.id);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -148,7 +148,7 @@ export default function LayerPanel({
       >
         {sortedNodes.map((node, index) => {
           const isDragging = draggedNode === node.id;
-          const canDrag = node.type !== "section";
+          const canDrag = node.type !== "section" && node.type !== "row";
           
           return (
           <div

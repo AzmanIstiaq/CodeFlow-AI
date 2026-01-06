@@ -1,6 +1,6 @@
 import type { InspectorProps } from "./types";
 import SelectionHeader from "./SelectionHeader";
-import { LayoutPosition, Style, Text, Effects, Advanced } from "./sections";
+import { LayoutPosition, RowControl, Style, Text, Effects, Advanced } from "./sections";
 import "./inspector.css";
 
 export default function InspectorPanel({
@@ -21,10 +21,18 @@ export default function InspectorPanel({
         updateNode={updateNode}
         updateNodes={updateNodes}
         onClose={onClose}
+        allNodes={allNodes}
       />
 
       <div className="inspector-content">
         <LayoutPosition
+          selectedNodes={selectedNodes}
+          updateNode={updateNode}
+          updateNodes={updateNodes}
+          allNodes={allNodes}
+        />
+
+        <RowControl
           selectedNodes={selectedNodes}
           updateNode={updateNode}
           updateNodes={updateNodes}
