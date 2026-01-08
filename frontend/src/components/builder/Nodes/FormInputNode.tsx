@@ -61,24 +61,21 @@ export default function FormInputNode({ data, selected }: NodeProps<FormInputNod
         onResizeEnd={(data as any)._onResizeEnd}
         onResize={(data as any)._onResize}
       />
-      <input
-        type={data.inputType || "text"}
-        placeholder={data.placeholder || "Enter text..."}
-        readOnly
-        style={{
-          width: "100%",
-          height: "100%",
-          fontSize: data.fontSize || 14,
-          padding: data.padding || 10,
-          background: "transparent",
-          border: selected ? "2px dotted #3b82f6" : "none",
-          outline: "none",
-          fontFamily: "inherit",
-          cursor: "move",
-          pointerEvents: "auto",
-          boxSizing: "border-box",
-        }}
-      >
+      <div style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        padding: "4px",
+        background: selected ? "rgba(59, 130, 246, 0.1)" : "transparent",
+        border: selected ? "2px dotted #3b82f6" : "none",
+        outline: "none",
+        fontFamily: "inherit",
+        cursor: "move",
+        pointerEvents: "auto",
+        boxSizing: "border-box",
+      }}>
         {data.label && (
           <label
             onDoubleClick={(e) => {

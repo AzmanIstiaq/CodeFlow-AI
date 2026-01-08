@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow, useViewport } from "reactflow";
-import ReactFlow from "reactflow";
+import ReactFlow, { type NodeTypes } from "reactflow";
 import type { Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
 import "../styles/reactflow-overrides.css";
@@ -46,11 +46,11 @@ import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOp
 const MODE: "workflow" | "builder" = "builder";
 
 // ✅ Static nodeTypes - defined ONCE outside component (referential equality preserved)
-const nodeTypes = {
+const nodeTypes: NodeTypes = {
   start: StartNode,
   ai: AINode,
   output: OutputNode,
-  text: TextNode,
+  text: TextNode as any,
   section: SectionNode,
   row: RowNode,
   button: ButtonNode,
@@ -93,6 +93,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         borderRadius: 0,
         border: "none",
         width: 200,
+        height: 60,
       };
     case "button":
       return {
@@ -379,23 +380,42 @@ export default function PageBuilderInner() {
       y: event.clientY,
     });
     const target = findDropTarget(flowPoint);
-    if (!target) return false;
-
-    const { ownerId, columnIndex, rect } = target;
-    const columnWidth = rect.right - rect.left;
-    const localX = Math.max(0, Math.min(columnWidth, flowPoint.x - rect.left));
-    const localY = flowPoint.y - rect.top;
+    
+    let position, parentNode, extraData;
+    
+    if (!target) {
+      // Fallback: place at clicked position
+      position = flowPoint;
+      parentNode = undefined;
+      extraData = {};
+    } else {
+      const { ownerId, columnIndex, rect } = target;
+      const columnWidth = rect.right - rect.left;
+      const localX = Math.max(0, Math.min(columnWidth, flowPoint.x - rect.left));
+      const localY = flowPoint.y - rect.top;
+      
+      position = {
+        x: columnWidth * columnIndex + localX,
+        y: localY,
+      };
+      parentNode = ownerId;
+      extraData = {
+        _rowId: ownerId,
+        _ownedByColumn: ownerId,
+        _columnIndex: columnIndex,
+        _localY: localY,
+        columnIndex,
+      };
+    }
 
     const nodeId = `${placementMode.type}-${Date.now()}`;
     const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
+    console.log('Default data:', defaultData);
     const newNode: any = {
       id: nodeId,
       type: placementMode.type,
-      parentNode: ownerId,
-      position: {
-        x: columnWidth * columnIndex + localX,
-        y: localY,
-      },
+      parentNode: parentNode,
+      position: position,
       draggable: true,
       style: defaultData.width ? {
         width: defaultData.width,
@@ -403,11 +423,7 @@ export default function PageBuilderInner() {
       } : undefined,
       data: {
         ...defaultData,
-        _rowId: ownerId,
-        _ownedByColumn: ownerId,
-        _columnIndex: columnIndex,
-        _localY: localY,
-        columnIndex,
+        ...extraData,
       },
     };
 
@@ -769,10 +785,6 @@ export default function PageBuilderInner() {
                     draggable: !n.data?.locked,
                     data: {
                       ...n.data,
-                      onUpdateText: (newText: string) => {
-                        setNodes((nds: any) =>
-                          nds.map((node: any) => {
-                            if (node.id === n.id) {
                       _onResizeStart: () => setIsResizing(true),
                       _onResizeEnd: () => setIsResizing(false),
                       _onRadiusStart: () => setIsEditingRadius(true),
@@ -803,17 +815,10 @@ export default function PageBuilderInner() {
                           )
                         );
                       },
-                      _onRadiusChange: (radius: number, corner?: string) => {
-                        setNodesNormalized((nds: any) =>
+                      onUpdateText: (newText: string) => {
+                        setNodes((nds: any) =>
                           nds.map((node: any) => {
-                            if (node.id !== n.id) return node;
-                            
-                            if (corner) {
-                              // Individual corner editing (Ctrl pressed)
-                              const currentRadius = typeof node.data.borderRadius === 'number' 
-                                ? { topLeft: node.data.borderRadius, topRight: node.data.borderRadius, bottomLeft: node.data.borderRadius, bottomRight: node.data.borderRadius }
-                                : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0, ...node.data.borderRadius };
-                              
+                            if (node.id === n.id) {
                               return {
                                 ...node,
                                 data: {
@@ -829,10 +834,21 @@ export default function PageBuilderInner() {
                           })
                         );
                       },
-                      onUpdateLabel: (newText: string) => {
-                        setNodes((nds: any) =>
+                      _onRadiusChange: (radius: number, corner?: string) => {
+                        setNodesNormalized((nds: any) =>
                           nds.map((node: any) => {
-                            if (node.id === n.id) {
+                            if (node.id !== n.id) return node;
+                            
+                            if (corner) {
+                              // Individual corner editing (Ctrl pressed)
+                              const currentRadius = typeof node.data.borderRadius === 'number' 
+                                ? { topLeft: node.data.borderRadius, topRight: node.data.borderRadius, bottomLeft: node.data.borderRadius, bottomRight: node.data.borderRadius }
+                                : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0, ...node.data.borderRadius };
+                              
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
                                   borderRadius: {
                                     ...currentRadius,
                                     [corner]: radius,
@@ -845,15 +861,6 @@ export default function PageBuilderInner() {
                                 ...node,
                                 data: {
                                   ...node.data,
-                                  label: newText,
-                                },
-                              };
-                            }
-                            return node;
-                          })
-                        );
-                      },
-                    },
                                   borderRadius: radius,
                                 },
                               };

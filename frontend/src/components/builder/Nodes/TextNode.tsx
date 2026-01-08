@@ -1,7 +1,7 @@
+import React from "react";
 import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useInlineEdit } from "../hooks/useInlineEdit";
-import { NodeResizer } from "reactflow";
 
 export type TextNodeData = {
   text: string;
@@ -22,6 +22,7 @@ export type TextNodeData = {
   borderRadius: number;
   border: string;
   width: number;
+  height: number;
   onUpdateText?: (text: string) => void;
 };
 
@@ -39,7 +40,8 @@ export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>
       data.onUpdateText(newValue);
     }
   });
-  const content = (
+
+  return (
     <div
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -47,7 +49,7 @@ export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>
       }}
       style={{
         fontSize: data.fontSize || 16,
-        color: data.color,
+        color: data.color || "#111827",
         fontWeight: data.fontWeight || 400,
         fontFamily: data.fontFamily || "inherit",
         textAlign: data.textAlign || "left",
