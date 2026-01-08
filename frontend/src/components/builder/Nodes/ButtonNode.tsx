@@ -1,3 +1,5 @@
+import { useInlineEdit } from "../hooks/useInlineEdit";
+import type { NodeProps } from "reactflow";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
@@ -17,20 +19,29 @@ export type ButtonNodeData = {
   boxShadow: string;
   border: string;
   width: number;
+  onUpdateText?: (text: string) => void;
   _onRadiusChange?: (radius: number, corner?: string) => void;
   _onRadiusStart?: () => void;
   _onRadiusEnd?: () => void;
 };
 
-type Props = {
-  data: ButtonNodeData;
-  selected?: boolean;
-};
-
-export default function ButtonNode({ data, selected }: Props) {
+export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeData>) {
   const defaultBg = data.variant === "secondary" ? "#374151" : "#3b82f6";
   const bg = data.backgroundColor || defaultBg;
 
+  const {
+    isEditing,
+    value,
+    inputRef,
+    startEditing,
+    handleKeyDown,
+    handleBlur,
+    handleChange,
+  } = useInlineEdit(data.label, (newValue) => {
+    if (data.onUpdateText) {
+      data.onUpdateText(newValue);
+    }
+  });
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
@@ -50,13 +61,17 @@ export default function ButtonNode({ data, selected }: Props) {
 
   const buttonContent = (
     <button
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        startEditing();
+      }}
       style={{
         width: "100%",
         height: "100%",
         padding: data.padding || "12px 24px",
         borderRadius: getBorderRadius(),
         border: data.border || "none",
-        cursor: "grab",
+        cursor: isEditing ? "text" : "grab",
         background: bg,
         color: data.textColor || "#ffffff",
         fontWeight: data.fontWeight || 600,
@@ -71,10 +86,37 @@ export default function ButtonNode({ data, selected }: Props) {
         transform: `rotate(${data.rotation || 0}deg)`,
         boxShadow: data.boxShadow || "none",
         outlineOffset: "2px",
+        pointerEvents: "auto",
         boxSizing: "border-box",
       }}
     >
-      {data.label}
+      {isEditing ? (
+        <input
+          ref={inputRef as React.RefObject<HTMLInputElement>}
+          type="text"
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "inherit",
+            fontWeight: "inherit",
+            fontSize: "inherit",
+            fontFamily: "inherit",
+            textAlign: "center",
+            width: "100%",
+            padding: 0,
+            cursor: "text",
+          }}
+        />
+      ) : (
+        data.label
+      )}
     </button>
   );
 
