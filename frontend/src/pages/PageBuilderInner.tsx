@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow, useViewport } from "reactflow";
 import ReactFlow from "reactflow";
@@ -7,7 +7,6 @@ import "reactflow/dist/style.css";
 import "../styles/reactflow-overrides.css";
 
 import NodeToolbar from "../components/builder/NodeToolbar";
-import PageTabs from "../components/builder/PageTabs";
 import StartNode from "../components/builder/Nodes/StartNode";
 import AINode from "../components/builder/Nodes/AINode";
 import OutputNode from "../components/builder/Nodes/OutputNode";
@@ -22,7 +21,8 @@ import FormTextareaNode from "../components/builder/Nodes/FormTextareaNode";
 import FormCheckboxNode from "../components/builder/Nodes/FormCheckboxNode";
 import FormRadioNode from "../components/builder/Nodes/FormRadioNode";
 import FormSelectNode from "../components/builder/Nodes/FormSelectNode";
-import NodeEditorPanel from "../components/builder/NodeEditorPanel";
+import RowNode from "../components/builder/Nodes/RowNode";
+import { InspectorPanel } from "../components/builder/Inspector";
 import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkflowDialog";
 import LayerPanel from "../components/builder/LayerPanel";
 import AlignmentToolbar from "../components/builder/AlignmentToolbar";
@@ -32,6 +32,10 @@ import MenuBar from "../components/builder/MenuBar";
 import { useKeyboardShortcuts } from "../components/builder/hooks/useKeyboardShortcuts";
 import { useSmartGuides } from "../components/builder/hooks/useSmartGuides";
 import { useHistory } from "../components/builder/hooks/useHistory";
+
+import { useCanvasDrawing } from "./canvas/useCanvasDrawing";
+import { useCanvasActions } from "./canvas/useCanvasActions";
+import { useCanvasLayers } from "./canvas/useCanvasLayers";
 
 import { useSiteState } from "../components/builder/hooks/useSiteState";
 import { useNodeOperations } from "../components/builder/hooks/useNodeOperations";
@@ -48,6 +52,7 @@ const nodeTypes = {
   output: OutputNode,
   text: TextNode,
   section: SectionNode,
+  row: RowNode,
   button: ButtonNode,
   image: ImageNode,
   container: ContainerNode,
@@ -57,6 +62,115 @@ const nodeTypes = {
   formCheckbox: FormCheckboxNode,
   formRadio: FormRadioNode,
   formSelect: FormSelectNode,
+
+};
+
+// Enforce consistent layering across all node operations.
+const normalizeZIndex = (nodeList: any[]) =>
+  nodeList.map((node: any) => {
+    const zIndex = node.type === "section" ? 0 : node.type === "row" ? 1 : 10;
+    return node.zIndex === zIndex ? node : { ...node, zIndex };
+  });
+
+// Helper function to get default data for each node type
+const getDefaultNodeData = (type: string, label: string) => {
+  switch (type) {
+    case "text":
+      return {
+        text: "Sample Text",
+        fontSize: 16,
+        color: "#111827",
+        fontWeight: 400,
+        fontFamily: "inherit",
+        textAlign: "left",
+        lineHeight: 1.6,
+        letterSpacing: 0,
+        opacity: 1,
+        rotation: 0,
+        textShadow: "none",
+        backgroundColor: "transparent",
+        padding: 16,
+        borderRadius: 0,
+        border: "none",
+        width: 200,
+      };
+    case "button":
+      return {
+        label: "Click Me",
+        href: "#",
+        variant: "primary",
+        borderRadius: 8,
+        opacity: 1,
+        rotation: 0,
+      };
+    case "image":
+      return {
+        src: "https://via.placeholder.com/300x200",
+        alt: "Image",
+        width: 300,
+        height: 200,
+        borderRadius: 0,
+        opacity: 1,
+        rotation: 0,
+        objectFit: "cover",
+      };
+    case "container":
+      return {
+        label: "Container",
+        width: 400,
+        height: 300,
+        backgroundColor: "#f3f4f6",
+        borderRadius: 8,
+        padding: 20,
+        opacity: 1,
+        rotation: 0,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        gap: 12,
+      };
+    case "shape":
+      return {
+        shapeType: "rectangle",
+        width: 100,
+        height: 100,
+        backgroundColor: "#3b82f6",
+        borderRadius: 0,
+        opacity: 1,
+        rotation: 0,
+      };
+    case "formInput":
+      return {
+        placeholder: "Enter text...",
+        inputType: "text",
+        width: 300,
+        fontSize: 14,
+        padding: 10,
+        required: false,
+      };
+    case "formTextarea":
+      return {
+        placeholder: "Enter your message...",
+        width: 300,
+        height: 100,
+        fontSize: 14,
+        padding: 10,
+        required: false,
+        rows: 4,
+      };
+    case "section":
+      return {
+        label,
+        padding: 40,
+        gap: 24,
+        align: "start",
+        maxWidth: 1200,
+        backgroundColor: "#000000",
+      };
+    default:
+      return { label };
+  }
 };
 
 export default function PageBuilderInner() {
@@ -69,6 +183,12 @@ export default function PageBuilderInner() {
   const [clipboard, setClipboard] = useState<any[]>([]);
   const [showGrid, setShowGrid] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [placementMode, setPlacementMode] = useState<{ type: string; label: string } | null>(null);
+  const [drawingMode, setDrawingMode] = useState<{ type: string; label: string; start: { x: number; y: number } } | null>(null);
+  const [drawingPreview, setDrawingPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const isDrawingRef = useRef(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isEditingRadius, setIsEditingRadius] = useState(false);
 
   // 🎯 Clean hook-based architecture
   const {
@@ -85,6 +205,14 @@ export default function PageBuilderInner() {
     handlePageRename,
   } = useSiteState(id);
 
+  // Normalize zIndex on every node update to keep rows below content.
+  const setNodesNormalized = (updater: any) => {
+    setNodes((nds: any) => {
+      const next = typeof updater === "function" ? updater(nds) : updater;
+      return Array.isArray(next) ? normalizeZIndex(next) : next;
+    });
+  };
+
   const { onNodesChange, onEdgesChange, onConnect, addNode } =
     useNodeOperations(activePage, updateActivePage);
 
@@ -95,12 +223,13 @@ export default function PageBuilderInner() {
     handleNodeDragStop,
     viewportVersion,
     hoverState,
-  } = useColumnDropZones(setSite, nodes, setNodes);
+    findDropTarget,
+  } = useColumnDropZones(nodes, setNodesNormalized);
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
-  const { save, handleExportHTML, runWorkflow, isExecuting, dialogProps } =
-    useWorkflowOperations(id, site, activePage, setNodes);
+  const { save, handleExportHTML, dialogProps } =
+    useWorkflowOperations(id, site, activePage, setNodesNormalized);
 
   // Smart guides for alignment
   const reactFlowInstance = useReactFlow();
@@ -143,274 +272,64 @@ export default function PageBuilderInner() {
   }, [setOverrideKey]);
 
   // History (undo/redo) - keyboard shortcuts handled in useHistory hook
-  useHistory(nodes, setNodes);
+  useHistory(nodes, setNodesNormalized);
 
-  // Alignment and distribution handlers
-  const handleAlign = (type: string) => {
-    if (selectedNodes.length < 2) return;
+  // Canvas drawing (ESC key + drawing mode)
+  useCanvasDrawing({
+    placementMode,
+    setPlacementMode,
+    drawingMode,
+    setDrawingMode,
+    drawingPreview,
+    setDrawingPreview,
+    isDrawingRef,
+    reactFlowInstance,
+    setNodes: setNodesNormalized,
+    setSelectedNode,
+    setSelectedNodes,
+    getDefaultNodeData,
+  });
 
-    const positions = selectedNodes.map(n => ({ id: n.id, x: n.position.x, y: n.position.y }));
-    let newX: number, newY: number;
+  // Canvas actions (alignment, distribution, copy/paste, etc.)
+  const {
+    handleAlign,
+    handleDistribute,
+    handleDuplicate,
+    handleDelete,
+    handleCopy,
+    handlePaste,
+    handleSelectAll,
+    handleDeselect,
+    handleSetColumns,
+    handleCut,
+  } = useCanvasActions({
+    selectedNodes,
+    selectedNode,
+    setNodes: setNodesNormalized,
+    setSelectedNode,
+    setSelectedNodes,
+    clipboard,
+    setClipboard,
+    nodes,
+  });
 
-    switch (type) {
-      case "left":
-        newX = Math.min(...positions.map(p => p.x));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: newX } }
-              : n
-          )
-        );
-        break;
-      case "right":
-        newX = Math.max(...positions.map(p => p.x));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: newX } }
-              : n
-          )
-        );
-        break;
-      case "center-h":
-        const avgX = positions.reduce((sum, p) => sum + p.x, 0) / positions.length;
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, x: avgX } }
-              : n
-          )
-        );
-        break;
-      case "top":
-        newY = Math.min(...positions.map(p => p.y));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: newY } }
-              : n
-          )
-        );
-        break;
-      case "bottom":
-        newY = Math.max(...positions.map(p => p.y));
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: newY } }
-              : n
-          )
-        );
-        break;
-      case "center-v":
-        const avgY = positions.reduce((sum, p) => sum + p.y, 0) / positions.length;
-        setNodes((nds: any) =>
-          nds.map((n: any) =>
-            selectedNodes.find(sn => sn.id === n.id)
-              ? { ...n, position: { ...n.position, y: avgY } }
-              : n
-          )
-        );
-        break;
-    }
-  };
-
-  const handleDistribute = (type: string) => {
-    if (selectedNodes.length < 3) return;
-
-    const sorted = [...selectedNodes].sort((a, b) =>
-      type === "horizontal" ? a.position.x - b.position.x : a.position.y - b.position.y
-    );
-
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const totalSpace =
-      type === "horizontal"
-        ? last.position.x - first.position.x
-        : last.position.y - first.position.y;
-    const gap = totalSpace / (sorted.length - 1);
-
-    setNodes((nds: any) =>
-      nds.map((n: any) => {
-        const index = sorted.findIndex(sn => sn.id === n.id);
-        if (index === -1 || index === 0 || index === sorted.length - 1) return n;
-
-        return {
-          ...n,
-          position:
-            type === "horizontal"
-              ? { ...n.position, x: first.position.x + gap * index }
-              : { ...n.position, y: first.position.y + gap * index },
-        };
-      })
-    );
-  };
-
-  const handleDuplicate = () => {
-    const nodesToDuplicate = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToDuplicate.length === 0) return;
-
-    const newNodes = nodesToDuplicate.map((node: any) => ({
-      ...node,
-      id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      position: { x: node.position.x + 20, y: node.position.y + 20 },
-      selected: false,
-    }));
-
-    setNodes((nds: any) => [...nds, ...newNodes]);
-  };
-
-  const handleDelete = () => {
-    const nodesToDelete = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToDelete.length === 0) return;
-
-    const idsToDelete = nodesToDelete.map(n => n.id);
-    setNodes((nds: any) => nds.filter((n: any) => !idsToDelete.includes(n.id)));
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleCopy = () => {
-    const nodesToCopy = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToCopy.length === 0) return;
-    setClipboard(nodesToCopy);
-  };
-
-  const handlePaste = () => {
-    if (clipboard.length === 0) return;
-
-    const newNodes = clipboard.map((node: any) => ({
-      ...node,
-      id: `${node.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      position: { x: node.position.x + 40, y: node.position.y + 40 },
-      selected: false,
-    }));
-
-    setNodes((nds: any) => [...nds, ...newNodes]);
-  };
-
-  const handleSelectAll = () => {
-    const selectableNodes = nodes.filter((n: any) => n.type !== "section");
-    setSelectedNodes(selectableNodes);
-  };
-
-  const handleDeselect = () => {
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleSetColumns = (count: number) => {
-    if (selectedNodes.length === 1 && selectedNodes[0].type === "section") {
-      const sectionId = selectedNodes[0].id;
-      setNodes((nds: any) =>
-        nds.map((n: any) =>
-          n.id === sectionId
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  columns: {
-                    count,
-                    gap: n.data.columns?.gap || 24,
-                  },
-                },
-              }
-            : n
-        )
-      );
-    }
-  };
-
-  const handleCut = () => {
-    handleCopy();
-    handleDelete();
-  };
-
-  const handleLock = () => {
-    const nodesToLock = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToLock.length === 0) return;
-    
-    setNodes((nds: any) =>
-      nds.map((n: any) =>
-        nodesToLock.some(sn => sn.id === n.id)
-          ? { ...n, data: { ...n.data, locked: true }, draggable: false }
-          : n
-      )
-    );
-  };
-
-  const handleHide = () => {
-    const nodesToHide = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToHide.length === 0) return;
-    
-    setNodes((nds: any) =>
-      nds.map((n: any) =>
-        nodesToHide.some(sn => sn.id === n.id)
-          ? { ...n, data: { ...n.data, hidden: true } }
-          : n
-      )
-    );
-    setSelectedNode(null);
-    setSelectedNodes([]);
-  };
-
-  const handleBringToFront = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      const maxZIndex = Math.max(...nds.map((n: any) => n.zIndex || 0));
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: maxZIndex + 1 }
-          : n
-      );
-    });
-  };
-
-  const handleBringForward = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: (n.zIndex || 0) + 1 }
-          : n
-      );
-    });
-  };
-
-  const handleSendBackward = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: Math.max(0, (n.zIndex || 0) - 1) }
-          : n
-      );
-    });
-  };
-
-  const handleSendToBack = () => {
-    const nodesToMove = selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [];
-    if (nodesToMove.length === 0) return;
-    
-    setNodes((nds: any) => {
-      return nds.map((n: any) =>
-        nodesToMove.some(sn => sn.id === n.id)
-          ? { ...n, zIndex: 0 }
-          : n
-      );
-    });
-  };
-
-  const handleZoomTo100 = () => {
-    reactFlowInstance.setViewport({ x: 0, y: 0, zoom: 1 });
-  };
+  // Canvas layers (lock, hide, z-index, zoom)
+  const {
+    handleLock,
+    handleHide,
+    handleBringToFront,
+    handleBringForward,
+    handleSendBackward,
+    handleSendToBack,
+    handleZoomTo100,
+  } = useCanvasLayers({
+    selectedNodes,
+    selectedNode,
+    setNodes: setNodesNormalized,
+    setSelectedNode,
+    setSelectedNodes,
+    reactFlowInstance,
+  });
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -425,6 +344,101 @@ export default function PageBuilderInner() {
 
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
+
+  const rowLayoutById = useMemo(() => {
+    const layout = new Map<string, { x: number; y: number; width: number }>();
+    const sections = nodes.filter((n: any) => n.type === "section");
+
+    sections.forEach((section: any) => {
+      const sectionPadding = 0;
+      const sectionGap = 0;
+      const sectionWidth = section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
+
+      const rows = nodes
+        .filter((n: any) => n.type === "row" && n.parentNode === section.id)
+        .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+
+      let currentY = sectionPadding;
+      rows.forEach((row: any) => {
+        const isOnlyRow = rows.length === 1;
+        layout.set(row.id, { x: 0, y: currentY, width: sectionWidth });
+        const rowHeight = isOnlyRow
+          ? section.data?.pageHeight ?? row.data?.rowHeight ?? row.height ?? 0
+          : row.data?.rowHeight ?? row.height ?? 0;
+        currentY += rowHeight + sectionGap;
+      });
+    });
+
+    return layout;
+  }, [nodes]);
+
+  const placeNodeAtEvent = (event: any) => {
+    if (!placementMode) return false;
+    const flowPoint = reactFlowInstance.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const target = findDropTarget(flowPoint);
+    if (!target) return false;
+
+    const { ownerId, columnIndex, rect } = target;
+    const columnWidth = rect.right - rect.left;
+    const localX = Math.max(0, Math.min(columnWidth, flowPoint.x - rect.left));
+    const localY = flowPoint.y - rect.top;
+
+    const nodeId = `${placementMode.type}-${Date.now()}`;
+    const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
+    const newNode: any = {
+      id: nodeId,
+      type: placementMode.type,
+      parentNode: ownerId,
+      position: {
+        x: columnWidth * columnIndex + localX,
+        y: localY,
+      },
+      draggable: true,
+      style: defaultData.width ? {
+        width: defaultData.width,
+        ...(defaultData.height ? { height: defaultData.height } : {}),
+      } : undefined,
+      data: {
+        ...defaultData,
+        _rowId: ownerId,
+        _ownedByColumn: ownerId,
+        _columnIndex: columnIndex,
+        _localY: localY,
+        columnIndex,
+      },
+    };
+
+    setNodesNormalized((nds: any) => [...nds, newNode]);
+    setPlacementMode(null);
+    setSelectedNode(newNode);
+    setSelectedNodes([newNode]);
+    return true;
+  };
+
+  const selectFrameAtPoint = (event: any) => {
+    const flowPoint = reactFlowInstance.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const frame = nodes.find((n: any) => n.type === "section");
+    if (!frame) return false;
+    const width = frame.width ?? frame.data?.pageWidth ?? 0;
+    const height = frame.height ?? frame.data?.pageHeight ?? 0;
+    const within =
+      flowPoint.x >= frame.position.x &&
+      flowPoint.x <= frame.position.x + width &&
+      flowPoint.y >= frame.position.y &&
+      flowPoint.y <= frame.position.y + height;
+    if (within) {
+      setSelectedNode(frame);
+      setSelectedNodes([frame]);
+      return true;
+    }
+    return false;
+  };
 
   return (
     <>
@@ -481,14 +495,41 @@ export default function PageBuilderInner() {
         />
         {hasFrame && (
           <LayerPanel
-            nodes={nodes}
+            nodes={normalizeZIndex(nodes)}
             selectedNode={selectedNode}
             onNodeSelect={(node) => {
+              if (node.type === "row") {
+                const parentSection = nodes.find(
+                  (n: any) => n.type === "section" && n.id === node.parentNode
+                );
+                if (parentSection) {
+                  setSelectedNode(parentSection);
+                  setSelectedNodes([parentSection]);
+                }
+                return;
+              }
               setSelectedNode(node);
               setSelectedNodes([node]);
             }}
             onNodeDelete={(nodeId) => {
-              setNodes((nds: any) => nds.filter((n: any) => n.id !== nodeId));
+              const target = nodes.find((n: any) => n.id === nodeId);
+              if (target?.type === "section") return;
+              if (target?.type === "row") {
+                setNodesNormalized((nds: any) =>
+                  nds.filter(
+                    (n: any) =>
+                      n.id !== nodeId &&
+                      n.parentNode !== nodeId &&
+                      n.data?._rowId !== nodeId
+                  )
+                );
+                if (selectedNode?.id === nodeId) {
+                  setSelectedNode(null);
+                }
+                setSelectedNodes((sns) => sns.filter((n) => n.id !== nodeId));
+                return;
+              }
+              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== nodeId));
               if (selectedNode?.id === nodeId) {
                 setSelectedNode(null);
               }
@@ -497,7 +538,7 @@ export default function PageBuilderInner() {
             onNodeVisibilityToggle={() => {}}
             onNodeLock={() => {}}
             onUpdateNode={(nodeId: string, updates: any) => {
-              setNodes((nds: any) =>
+              setNodesNormalized((nds: any) =>
                 nds.map((n: any) => {
                   if (n.id === nodeId) {
                     return {
@@ -512,7 +553,7 @@ export default function PageBuilderInner() {
               );
             }}
             onReorderNodes={(nodeId: string, targetIndex: number) => {
-              setNodes((nds: any) => {
+              setNodesNormalized((nds: any) => {
                 const nodesCopy = [...nds];
                 const draggedIndex = nodesCopy.findIndex((n) => n.id === nodeId);
                 if (draggedIndex === -1) return nds;
@@ -522,11 +563,10 @@ export default function PageBuilderInner() {
                 
                 // Insert at target index
                 nodesCopy.splice(targetIndex, 0, draggedNode);
-                
-                // Update z-index/order for all nodes
+
+                // Update order only; zIndex is normalized separately.
                 return nodesCopy.map((node, index) => ({
                   ...node,
-                  zIndex: node.type === "section" ? 0 : index + 1,
                   data: {
                     ...node.data,
                     order: index,
@@ -537,7 +577,54 @@ export default function PageBuilderInner() {
           />
         )}
         <div className="visualbuilder-canvas">
-          <NodeToolbar addNode={addNode} mode={MODE} hasFrame={hasFrame} />
+          {placementMode && (
+            <div style={{
+              position: "absolute",
+              top: 20,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#3b82f6",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 6,
+              zIndex: 1000,
+              fontSize: 14,
+              fontWeight: 500,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}>
+              Click on canvas to place {placementMode.label} • Press ESC to cancel
+            </div>
+          )}
+          {drawingMode && (
+            <div style={{
+              position: "absolute",
+              top: 20,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#10b981",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 6,
+              zIndex: 1000,
+              fontSize: 14,
+              fontWeight: 500,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}>
+              Click and drag to draw {drawingMode.label} • Press ESC to cancel
+            </div>
+          )}
+          <NodeToolbar 
+            addNode={(type, label) => {
+              // Use drawing mode for shapes and containers
+              if (type === 'shape' || type === 'container') {
+                setDrawingMode({ type, label, start: { x: 0, y: 0 } });
+              } else {
+                setPlacementMode({ type, label });
+              }
+            }}
+            mode={MODE} 
+            hasFrame={hasFrame} 
+          />
 
           {!hasFrame ? (
             <div
@@ -563,6 +650,21 @@ export default function PageBuilderInner() {
           ) : (
             <>
             <SmartGuides guides={activeGuides} viewport={viewport} />
+            {drawingPreview && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: drawingPreview.x * viewport.zoom + viewport.x,
+                  top: drawingPreview.y * viewport.zoom + viewport.y,
+                  width: drawingPreview.width * viewport.zoom,
+                  height: drawingPreview.height * viewport.zoom,
+                  border: "2px dashed #3b82f6",
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                  pointerEvents: "none",
+                  zIndex: 1000,
+                }}
+              />
+            )}
             {showGrid && (
               <div
                 style={{
@@ -575,7 +677,7 @@ export default function PageBuilderInner() {
                     linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px),
                     linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px)
                   `,
-                  backgroundSize: "20px 20px",
+                  backgroundSize: "8px 8px",
                   pointerEvents: "none",
                   zIndex: 0,
                 }}
@@ -584,9 +686,13 @@ export default function PageBuilderInner() {
             <ZoomControls showGrid={showGrid} onToggleGrid={() => setShowGrid(!showGrid)} />
             <ReactFlow
               nodes={nodes
+                // Render order must respect zIndex to keep rows below content nodes.
                 .filter((n: any) => !n.data?.hidden)
+                .sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
                 .map((n: any) => {
-                  const isSelected = selectedNode?.id === n.id || selectedNodes.some(sn => sn.id === n.id);
+                  const isSelected =
+                    selectedNode?.id === n.id ||
+                    selectedNodes.some((sn) => sn.id === n.id);
                   if (n.type === "section") {
                     return {
                       ...n,
@@ -600,11 +706,65 @@ export default function PageBuilderInner() {
                         _viewportVersion: viewportVersion,
                         _hoverState: hoverState,
                       },
+                      style: {
+                        ...n.style,
+                        zIndex: 0,
+                      },
+                    };
+                  }
+                  if (n.type === "row") {
+                    const layout = rowLayoutById.get(n.id);
+                    return {
+                      ...n,
+                      zIndex: 1,
+                      draggable: false,
+                      selectable: false,
+                      position: layout ? { x: layout.x, y: layout.y } : n.position,
+                      selected: isSelected,
+                      data: {
+                        ...n.data,
+                        _allNodes: nodes,
+                        _registerColumnRect: registerColumnRect,
+                        _viewportVersion: viewportVersion,
+                        _hoverState: hoverState,
+                        _onColumnClick: (event: any) => {
+                          if (placementMode) {
+                            placeNodeAtEvent(event);
+                            return;
+                          }
+                          const parentSection = nodes.find(
+                            (node: any) => node.type === "section" && node.id === n.parentNode
+                          );
+                          if (parentSection) {
+                            setSelectedNode(parentSection);
+                            setSelectedNodes([parentSection]);
+                          }
+                        },
+                        _onRowMeasure: (rowId: string, height: number) => {
+                          setNodesNormalized((nds: any) =>
+                            nds.map((node: any) => {
+                              if (node.id !== rowId) return node;
+                              if (node.data?.rowHeight === height) return node;
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  rowHeight: height,
+                                },
+                              };
+                            })
+                          );
+                        },
+                      },
+                      style: {
+                        ...n.style,
+                        zIndex: 1,
+                        width: layout?.width ?? n.style?.width,
+                      },
                     };
                   }
                   return {
                     ...n,
-                    zIndex: 1,
                     selected: isSelected,
                     draggable: !n.data?.locked,
                     data: {
@@ -613,6 +773,47 @@ export default function PageBuilderInner() {
                         setNodes((nds: any) =>
                           nds.map((node: any) => {
                             if (node.id === n.id) {
+                      _onResizeStart: () => setIsResizing(true),
+                      _onResizeEnd: () => setIsResizing(false),
+                      _onRadiusStart: () => setIsEditingRadius(true),
+                      _onRadiusEnd: () => setIsEditingRadius(false),
+                      _onResize: (_event: any, params: any) => {
+                        setNodesNormalized((nds: any) =>
+                          nds.map((node: any) =>
+                            node.id === n.id
+                              ? {
+                                  ...node,
+                                  position: {
+                                    x: params.x,
+                                    y: params.y,
+                                  },
+                                  style: {
+                                    ...node.style,
+                                    width: params.width,
+                                    height: params.height,
+                                    zIndex: n.zIndex ?? 10,
+                                  },
+                                  data: {
+                                    ...node.data,
+                                    width: Math.round(params.width),
+                                    height: Math.round(params.height),
+                                  },
+                                }
+                              : node
+                          )
+                        );
+                      },
+                      _onRadiusChange: (radius: number, corner?: string) => {
+                        setNodesNormalized((nds: any) =>
+                          nds.map((node: any) => {
+                            if (node.id !== n.id) return node;
+                            
+                            if (corner) {
+                              // Individual corner editing (Ctrl pressed)
+                              const currentRadius = typeof node.data.borderRadius === 'number' 
+                                ? { topLeft: node.data.borderRadius, topRight: node.data.borderRadius, bottomLeft: node.data.borderRadius, bottomRight: node.data.borderRadius }
+                                : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0, ...node.data.borderRadius };
+                              
                               return {
                                 ...node,
                                 data: {
@@ -632,6 +833,14 @@ export default function PageBuilderInner() {
                         setNodes((nds: any) =>
                           nds.map((node: any) => {
                             if (node.id === n.id) {
+                                  borderRadius: {
+                                    ...currentRadius,
+                                    [corner]: radius,
+                                  },
+                                },
+                              };
+                            } else {
+                              // All corners (no Ctrl)
                               return {
                                 ...node,
                                 data: {
@@ -645,12 +854,39 @@ export default function PageBuilderInner() {
                         );
                       },
                     },
+                                  borderRadius: radius,
+                                },
+                              };
+                            }
+                          })
+                        );
+                      },
+                    },
+                    style: {
+                      ...n.style,
+                      zIndex: n.zIndex ?? 10,
+                    },
                   };
                 })}
               edges={MODE === "builder" ? [] : edges}
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
-              onNodeClick={(_, node) => {
+              onNodeClick={(event, node) => {
+                if (node.type === "row") {
+                  const parentSection = nodes.find(
+                    (n: any) => n.type === "section" && n.id === node.parentNode
+                  );
+                  if (parentSection) {
+                    setSelectedNode(parentSection);
+                    setSelectedNodes([parentSection]);
+                  }
+                  return;
+                }
+                event.stopPropagation();
+                if (placementMode) {
+                  placeNodeAtEvent(event);
+                  return;
+                }
                 setSelectedNode(node);
                 setSelectedNodes([node]);
               }}
@@ -658,10 +894,14 @@ export default function PageBuilderInner() {
               onConnect={MODE === "builder" ? () => {} : onConnect}
               isValidConnection={() => MODE === "workflow"}
               nodesConnectable={MODE === "workflow"}
-              nodesDraggable={true}
-              elementsSelectable={true}
-              selectNodesOnDrag={false}
+              nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
+              elementsSelectable={!drawingMode}
+              selectNodesOnDrag={true}
+              elevateNodesOnSelect={false}
+              panOnDrag={drawingMode ? false : true}
+              zoomOnScroll={!drawingMode}
               onNodeDragStart={(_, node) => {
+                if (node.type === "row") return;
                 setSelectedNode(node);
                 setSelectedNodes([node]);
                 draggingNodeRef.current = node;
@@ -710,9 +950,15 @@ export default function PageBuilderInner() {
                 clearGuides();
                 draggingNodeRef.current = null;
               }}
-              onPaneClick={() => {
-                setSelectedNode(null);
-                setSelectedNodes([]);
+              onPaneClick={(event) => {
+                if (placementMode) {
+                  placeNodeAtEvent(event);
+                  return;
+                }
+                if (!selectFrameAtPoint(event)) {
+                  setSelectedNode(null);
+                  setSelectedNodes([]);
+                }
               }}
               multiSelectionKeyCode="Shift"
               defaultEdgeOptions={{
@@ -720,7 +966,11 @@ export default function PageBuilderInner() {
                 animated: false,
               }}
               fitView
-              style={{ width: "100%", height: "100%" }}
+              style={{ 
+                width: "100%", 
+                height: "100%",
+                cursor: placementMode ? "crosshair" : drawingMode ? "crosshair" : "default"
+              }}
               onMoveEnd={handleMoveEnd}
             >
             </ReactFlow>
@@ -728,34 +978,88 @@ export default function PageBuilderInner() {
           )}
         </div>
 
-        {selectedNode && (
-          <div className="node-editor-panel">
-            <NodeEditorPanel
-              node={nodes.find((n: any) => n.id === selectedNode.id) || selectedNode}
-              closePanel={() => setSelectedNode(null)}
-              updateNodeData={(id: string, newData: any) => {
-                const node = nodes.find((n: any) => n.id === id);
-
-                if (
-                  node?.type === "columnsSection" &&
-                  newData.columns !== node.data.columns
-                ) {
-                  return;
+        {selectedNodes.length > 0 && (
+          <InspectorPanel
+            selectedNodes={selectedNodes.map(sn => nodes.find((n: any) => n.id === sn.id) || sn)}
+            allNodes={nodes}
+            updateNode={(id: string, updates: any) => {
+              setNodesNormalized((nds: any) => {
+                const updatedNodes = nds.map((n: any) => {
+                  if (n.id === id) {
+                    return {
+                      ...n,
+                      data: { ...n.data, ...updates },
+                      position: updates.position !== undefined ? updates.position : n.position,
+                      style: {
+                        ...n.style,
+                        ...(updates.width !== undefined ? { width: updates.width } : {}),
+                        ...(updates.height !== undefined ? { height: updates.height } : {}),
+                      },
+                    };
+                  }
+                  return n;
+                });
+                
+                // Update selectedNodes with fresh data from the new nodes array
+                setSelectedNodes(prev =>
+                  prev.map(sn => {
+                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                    return updated || sn;
+                  })
+                );
+                
+                return updatedNodes;
+              });
+            }}
+            updateNodes={(ids: string[], updates: any) => {
+              setNodesNormalized((nds: any) => {
+                const { __addNode, ...restUpdates } = updates || {};
+                if (__addNode) {
+                  return [...nds, __addNode];
                 }
 
-                setNodes((nds: any) =>
-                  nds.map((n: any) =>
-                    n.id === id ? { ...n, data: newData } : n
-                  )
+                const updatedNodes = nds.map((n: any) => {
+                  if (ids.includes(n.id)) {
+                    return {
+                      ...n,
+                      data: { ...n.data, ...restUpdates },
+                      position: restUpdates.position !== undefined ? restUpdates.position : n.position,
+                      style: {
+                        ...n.style,
+                        ...(restUpdates.width !== undefined ? { width: restUpdates.width } : {}),
+                        ...(restUpdates.height !== undefined ? { height: restUpdates.height } : {}),
+                      },
+                    };
+                  }
+                  return n;
+                });
+                
+                // Update selectedNodes with fresh data from the new nodes array
+                setSelectedNodes(prev =>
+                  prev.map(sn => {
+                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                    return updated || sn;
+                  })
                 );
-              }}
-              updateNodes={(updater: (nodes: any[]) => any[]) => {
-                setNodes(updater);
-              }}
-              edges={edges}
-              nodes={nodes}
-            />
-          </div>
+                
+                return updatedNodes;
+              });
+            }}
+            deleteNode={(id: string) => {
+              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== id));
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+            deleteNodes={(ids: string[]) => {
+              setNodesNormalized((nds: any) => nds.filter((n: any) => !ids.includes(n.id)));
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+            onClose={() => {
+              setSelectedNodes([]);
+              setSelectedNode(null);
+            }}
+          />
         )}
       </div>
     </>

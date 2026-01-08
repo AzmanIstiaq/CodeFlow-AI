@@ -117,10 +117,6 @@ export function useNodeOperations(
           maxWidth: 1200,
           backgroundColor: "#000000",
           order: sectionCount,
-          columns: {
-            count: 1,
-            gap: 24,
-          },
         },
       };
 
@@ -146,6 +142,9 @@ export function useNodeOperations(
           y: section.position.y + 100 + (textCount * 80) 
         },
         draggable: true,
+        style: {
+          width: 200,
+        },
         data: {
           text: "Sample Text",
           fontSize: 16,
@@ -183,6 +182,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (buttonCount * 80) 
         },
         draggable: true,
+        style: {
+          width: 150,
+          height: 44,
+        },
         data: {
           label: "Click Me",
           href: "#",
@@ -191,6 +194,8 @@ export function useNodeOperations(
           borderRadius: 8,
           opacity: 1,
           rotation: 0,
+          width: 150,
+          height: 44,
         },
       };
 
@@ -210,6 +215,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (imageCount * 250) 
         },
         draggable: true,
+        style: {
+          width: 300,
+          height: 200,
+        },
         data: {
           src: "https://via.placeholder.com/300x200",
           alt: "Image",
@@ -238,6 +247,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (containerCount * 350) 
         },
         draggable: true,
+        style: {
+          width: 400,
+          height: 300,
+        },
         data: {
           label: "Container",
           width: 400,
@@ -271,6 +284,10 @@ export function useNodeOperations(
           y: section.position.y + 100 + (shapeCount * 150) 
         },
         draggable: true,
+        style: {
+          width: 100,
+          height: 100,
+        },
         data: {
           shapeType: "rectangle",
           width: 100,
@@ -279,6 +296,66 @@ export function useNodeOperations(
           borderRadius: 0,
           opacity: 1,
           rotation: 0,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- FORM INPUT ----------------
+    if (type === "formInput") {
+      const formInputCount = nodes.filter((n: any) => n.type === "formInput" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "formInput",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (formInputCount * 100) 
+        },
+        draggable: true,
+        style: {
+          width: 300,
+        },
+        data: {
+          placeholder: "Enter text...",
+          inputType: "text",
+          width: 300,
+          fontSize: 14,
+          padding: 10,
+          required: false,
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // ---------------- FORM TEXTAREA ----------------
+    if (type === "formTextarea") {
+      const formTextareaCount = nodes.filter((n: any) => n.type === "formTextarea" && !n.data?._ownedByColumn).length;
+      const sectionWidth = section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type: "formTextarea",
+        position: { 
+          x: section.position.x + sectionWidth + 100, 
+          y: section.position.y + 100 + (formTextareaCount * 150) 
+        },
+        draggable: true,
+        style: {
+          width: 300,
+          height: 100,
+        },
+        data: {
+          placeholder: "Enter your message...",
+          width: 300,
+          height: 100,
+          fontSize: 14,
+          padding: 10,
+          required: false,
+          rows: 4,
         },
       };
 

@@ -81,7 +81,6 @@ export default function ColumnsSectionNode({
             padding: "40px 32px",
             backgroundColor: isHovered ? "rgba(59,130,246,0.15)" : "transparent",
             border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : undefined,
-            borderRadius: isHovered ? 8 : 0,
             transition: "all 0.2s ease",
           }}
         >

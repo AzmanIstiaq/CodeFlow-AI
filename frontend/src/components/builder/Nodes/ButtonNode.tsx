@@ -1,5 +1,7 @@
 import { useInlineEdit } from "../hooks/useInlineEdit";
 import type { NodeProps } from "reactflow";
+import { NodeResizer } from "reactflow";
+import RadiusHandle from "../RadiusHandle";
 
 export type ButtonNodeData = {
   label: string;
@@ -8,7 +10,7 @@ export type ButtonNodeData = {
   order: number;
   backgroundColor?: string;
   textColor?: string;
-  borderRadius: number;
+  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
   padding: string;
   fontSize: number;
   fontWeight: number;
@@ -18,6 +20,9 @@ export type ButtonNodeData = {
   border: string;
   width: number;
   onUpdateText?: (text: string) => void;
+  _onRadiusChange?: (radius: number, corner?: string) => void;
+  _onRadiusStart?: () => void;
+  _onRadiusEnd?: () => void;
 };
 
 export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeData>) {
@@ -37,6 +42,22 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
       data.onUpdateText(newValue);
     }
   });
+  const handleRadiusChange = (radius: number, corner?: string) => {
+    if (data._onRadiusChange) {
+      data._onRadiusChange(radius, corner);
+    }
+  };
+
+  const getBorderRadius = () => {
+    if (data.borderRadius === undefined) {
+      return 8;
+    }
+    if (typeof data.borderRadius === 'number') {
+      return data.borderRadius;
+    }
+    const { topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = data.borderRadius;
+    return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
+  };
 
   const buttonContent = (
     <button
@@ -45,8 +66,10 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
         startEditing();
       }}
       style={{
+        width: "100%",
+        height: "100%",
         padding: data.padding || "12px 24px",
-        borderRadius: data.borderRadius ?? 8,
+        borderRadius: getBorderRadius(),
         border: data.border || "none",
         cursor: isEditing ? "text" : "grab",
         background: bg,
@@ -54,18 +77,17 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
         fontWeight: data.fontWeight || 600,
         fontSize: data.fontSize || 16,
         minWidth: "120px",
-        width: data.width || "auto",
-        height: "44px",
-        display: "inline-flex",
+        minHeight: "44px",
+        display: "flex",
         alignItems: "center",
         justifyContent: "center",
         whiteSpace: "nowrap",
         opacity: data.opacity ?? 1,
         transform: `rotate(${data.rotation || 0}deg)`,
         boxShadow: data.boxShadow || "none",
-        outline: selected ? "2px solid #3b82f6" : "none",
         outlineOffset: "2px",
         pointerEvents: "auto",
+        boxSizing: "border-box",
       }}
     >
       {isEditing ? (
@@ -100,11 +122,107 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
 
   if (data.href) {
     return (
-      <a href={data.href} style={{ textDecoration: "none" }}>
-        {buttonContent}
-      </a>
+      <div style={{ 
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}>
+        <NodeResizer 
+          isVisible={selected} 
+          minWidth={120} 
+          minHeight={44}
+          keepAspectRatio={false}
+          onResizeStart={(data as any)._onResizeStart}
+          onResizeEnd={(data as any)._onResizeEnd}
+          onResize={(data as any)._onResize}
+        />
+        <RadiusHandle
+          borderRadius={data.borderRadius || 0}
+          onRadiusChange={handleRadiusChange}
+          isVisible={selected || false}
+          position="top-left"
+          onDragStart={data._onRadiusStart}
+          onDragEnd={data._onRadiusEnd}
+        />
+        <RadiusHandle
+          borderRadius={data.borderRadius || 0}
+          onRadiusChange={handleRadiusChange}
+          isVisible={selected || false}
+          position="top-right"
+          onDragStart={data._onRadiusStart}
+          onDragEnd={data._onRadiusEnd}
+        />
+        <RadiusHandle
+          borderRadius={data.borderRadius || 0}
+          onRadiusChange={handleRadiusChange}
+          isVisible={selected || false}
+          position="bottom-left"
+          onDragStart={data._onRadiusStart}
+          onDragEnd={data._onRadiusEnd}
+        />
+        <RadiusHandle
+          borderRadius={data.borderRadius || 0}
+          onRadiusChange={handleRadiusChange}
+          isVisible={selected || false}
+          position="bottom-right"
+          onDragStart={data._onRadiusStart}
+          onDragEnd={data._onRadiusEnd}
+        />
+        <a href={data.href} style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
+          {buttonContent}
+        </a>
+      </div>
     );
   }
 
-  return buttonContent;
+  return (
+    <div style={{ 
+      position: "relative",
+      width: "100%",
+      height: "100%",
+    }}>
+      <NodeResizer 
+        isVisible={selected} 
+        minWidth={120} 
+        minHeight={44}
+        keepAspectRatio={false}
+        onResizeStart={(data as any)._onResizeStart}
+        onResizeEnd={(data as any)._onResizeEnd}
+        onResize={(data as any)._onResize}
+      />
+      <RadiusHandle
+        borderRadius={data.borderRadius || 0}
+        onRadiusChange={handleRadiusChange}
+        isVisible={selected || false}
+        position="top-left"
+        onDragStart={data._onRadiusStart}
+        onDragEnd={data._onRadiusEnd}
+      />
+      <RadiusHandle
+        borderRadius={data.borderRadius || 0}
+        onRadiusChange={handleRadiusChange}
+        isVisible={selected || false}
+        position="top-right"
+        onDragStart={data._onRadiusStart}
+        onDragEnd={data._onRadiusEnd}
+      />
+      <RadiusHandle
+        borderRadius={data.borderRadius || 0}
+        onRadiusChange={handleRadiusChange}
+        isVisible={selected || false}
+        position="bottom-left"
+        onDragStart={data._onRadiusStart}
+        onDragEnd={data._onRadiusEnd}
+      />
+      <RadiusHandle
+        borderRadius={data.borderRadius || 0}
+        onRadiusChange={handleRadiusChange}
+        isVisible={selected || false}
+        position="bottom-right"
+        onDragStart={data._onRadiusStart}
+        onDragEnd={data._onRadiusEnd}
+      />
+      {buttonContent}
+    </div>
+  );
 }

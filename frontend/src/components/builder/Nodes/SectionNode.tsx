@@ -1,11 +1,17 @@
-import { Handle, Position, type NodeProps } from "reactflow";
+import { type NodeProps } from "reactflow";
 import { useMemo } from "react";
 import ColumnsSectionNode from "./ColumnsSectionNode";
 
 export type SectionNodeData = {
   label?: string;
+
+  // Page sizing
+  pageWidth: number; // e.g. 1280 (FIXED)
+  pageHeight: number; // editable (e.g. 800)
+
   padding: number;
   gap: number;
+
   align: "start" | "center";
   maxWidth: number;
   backgroundColor: string;
@@ -42,6 +48,14 @@ export default function SectionNode({
   }
 >) {
   const columnCount = data.columns?.count ?? 0;
+  const hasRows = (data._allNodes ?? []).some(
+    (n) => n.type === "row" && n.parentNode === id
+  );
+
+  const pageWidth = data.pageWidth ?? 1280;
+  const pageHeight = data.pageHeight ?? 800;
+  const sectionPadding = 0;
+  const sectionGap = 0;
 
   // 🔑 Group children by column index
   const childrenByColumn = Array.from({ length: columnCount }, (_, col) =>
@@ -53,52 +67,75 @@ export default function SectionNode({
     )
   );
 
-  // Calculate dynamic height based on child nodes - only grow when needed
-  // Memoize based on child node count to prevent recalculation during drag
-  const childNodes = (data._allNodes ?? []).filter(
-    (n) => n.data?._ownedByColumn === id
-  );
-  
+  const rowNodes = (data._allNodes ?? [])
+    .filter((n) => n.type === "row" && n.parentNode === id)
+    .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+
+  // Calculate dynamic height based on rows - only grow when needed
   const calculatedHeight = useMemo(() => {
-    const minHeight = 720; // Full screen height
-    let height = minHeight;
-    
-    if (childNodes.length > 0) {
-      // Get the lowest node position
-      const maxY = Math.max(...childNodes.map((n: any) => n.position.y));
-      // Calculate exact height needed: node position + node height (44px for buttons/text)
-      const requiredHeight = maxY + 44;
-      
-      // Only grow if content exceeds minimum height, use exact required height
-      if (requiredHeight > minHeight) {
-        height = requiredHeight;
+    const minHeight = pageHeight;
+    if (rowNodes.length === 0) return minHeight;
+
+    const rowsHeight = rowNodes.reduce((sum: number, row: any) => {
+      const isOnlyRow = rowNodes.length === 1;
+      if (isOnlyRow && typeof pageHeight === "number") {
+        return sum + Math.max(0, pageHeight);
       }
-    }
-    
-    return height;
-  }, [childNodes.length, id]);
+      if (typeof row.data?.rowHeight === "number") {
+        return sum + Math.max(0, row.data.rowHeight);
+      }
+
+      const rowChildren = (data._allNodes ?? []).filter(
+        (n) => n.data?._rowId === row.id
+      );
+      const rowHeight =
+        rowChildren.length > 0
+          ? Math.max(
+              ...rowChildren.map((child: any) => {
+                const height = child.height ?? child.data?.height ?? 0;
+                return (child.position?.y ?? 0) + height;
+              })
+            ) - Math.min(...rowChildren.map((child: any) => child.position?.y ?? 0))
+          : row.height ?? 0;
+      return sum + Math.max(0, rowHeight);
+    }, 0);
+
+    const gapsHeight = Math.max(0, rowNodes.length - 1) * sectionGap;
+    const contentHeight = rowsHeight + gapsHeight + sectionPadding * 2;
+
+    return Math.max(minHeight, contentHeight);
+  }, [rowNodes, data._allNodes, pageHeight, sectionPadding, sectionGap]);
+
 
   return (
     <div
       style={{
         background: data.backgroundColor ?? "#ffffff",
-        width: 1280, // Full screen width
+        maxWidth: pageWidth,
+        width: pageWidth, // Full screen width
+        minWidth: pageWidth,
+
         height: calculatedHeight,
+minHeight: pageHeight,
+
         margin: "0 auto",
         padding: 0,
-        borderRadius: 8,
-        pointerEvents: "none",
+
+        pointerEvents: "auto",
+        cursor: "default",
+
         boxShadow: selected
           ? "0 0 0 3px #3b82f6"
           : "0 4px 20px rgba(0,0,0,0.1)",
         transition: "box-shadow 0.2s ease, height 0.3s ease",
         overflow: "hidden",
+        
         display: "flex",
         flexDirection: "column",
       }}
     >
 
-      {data.columns && (
+      {data.columns && !hasRows && (
         <ColumnsSectionNode
           id={id}
           columns={columnCount}
@@ -113,10 +150,6 @@ export default function SectionNode({
           hoverState={data._hoverState}
         />
       )}
-
-      {/* ReactFlow handles (kept invisible) */}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }

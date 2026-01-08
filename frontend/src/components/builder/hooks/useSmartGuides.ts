@@ -573,7 +573,7 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
 
       return { x: snappedX, y: snappedY, snapped };
     },
-    [detectGuides]
+    [detectGuides, gridEnabled]
   );
 
   const handleDrag = useCallback(

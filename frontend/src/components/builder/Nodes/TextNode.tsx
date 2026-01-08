@@ -1,6 +1,7 @@
 import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useInlineEdit } from "../hooks/useInlineEdit";
+import { NodeResizer } from "reactflow";
 
 export type TextNodeData = {
   text: string;
@@ -109,6 +110,4 @@ export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>
       <Handle type="target" position={Position.Top} />
     </div>
   );
-  
-  return content;
 }
