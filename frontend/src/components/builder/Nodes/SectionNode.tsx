@@ -1,3 +1,39 @@
+/**
+ * SectionNode Component
+ *
+ * Renders a top-level container (frame/section) that holds all page content.
+ * Can have optional column-based layout for structured multi-column designs.
+ *
+ * Key Responsibilities:
+ * 1. Display fixed-width page container (default 1280px)
+ * 2. Support dynamic height based on content
+ * 3. Manage column layout if enabled
+ * 4. Route to ColumnsSectionNode if columns exist
+ * 5. Support background styling and padding
+ * 6. Render rows and child nodes with proper z-index
+ *
+ * Data Props:
+ * - pageWidth/pageHeight: Container dimensions
+ * - backgroundColor, backgroundImage: Styling
+ * - padding, gap: Spacing
+ * - columns?: { count, gap } - Enable column layout
+ * - align: "start" | "center" - Vertical alignment
+ * - isParentOfSelected?: boolean - Visual feedback
+ * - _allNodes?: Array - All nodes for child filtering
+ *
+ * Architectural Note:
+ * - Sections use margin: "0 auto" for centering (CSS centering, not ReactFlow positioning)
+ * - Child nodes use relative positioning within section bounds
+ * - Column layout delegated to ColumnsSectionNode
+ * - Rows are ordered by data.order field
+ * - Height auto-grows based on content height
+ *
+ * Performance:
+ * - useMemo for calculated height to avoid unnecessary recomputes
+ * - Filters children by _ownedByColumn metadata
+ * - Sorts rows by order field once per render
+ */
+
 import { type NodeProps } from "reactflow";
 import { useMemo } from "react";
 import ColumnsSectionNode from "./ColumnsSectionNode";
@@ -47,17 +83,30 @@ export default function SectionNode({
     };
   }
 >) {
+  // =====================================
+  // COLUMN SETUP
+  // =====================================
+  // If columns enabled, delegate to specialized component
   const columnCount = data.columns?.count ?? 0;
   const hasRows = (data._allNodes ?? []).some(
     (n) => n.type === "row" && n.parentNode === id
   );
 
+  // =====================================
+  // DIMENSIONS
+  // =====================================
+  // Fixed width (typical responsive design breakpoint)
+  // Height auto-grows based on content
   const pageWidth = data.pageWidth ?? 1280;
   const pageHeight = data.pageHeight ?? 800;
   const sectionPadding = 0;
   const sectionGap = 0;
 
-  // 🔑 Group children by column index
+  // =====================================
+  // CHILD ORGANIZATION
+  // =====================================
+  // Group children by column for column-based layouts
+  // Filter out special nodes like columnsSections
   const childrenByColumn = Array.from({ length: columnCount }, (_, col) =>
     (data._allNodes ?? []).filter(
       (n) =>
@@ -67,11 +116,20 @@ export default function SectionNode({
     )
   );
 
+  // Get all rows sorted by order (z-index layers)
   const rowNodes = (data._allNodes ?? [])
     .filter((n) => n.type === "row" && n.parentNode === id)
     .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
 
-  // Calculate dynamic height based on rows - only grow when needed
+  // =====================================
+  // DYNAMIC HEIGHT CALCULATION
+  // =====================================
+  /**
+   * Calculate height based on content
+   * Minimum: pageHeight
+   * Grows with: row heights and child node positions
+   * Memoized to avoid recomputation on every render
+   */
   const calculatedHeight = useMemo(() => {
     const minHeight = pageHeight;
     if (rowNodes.length === 0) return minHeight;
@@ -95,7 +153,8 @@ export default function SectionNode({
                 const height = child.height ?? child.data?.height ?? 0;
                 return (child.position?.y ?? 0) + height;
               })
-            ) - Math.min(...rowChildren.map((child: any) => child.position?.y ?? 0))
+            ) -
+            Math.min(...rowChildren.map((child: any) => child.position?.y ?? 0))
           : row.height ?? 0;
       return sum + Math.max(0, rowHeight);
     }, 0);
@@ -106,7 +165,6 @@ export default function SectionNode({
     return Math.max(minHeight, contentHeight);
   }, [rowNodes, data._allNodes, pageHeight, sectionPadding, sectionGap]);
 
-
   return (
     <div
       style={{
@@ -116,7 +174,7 @@ export default function SectionNode({
         minWidth: pageWidth,
 
         height: calculatedHeight,
-minHeight: pageHeight,
+        minHeight: pageHeight,
 
         margin: "0 auto",
         padding: 0,
@@ -129,12 +187,11 @@ minHeight: pageHeight,
           : "0 4px 20px rgba(0,0,0,0.1)",
         transition: "box-shadow 0.2s ease, height 0.3s ease",
         overflow: "hidden",
-        
+
         display: "flex",
         flexDirection: "column",
       }}
     >
-
       {data.columns && !hasRows && (
         <ColumnsSectionNode
           id={id}

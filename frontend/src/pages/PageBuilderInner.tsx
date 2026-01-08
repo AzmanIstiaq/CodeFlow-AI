@@ -1,3 +1,43 @@
+/**
+ * PageBuilderInner Component
+ *
+ * The core canvas editor for the visual page builder.
+ * Orchestrates all builder features: nodes, guides, layers, undo/redo, snapping, etc.
+ *
+ * Architecture:
+ * - Uses React hooks for state and side effects
+ * - Leverages ReactFlow for canvas rendering and drag handling
+ * - Integrates custom hooks for domain logic (site state, node ops, guides, etc.)
+ * - Manages multi-page sites with immutable state updates
+ *
+ * Key Responsibilities:
+ * 1. Render ReactFlow canvas with all node types
+ * 2. Handle node/edge changes and state synchronization
+ * 3. Coordinate between multiple feature hooks (undo, guides, columns, etc.)
+ * 4. Manage keyboard shortcuts and interaction states
+ * 5. Persist changes to server via API
+ * 6. Support drawing mode, resizing, radius editing
+ * 7. Maintain visual feedback (guides, layers, inspector)
+ *
+ * State Management:
+ * - useSiteState: Multi-page site + active page
+ * - useNodeOperations: Node/edge change handlers
+ * - useColumnDropZones: Column-based layout system
+ * - useSmartGuides: Alignment and snapping
+ * - useHistory: Undo/redo
+ * - Local state: Drawing, resizing, selection, etc.
+ *
+ * Performance Optimizations:
+ * - Node types defined outside component (referential equality)
+ * - useCallback for expensive handlers
+ * - useMemo for transformation pipelines
+ * - Ref-based refs for drawing/resizing state
+ *
+ * Constants:
+ * - MODE: "builder" (AI execution disabled)
+ * - nodeTypes: Maps node type strings to React components
+ */
+
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow, useViewport } from "reactflow";
@@ -42,9 +82,13 @@ import { useNodeOperations } from "../components/builder/hooks/useNodeOperations
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
 import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOperations";
 
-// Mode: "workflow" for AI execution, "builder" for page building
+// ===== APPLICATION MODE =====
+// "workflow" enables AI execution; "builder" is page design only
 const MODE: "workflow" | "builder" = "builder";
 
+// ===== NODE TYPE REGISTRY =====
+// Maps node type strings to React components
+// Defined outside component to preserve referential equality across renders
 // ✅ Static nodeTypes - defined ONCE outside component (referential equality preserved)
 const nodeTypes: NodeTypes = {
   start: StartNode,
@@ -64,14 +108,23 @@ const nodeTypes: NodeTypes = {
   formSelect: FormSelectNode,
 };
 
-// Enforce consistent layering across all node operations.
+// ===== UTILITY FUNCTIONS =====
+
+/**
+ * Enforce consistent z-index layering across all nodes
+ * Sections stay behind (0), rows middle (1), content on top (10)
+ * Prevents visual hierarchy issues after node operations
+ */
 const normalizeZIndex = (nodeList: any[]) =>
   nodeList.map((node: any) => {
     const zIndex = node.type === "section" ? 0 : node.type === "row" ? 1 : 10;
     return node.zIndex === zIndex ? node : { ...node, zIndex };
   });
 
-// Helper function to get default data for each node type
+/**
+ * Get default data for each node type
+ * Provides reasonable starting values for new nodes
+ */
 const getDefaultNodeData = (type: string, label: string) => {
   switch (type) {
     case "text":
@@ -174,37 +227,62 @@ const getDefaultNodeData = (type: string, label: string) => {
 };
 
 export default function PageBuilderInner() {
+  // =====================================
+  // URL PARAMETERS
+  // =====================================
+  // Get workflow ID from URL query string for persistence
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const id = searchParams.get("id");
 
+  // =====================================
+  // LOCAL STATE
+  // =====================================
+  // Node selection
   const [selectedNode, setSelectedNode] = useState<ReactFlowNode | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<ReactFlowNode[]>([]);
+
+  // Clipboard for copy/paste operations
   const [clipboard, setClipboard] = useState<any[]>([]);
+
+  // UI visibility flags
   const [showGrid, setShowGrid] = useState(false);
   const [previewMode, setPreviewMode] = useState<
     "desktop" | "tablet" | "mobile"
   >("desktop");
+
+  // Node placement mode (toolbar button → click canvas to place)
   const [placementMode, setPlacementMode] = useState<{
     type: string;
     label: string;
   } | null>(null);
+
+  // Canvas drawing mode (ESC key to start free drawing)
   const [drawingMode, setDrawingMode] = useState<{
     type: string;
     label: string;
     start: { x: number; y: number };
   } | null>(null);
+
+  // Visual preview while drawing
   const [drawingPreview, setDrawingPreview] = useState<{
     x: number;
     y: number;
     width: number;
     height: number;
   } | null>(null);
+
+  // Ref to track drawing state without re-rendering
   const isDrawingRef = useRef(false);
+
+  // UI state for interactions
   const [isResizing, setIsResizing] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
 
-  // 🎯 Clean hook-based architecture
+  // =====================================
+  // HOOK INTEGRATION
+  // =====================================
+  // Clean hook-based architecture for domain logic separation
   const {
     site,
     setSite,
@@ -395,6 +473,14 @@ export default function PageBuilderInner() {
     return layout;
   }, [nodes]);
 
+  // =====================================
+  // NODE PLACEMENT & INTERACTION HANDLERS
+  // =====================================
+  /**
+   * Place node at mouse click location
+   * Respects column drop zones if available
+   * Centers node on cursor
+   */
   const placeNodeAtEvent = useCallback(
     (event: any) => {
       if (!placementMode) return false;
@@ -699,6 +785,10 @@ export default function PageBuilderInner() {
     placeNodeAtEvent,
   ]);
 
+  // =====================================
+  // JSX RENDER
+  // =====================================
+  // Main UI structure with ReactFlow canvas and surrounding panels
   return (
     <>
       <SaveWorkflowDialog {...dialogProps} />

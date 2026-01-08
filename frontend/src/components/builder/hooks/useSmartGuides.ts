@@ -1,7 +1,37 @@
+/**
+ * useSmartGuides Hook
+ *
+ * Implements intelligent visual alignment guides and snapping for the canvas.
+ * Detects alignment opportunities between nodes and snaps them into place for clean layouts.
+ *
+ * Key Features:
+ * 1. Alignment Detection: Vertical (left/center/right) and horizontal (top/center/bottom)
+ * 2. Even Spacing: Detects when dragged node creates equal spacing between others
+ * 3. Frame Snapping: Column boundaries and frame edges for structured layouts
+ * 4. Grid Snap: Optional grid-based alignment
+ * 5. Modifier Key Override: Holding key disables all snapping (fine-grained positioning)
+ *
+ * Visual Feedback:
+ * - activeGuides state contains list of guide lines to render
+ * - Each guide has position, type (vertical/horizontal), and snap target (left/center/right)
+ *
+ * Performance Considerations:
+ * - Uses refs for threshold/grid settings to avoid unnecessary re-renders
+ * - Caches bounds calculations with useCallback
+ * - Only shows guides for nodes in same parent frame
+ * - Deduplicates guides at same position
+ *
+ * Frame Model:
+ * - Sections are 1280px wide with column subdivisions
+ * - Child nodes use _ownedByColumn metadata to indicate column ownership
+ * - Smart guides only snap nodes within the same column/parent frame
+ */
+
 import { useState, useCallback, useRef } from "react";
 import type { Node } from "reactflow";
 import type { ReactFlowInstance } from "reactflow";
 
+// ===== CONSTANTS & TYPES =====
 const DEFAULT_SNAP_THRESHOLD = 5; // pixels
 const DEFAULT_GRID_SIZE = 16; // pixels
 
@@ -41,71 +71,97 @@ interface SnapResult {
   snapped: boolean;
 }
 
-export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInstance) {
+export function useSmartGuides(
+  nodes: Node[],
+  reactFlowInstance?: ReactFlowInstance
+) {
   const [activeGuides, setActiveGuides] = useState<GuideWithBounds>({
     vertical: [],
     horizontal: [],
   });
-  
+
+  // Use refs for settings that don't need to trigger re-renders
   const snapThresholdRef = useRef(DEFAULT_SNAP_THRESHOLD);
   const gridSizeRef = useRef(DEFAULT_GRID_SIZE);
   const enableGridSnapRef = useRef(false);
   const overrideKeyPressedRef = useRef(false);
 
+  // =====================================
+  // BOUND CALCULATION
+  // =====================================
   // Find the immediate parent frame/section for a node
-  const getParentFrame = useCallback((node: Node): Node | null => {
-    const parentId = node.data?._ownedByColumn;
-    if (!parentId) return null;
-    return nodes.find((n) => n.id === parentId && n.type === "section") || null;
-  }, [nodes]);
+  const getParentFrame = useCallback(
+    (node: Node): Node | null => {
+      const parentId = node.data?._ownedByColumn;
+      if (!parentId) return null;
+      return (
+        nodes.find((n) => n.id === parentId && n.type === "section") || null
+      );
+    },
+    [nodes]
+  );
 
-  // Calculate bounds for a node at a given position, accounting for parent frame
-  const getBounds = useCallback((node: Node, position?: { x: number; y: number }): Bounds | null => {
-    // Try node.width/height first, then fall back to data.width/height
-    const width = (node.width ?? (node.data as any)?.width) || 0;
-    const height = (node.height ?? (node.data as any)?.height) || 0;
+  /**
+   * Calculate bounding box for a node
+   *
+   * Uses ReactFlow's positionAbsolute for accuracy (already includes parent transforms)
+   * Falls back to calculating from position + parent position if positionAbsolute unavailable
+   * Returns null if node has no dimensions
+   */
+  const getBounds = useCallback(
+    (node: Node, position?: { x: number; y: number }): Bounds | null => {
+      // Try node.width/height first, then fall back to data.width/height
+      const width = (node.width ?? (node.data as any)?.width) || 0;
+      const height = (node.height ?? (node.data as any)?.height) || 0;
 
-    if (width === 0 || height === 0) return null;
+      if (width === 0 || height === 0) return null;
 
-    let x: number, y: number;
-    
-    if (position) {
-      // If position is provided, use it directly (already in absolute coordinates)
-      x = position.x;
-      y = position.y;
-    } else {
-      // ALWAYS use ReactFlow's positionAbsolute if available
-      // ReactFlow calculates this correctly, accounting for all transforms
-      if (node.positionAbsolute) {
-        x = node.positionAbsolute.x;
-        y = node.positionAbsolute.y;
+      let x: number, y: number;
+
+      if (position) {
+        // If position is provided, use it directly (already in absolute coordinates)
+        x = position.x;
+        y = position.y;
       } else {
-        // Fallback: if positionAbsolute is not available, calculate it
-        // This should only happen in edge cases
-        const parentFrame = getParentFrame(node);
-        if (parentFrame) {
-          const frameReactFlowNode = reactFlowInstance?.getNode(parentFrame.id);
-          const framePos = frameReactFlowNode?.positionAbsolute || parentFrame.positionAbsolute || parentFrame.position;
-          x = framePos.x + node.position.x;
-          y = framePos.y + node.position.y;
+        // ALWAYS use ReactFlow's positionAbsolute if available
+        // ReactFlow calculates this correctly, accounting for all transforms
+        if (node.positionAbsolute) {
+          x = node.positionAbsolute.x;
+          y = node.positionAbsolute.y;
         } else {
-          x = node.position.x;
-          y = node.position.y;
+          // Fallback: if positionAbsolute is not available, calculate it
+          // This should only happen in edge cases
+          const parentFrame = getParentFrame(node);
+          if (parentFrame) {
+            const frameReactFlowNode = reactFlowInstance?.getNode(
+              parentFrame.id
+            );
+            const framePos =
+              frameReactFlowNode?.positionAbsolute ||
+              parentFrame.positionAbsolute ||
+              parentFrame.position;
+            x = framePos.x + node.position.x;
+            y = framePos.y + node.position.y;
+          } else {
+            x = node.position.x;
+            y = node.position.y;
+          }
         }
       }
-    }
 
-    return {
-      left: x,
-      right: x + width,
-      top: y,
-      bottom: y + height,
-      centerX: x + width / 2,
-      centerY: y + height / 2,
-      width,
-      height,
-    };
-  }, [getParentFrame]);
+      return {
+        left: x,
+        right: x + width,
+        top: y,
+        bottom: y + height,
+        centerX: x + width / 2,
+        centerY: y + height / 2,
+        width,
+        height,
+      };
+    },
+    [getParentFrame]
+  );
 
   // Get all reference lines for a bounds object
   const getReferenceLines = useCallback((bounds: Bounds) => {
@@ -115,9 +171,26 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
     };
   }, []);
 
-  // Detect even spacing between three or more objects
+  // =====================================
+  // EVEN SPACING DETECTION
+  // =====================================
+  /**
+   * Detect when dragged node creates equal spacing between other nodes
+   *
+   * Algorithm:
+   * 1. For each pair of adjacent nodes, calculate gap between them
+   * 2. Check if dragged node's position would create same gap
+   * 3. Mark as spacing guide if within threshold
+   *
+   * This creates professional-looking layouts with consistent spacing
+   */
   const detectEvenSpacing = useCallback(
-    (draggedBounds: Bounds, otherNodes: Node[], draggedNodeId: string, draggedNodeParentId?: string) => {
+    (
+      draggedBounds: Bounds,
+      otherNodes: Node[],
+      draggedNodeId: string,
+      draggedNodeParentId?: string
+    ) => {
       const spacingGuides: GuideLine[] = [];
       const threshold = snapThresholdRef.current;
 
@@ -126,7 +199,8 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
         .filter((n) => {
           if (n.id === draggedNodeId || n.type === "section") return false;
           const nodeParentId = n.data?._ownedByColumn;
-          if (draggedNodeParentId && nodeParentId !== draggedNodeParentId) return false;
+          if (draggedNodeParentId && nodeParentId !== draggedNodeParentId)
+            return false;
           if (!draggedNodeParentId && nodeParentId) return false; // Dragged node is not in frame, but other node is
           return true;
         })
@@ -134,18 +208,24 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
           const bounds = getBounds(n);
           return bounds ? { node: n, bounds } : null;
         })
-        .filter((item): item is { node: Node; bounds: Bounds } => item !== null);
+        .filter(
+          (item): item is { node: Node; bounds: Bounds } => item !== null
+        );
 
       // Check horizontal spacing (vertical guides)
-      const sortedByX = [...relevantNodes].sort((a, b) => a.bounds.left - b.bounds.left);
-      
+      const sortedByX = [...relevantNodes].sort(
+        (a, b) => a.bounds.left - b.bounds.left
+      );
+
       for (let i = 0; i < sortedByX.length - 1; i++) {
         const nodeA = sortedByX[i];
         const nodeB = sortedByX[i + 1];
         const gap1 = nodeB.bounds.left - nodeA.bounds.right;
 
         // Check if dragged node could create equal spacing
-        if (Math.abs(draggedBounds.right - nodeA.bounds.right - gap1) < threshold) {
+        if (
+          Math.abs(draggedBounds.right - nodeA.bounds.right - gap1) < threshold
+        ) {
           const targetX = nodeA.bounds.right + gap1;
           if (Math.abs(draggedBounds.left - targetX) < threshold) {
             spacingGuides.push({
@@ -156,7 +236,9 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
             });
           }
         }
-        if (Math.abs(draggedBounds.left - nodeB.bounds.left + gap1) < threshold) {
+        if (
+          Math.abs(draggedBounds.left - nodeB.bounds.left + gap1) < threshold
+        ) {
           const targetX = nodeB.bounds.left - gap1;
           if (Math.abs(draggedBounds.right - targetX) < threshold) {
             spacingGuides.push({
@@ -187,14 +269,19 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
       }
 
       // Check vertical spacing (horizontal guides)
-      const sortedByY = [...relevantNodes].sort((a, b) => a.bounds.top - b.bounds.top);
-      
+      const sortedByY = [...relevantNodes].sort(
+        (a, b) => a.bounds.top - b.bounds.top
+      );
+
       for (let i = 0; i < sortedByY.length - 1; i++) {
         const nodeA = sortedByY[i];
         const nodeB = sortedByY[i + 1];
         const gap1 = nodeB.bounds.top - nodeA.bounds.bottom;
 
-        if (Math.abs(draggedBounds.bottom - nodeA.bounds.bottom - gap1) < threshold) {
+        if (
+          Math.abs(draggedBounds.bottom - nodeA.bounds.bottom - gap1) <
+          threshold
+        ) {
           const targetY = nodeA.bounds.bottom + gap1;
           if (Math.abs(draggedBounds.top - targetY) < threshold) {
             spacingGuides.push({
@@ -239,8 +326,25 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
     [getBounds]
   );
 
+  // =====================================
+  // GUIDE DETECTION
+  // =====================================
+  /**
+   * Detect all applicable guide lines for a dragged node
+   *
+   * Algorithm:
+   * 1. Establish frame bounds (parent section or canvas area)
+   * 2. Collect reference lines from all sibling nodes in same frame
+   * 3. For each reference line, calculate distances to dragged node edges/center
+   * 4. If distance < threshold, create guide line
+   * 5. Add spacing guides and frame boundary guides
+   * 6. Deduplicate guides at same position
+   *
+   * Returns: Object with vertical and horizontal guides, plus frame bounds
+   */
   const detectGuides = useCallback(
     (draggedNode: Node, position?: { x: number; y: number }) => {
+      // Skip detection if override key is pressed (user wants fine control)
       if (overrideKeyPressedRef.current) {
         return { vertical: [], horizontal: [] };
       }
@@ -250,33 +354,37 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
 
       const guides: GuideWithBounds = { vertical: [], horizontal: [] };
       const threshold = snapThresholdRef.current;
-      
+
       // Find the immediate parent frame for the dragged node
       const parentFrame = getParentFrame(draggedNode);
-      
+
       // Set frame bounds - use parent frame if available, otherwise find any section
       let frameNode = parentFrame;
       if (!frameNode) {
         // Fallback: find the first section node
         frameNode = nodes.find((n) => n.type === "section") || null;
       }
-      
+
       // Section nodes have fixed width of 1280px (see SectionNode.tsx)
       // Height is calculated dynamically, default to 720px
       const frameWidth = 1280; // Fixed width for sections
-      const frameHeight = frameNode?.height ?? (frameNode?.data as any)?.height ?? 720;
-      
+      const frameHeight =
+        frameNode?.height ?? (frameNode?.data as any)?.height ?? 720;
+
       if (frameNode) {
         // Get frame position from ReactFlow instance for accuracy
         const frameReactFlowNode = reactFlowInstance?.getNode(frameNode.id);
-        const framePos = frameReactFlowNode?.positionAbsolute || frameNode.positionAbsolute || frameNode.position;
-        
+        const framePos =
+          frameReactFlowNode?.positionAbsolute ||
+          frameNode.positionAbsolute ||
+          frameNode.position;
+
         // IMPORTANT: The section node uses margin: "0 auto" which centers it visually,
         // but ReactFlow's position is the actual DOM position (top-left corner).
         // We need to use the ACTUAL position where the frame is rendered, not the visual center.
         // Since child nodes use positions relative to the frame's actual position,
         // we should use framePos directly.
-        
+
         guides.frameBounds = {
           left: framePos.x,
           top: framePos.y,
@@ -294,13 +402,13 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
           })
           .map((n) => getBounds(n))
           .filter((b): b is Bounds => b !== null);
-        
+
         if (allBounds.length > 0) {
           const minX = Math.min(...allBounds.map((b) => b.left));
           const maxX = Math.max(...allBounds.map((b) => b.right));
           const minY = Math.min(...allBounds.map((b) => b.top));
           const maxY = Math.max(...allBounds.map((b) => b.bottom));
-          
+
           // Add padding around the bounds
           const padding = 500;
           guides.frameBounds = {
@@ -321,16 +429,20 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
       }
 
       // Collect all reference lines from other nodes
-      const verticalLines: Map<number, { target: string; distance?: number }> = new Map();
-      const horizontalLines: Map<number, { target: string; distance?: number }> = new Map();
+      const verticalLines: Map<number, { target: string; distance?: number }> =
+        new Map();
+      const horizontalLines: Map<
+        number,
+        { target: string; distance?: number }
+      > = new Map();
 
       // Get the parent frame ID to filter nodes in the same frame
       const draggedNodeParentId = draggedNode.data?._ownedByColumn;
-      
+
       nodes.forEach((node) => {
         if (node.id === draggedNode.id) return;
         if (node.type === "section") return;
-        
+
         // Only show guides for nodes in the same parent frame
         const nodeParentId = node.data?._ownedByColumn;
         if (draggedNodeParentId && nodeParentId !== draggedNodeParentId) return;
@@ -453,40 +565,67 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
         const columnCount = frameNode.data?.columns?.count ?? 1;
         const columnWidth = frameWidth / columnCount;
         const columnPadding = 32;
-        
+
         const columnOuterLeft = frameBounds.left + columnWidth * columnIndex;
         const columnLeft = columnOuterLeft + columnPadding;
         const columnRight = columnOuterLeft + columnWidth - columnPadding;
         const columnCenterX = columnOuterLeft + columnWidth / 2;
-        const frameCenterY = frameBounds.top + (frameBounds.bottom - frameBounds.top) / 2;
+        const frameCenterY =
+          frameBounds.top + (frameBounds.bottom - frameBounds.top) / 2;
 
         // Check column boundaries
         if (Math.abs(draggedBounds.left - columnLeft) < threshold) {
-          guides.vertical.push({ position: columnLeft, type: "vertical", snapTarget: "left" });
+          guides.vertical.push({
+            position: columnLeft,
+            type: "vertical",
+            snapTarget: "left",
+          });
         }
         if (Math.abs(draggedBounds.right - columnRight) < threshold) {
-          guides.vertical.push({ position: columnRight, type: "vertical", snapTarget: "right" });
+          guides.vertical.push({
+            position: columnRight,
+            type: "vertical",
+            snapTarget: "right",
+          });
         }
         if (Math.abs(draggedBounds.centerX - columnCenterX) < threshold) {
-          guides.vertical.push({ position: columnCenterX, type: "vertical", snapTarget: "center" });
+          guides.vertical.push({
+            position: columnCenterX,
+            type: "vertical",
+            snapTarget: "center",
+          });
         }
         if (Math.abs(draggedBounds.top - frameBounds.top) < threshold) {
-          guides.horizontal.push({ position: frameBounds.top, type: "horizontal", snapTarget: "top" });
+          guides.horizontal.push({
+            position: frameBounds.top,
+            type: "horizontal",
+            snapTarget: "top",
+          });
         }
         if (Math.abs(draggedBounds.bottom - frameBounds.bottom) < threshold) {
-          guides.horizontal.push({ position: frameBounds.bottom, type: "horizontal", snapTarget: "bottom" });
+          guides.horizontal.push({
+            position: frameBounds.bottom,
+            type: "horizontal",
+            snapTarget: "bottom",
+          });
         }
         if (Math.abs(draggedBounds.centerY - frameCenterY) < threshold) {
-          guides.horizontal.push({ position: frameCenterY, type: "horizontal", snapTarget: "center" });
+          guides.horizontal.push({
+            position: frameCenterY,
+            type: "horizontal",
+            snapTarget: "center",
+          });
         }
       }
 
       // Remove duplicates (same position)
       guides.vertical = guides.vertical.filter(
-        (g, i, arr) => arr.findIndex((g2) => Math.abs(g2.position - g.position) < 0.1) === i
+        (g, i, arr) =>
+          arr.findIndex((g2) => Math.abs(g2.position - g.position) < 0.1) === i
       );
       guides.horizontal = guides.horizontal.filter(
-        (g, i, arr) => arr.findIndex((g2) => Math.abs(g2.position - g.position) < 0.1) === i
+        (g, i, arr) =>
+          arr.findIndex((g2) => Math.abs(g2.position - g.position) < 0.1) === i
       );
 
       return guides;
@@ -494,11 +633,29 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
     [nodes, getBounds, getReferenceLines, detectEvenSpacing]
   );
 
+  // =====================================
+  // SNAPPING LOGIC
+  // =====================================
+  /**
+   * Apply snapping to a dragged node's position
+   *
+   * Process:
+   * 1. Skip if override key pressed (user wants free movement)
+   * 2. Apply grid snapping if enabled (coarser alignment)
+   * 3. Detect guide lines at current position
+   * 4. For each guide, calculate distance from node edge/center to guide
+   * 5. Snap to guide if distance < threshold
+   * 6. Return final position and whether snapping occurred
+   *
+   * Note: Grid snap is applied first, then guides snap to refined position
+   */
   const snapToGuides = useCallback(
     (draggedNode: Node, position: { x: number; y: number }): SnapResult => {
       const nodeWidth = draggedNode.width ?? (draggedNode.data as any)?.width;
-      const nodeHeight = draggedNode.height ?? (draggedNode.data as any)?.height;
-      
+      const nodeHeight =
+        draggedNode.height ?? (draggedNode.data as any)?.height;
+
+      // Early exit if override key pressed or node has no dimensions
       if (overrideKeyPressedRef.current || !nodeWidth || !nodeHeight) {
         return { ...position, snapped: false };
       }
@@ -532,18 +689,27 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
       // Snap to vertical guides
       for (const guide of guides.vertical) {
         const { position: guideX, snapTarget } = guide;
-        
-        if (snapTarget === "left" && Math.abs(draggedBounds.left - guideX) < threshold) {
+
+        if (
+          snapTarget === "left" &&
+          Math.abs(draggedBounds.left - guideX) < threshold
+        ) {
           snappedX = guideX;
           snapped = true;
           break;
         }
-        if (snapTarget === "right" && Math.abs(draggedBounds.right - guideX) < threshold) {
+        if (
+          snapTarget === "right" &&
+          Math.abs(draggedBounds.right - guideX) < threshold
+        ) {
           snappedX = guideX - nodeWidth;
           snapped = true;
           break;
         }
-        if (snapTarget === "center" && Math.abs(draggedBounds.centerX - guideX) < threshold) {
+        if (
+          snapTarget === "center" &&
+          Math.abs(draggedBounds.centerX - guideX) < threshold
+        ) {
           snappedX = guideX - nodeWidth / 2;
           snapped = true;
           break;
@@ -553,18 +719,27 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
       // Snap to horizontal guides
       for (const guide of guides.horizontal) {
         const { position: guideY, snapTarget } = guide;
-        
-        if (snapTarget === "top" && Math.abs(draggedBounds.top - guideY) < threshold) {
+
+        if (
+          snapTarget === "top" &&
+          Math.abs(draggedBounds.top - guideY) < threshold
+        ) {
           snappedY = guideY;
           snapped = true;
           break;
         }
-        if (snapTarget === "bottom" && Math.abs(draggedBounds.bottom - guideY) < threshold) {
+        if (
+          snapTarget === "bottom" &&
+          Math.abs(draggedBounds.bottom - guideY) < threshold
+        ) {
           snappedY = guideY - nodeHeight;
           snapped = true;
           break;
         }
-        if (snapTarget === "center" && Math.abs(draggedBounds.centerY - guideY) < threshold) {
+        if (
+          snapTarget === "center" &&
+          Math.abs(draggedBounds.centerY - guideY) < threshold
+        ) {
           snappedY = guideY - nodeHeight / 2;
           snapped = true;
           break;
@@ -584,16 +759,33 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
     [detectGuides]
   );
 
+  /**
+   * Clear all visible guides from canvas
+   * Called when drag ends or when snapping is disabled
+   */
   const clearGuides = useCallback(() => {
     setActiveGuides({ vertical: [], horizontal: [] });
   }, []);
 
-  // Set snapping threshold
+  // =====================================
+  // CONFIGURATION METHODS
+  // =====================================
+  /**
+   * Set snap threshold in pixels
+   * Guides trigger when cursor is within this distance
+   * Default: 5px
+   */
   const setSnapThreshold = useCallback((threshold: number) => {
     snapThresholdRef.current = threshold;
   }, []);
 
-  // Set grid size and enable/disable
+  /**
+   * Enable/disable grid snapping and set grid size
+   * When enabled, nodes snap to nearest grid multiple
+   *
+   * @param enabled - Whether grid snapping is active
+   * @param size - Grid size in pixels (if not provided, keeps current size)
+   */
   const setGridSnap = useCallback((enabled: boolean, size?: number) => {
     enableGridSnapRef.current = enabled;
     if (size !== undefined) {
@@ -601,11 +793,17 @@ export function useSmartGuides(nodes: Node[], reactFlowInstance?: ReactFlowInsta
     }
   }, []);
 
-  // Set override key state
+  /**
+   * Set modifier key state (e.g., Alt or Shift held)
+   * When true, disables all snapping for fine-grained positioning
+   */
   const setOverrideKey = useCallback((pressed: boolean) => {
     overrideKeyPressedRef.current = pressed;
   }, []);
 
+  // =====================================
+  // HOOK EXPORTS
+  // =====================================
   return {
     activeGuides,
     handleDrag,
