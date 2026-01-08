@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow, useViewport } from "reactflow";
 import ReactFlow, { type NodeTypes } from "reactflow";
@@ -62,7 +62,6 @@ const nodeTypes: NodeTypes = {
   formCheckbox: FormCheckboxNode,
   formRadio: FormRadioNode,
   formSelect: FormSelectNode,
-
 };
 
 // Enforce consistent layering across all node operations.
@@ -183,10 +182,24 @@ export default function PageBuilderInner() {
   const [selectedNodes, setSelectedNodes] = useState<ReactFlowNode[]>([]);
   const [clipboard, setClipboard] = useState<any[]>([]);
   const [showGrid, setShowGrid] = useState(false);
-  const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [placementMode, setPlacementMode] = useState<{ type: string; label: string } | null>(null);
-  const [drawingMode, setDrawingMode] = useState<{ type: string; label: string; start: { x: number; y: number } } | null>(null);
-  const [drawingPreview, setDrawingPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [previewMode, setPreviewMode] = useState<
+    "desktop" | "tablet" | "mobile"
+  >("desktop");
+  const [placementMode, setPlacementMode] = useState<{
+    type: string;
+    label: string;
+  } | null>(null);
+  const [drawingMode, setDrawingMode] = useState<{
+    type: string;
+    label: string;
+    start: { x: number; y: number };
+  } | null>(null);
+  const [drawingPreview, setDrawingPreview] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const isDrawingRef = useRef(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
@@ -229,8 +242,12 @@ export default function PageBuilderInner() {
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
-  const { save, handleExportHTML, dialogProps } =
-    useWorkflowOperations(id, site, activePage, setNodesNormalized);
+  const { save, handleExportHTML, dialogProps } = useWorkflowOperations(
+    id,
+    site,
+    activePage,
+    setNodesNormalized
+  );
 
   // Smart guides for alignment
   const reactFlowInstance = useReactFlow();
@@ -245,10 +262,10 @@ export default function PageBuilderInner() {
     setSnapThreshold,
     setGridSnap,
   } = useSmartGuides(nodes, reactFlowInstance);
-  
+
   // Track currently dragging node for snapping
   const draggingNodeRef = useRef<ReactFlowNode | null>(null);
-  
+
   // Handle override key (Ctrl/Cmd) for free movement
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -256,16 +273,16 @@ export default function PageBuilderInner() {
         setOverrideKey(true);
       }
     };
-    
+
     const handleKeyUp = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) {
         setOverrideKey(false);
       }
     };
-    
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
-    
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
@@ -334,7 +351,12 @@ export default function PageBuilderInner() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    selectedNodes: selectedNodes.length > 0 ? selectedNodes : selectedNode ? [selectedNode] : [],
+    selectedNodes:
+      selectedNodes.length > 0
+        ? selectedNodes
+        : selectedNode
+        ? [selectedNode]
+        : [],
     onDelete: handleDelete,
     onDuplicate: handleDuplicate,
     onCopy: handleCopy,
@@ -342,7 +364,6 @@ export default function PageBuilderInner() {
     onSelectAll: handleSelectAll,
     onDeselect: handleDeselect,
   });
-
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
 
@@ -353,7 +374,8 @@ export default function PageBuilderInner() {
     sections.forEach((section: any) => {
       const sectionPadding = 0;
       const sectionGap = 0;
-      const sectionWidth = section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
+      const sectionWidth =
+        section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
 
       const rows = nodes
         .filter((n: any) => n.type === "row" && n.parentNode === section.id)
@@ -373,88 +395,309 @@ export default function PageBuilderInner() {
     return layout;
   }, [nodes]);
 
-  const placeNodeAtEvent = (event: any) => {
-    if (!placementMode) return false;
-    const flowPoint = reactFlowInstance.screenToFlowPosition({
-      x: event.clientX,
-      y: event.clientY,
-    });
-    const target = findDropTarget(flowPoint);
-    
-    let position, parentNode, extraData;
-    
-    if (!target) {
-      // Fallback: place at clicked position
-      position = flowPoint;
-      parentNode = undefined;
-      extraData = {};
-    } else {
-      const { ownerId, columnIndex, rect } = target;
-      const columnWidth = rect.right - rect.left;
-      const localX = Math.max(0, Math.min(columnWidth, flowPoint.x - rect.left));
-      const localY = flowPoint.y - rect.top;
-      
-      position = {
-        x: columnWidth * columnIndex + localX,
-        y: localY,
+  const placeNodeAtEvent = useCallback(
+    (event: any) => {
+      if (!placementMode) return false;
+      const flowPoint = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const target = findDropTarget(flowPoint);
+
+      let position, parentNode, extraData;
+
+      if (!target) {
+        // Fallback: place at clicked position
+        position = flowPoint;
+        parentNode = undefined;
+        extraData = {};
+      } else {
+        const { ownerId, columnIndex, rect } = target;
+        const columnWidth = rect.right - rect.left;
+        const localX = Math.max(
+          0,
+          Math.min(columnWidth, flowPoint.x - rect.left)
+        );
+        const localY = flowPoint.y - rect.top;
+
+        position = {
+          x: columnWidth * columnIndex + localX,
+          y: localY,
+        };
+        parentNode = ownerId;
+        extraData = {
+          _rowId: ownerId,
+          _ownedByColumn: ownerId,
+          _columnIndex: columnIndex,
+          _localY: localY,
+          columnIndex,
+        };
+      }
+
+      const nodeId = `${placementMode.type}-${Date.now()}`;
+      const defaultData = getDefaultNodeData(
+        placementMode.type,
+        placementMode.label
+      );
+      console.log("Default data:", defaultData);
+      const newNode: any = {
+        id: nodeId,
+        type: placementMode.type,
+        parentNode: parentNode,
+        position: position,
+        draggable: true,
+        style: defaultData.width
+          ? {
+              width: defaultData.width,
+              ...(defaultData.height ? { height: defaultData.height } : {}),
+            }
+          : undefined,
+        data: {
+          ...defaultData,
+          ...extraData,
+        },
       };
-      parentNode = ownerId;
-      extraData = {
-        _rowId: ownerId,
-        _ownedByColumn: ownerId,
-        _columnIndex: columnIndex,
-        _localY: localY,
-        columnIndex,
-      };
-    }
 
-    const nodeId = `${placementMode.type}-${Date.now()}`;
-    const defaultData = getDefaultNodeData(placementMode.type, placementMode.label);
-    console.log('Default data:', defaultData);
-    const newNode: any = {
-      id: nodeId,
-      type: placementMode.type,
-      parentNode: parentNode,
-      position: position,
-      draggable: true,
-      style: defaultData.width ? {
-        width: defaultData.width,
-        ...(defaultData.height ? { height: defaultData.height } : {}),
-      } : undefined,
-      data: {
-        ...defaultData,
-        ...extraData,
-      },
-    };
-
-    setNodesNormalized((nds: any) => [...nds, newNode]);
-    setPlacementMode(null);
-    setSelectedNode(newNode);
-    setSelectedNodes([newNode]);
-    return true;
-  };
-
-  const selectFrameAtPoint = (event: any) => {
-    const flowPoint = reactFlowInstance.screenToFlowPosition({
-      x: event.clientX,
-      y: event.clientY,
-    });
-    const frame = nodes.find((n: any) => n.type === "section");
-    if (!frame) return false;
-    const width = frame.width ?? frame.data?.pageWidth ?? 0;
-    const height = frame.height ?? frame.data?.pageHeight ?? 0;
-    const within =
-      flowPoint.x >= frame.position.x &&
-      flowPoint.x <= frame.position.x + width &&
-      flowPoint.y >= frame.position.y &&
-      flowPoint.y <= frame.position.y + height;
-    if (within) {
-      setSelectedNode(frame);
-      setSelectedNodes([frame]);
+      setNodesNormalized((nds: any) => [...nds, newNode]);
+      setPlacementMode(null);
+      setSelectedNode(newNode);
+      setSelectedNodes([newNode]);
       return true;
-    }
-    return false;
-  };
+    },
+    [placementMode, reactFlowInstance, findDropTarget, setNodesNormalized]
+  );
+
+  const selectFrameAtPoint = useCallback(
+    (event: any) => {
+      const flowPoint = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const frame = nodes.find((n: any) => n.type === "section");
+      if (!frame) return false;
+      const width = frame.width ?? frame.data?.pageWidth ?? 0;
+      const height = frame.height ?? frame.data?.pageHeight ?? 0;
+      const within =
+        flowPoint.x >= frame.position.x &&
+        flowPoint.x <= frame.position.x + width &&
+        flowPoint.y >= frame.position.y &&
+        flowPoint.y <= frame.position.y + height;
+      if (within) {
+        setSelectedNode(frame);
+        setSelectedNodes([frame]);
+        return true;
+      }
+      return false;
+    },
+    [nodes, reactFlowInstance]
+  );
+
+  // Memoize the transformed nodes for ReactFlow to avoid expensive re-mapping on every render
+  const transformedNodes = useMemo(() => {
+    return (
+      nodes
+        // Render order must respect zIndex to keep rows below content nodes.
+        .filter((n: any) => !n.data?.hidden)
+        .sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+        .map((n: any) => {
+          const isSelected =
+            selectedNode?.id === n.id ||
+            selectedNodes.some((sn) => sn.id === n.id);
+          if (n.type === "section") {
+            return {
+              ...n,
+              zIndex: 0,
+              draggable: false,
+              selected: isSelected,
+              data: {
+                ...n.data,
+                _allNodes: nodes,
+                _registerColumnRect: registerColumnRect,
+                _viewportVersion: viewportVersion,
+                _hoverState: hoverState,
+              },
+              style: {
+                ...n.style,
+                zIndex: 0,
+              },
+            };
+          }
+          if (n.type === "row") {
+            const layout = rowLayoutById.get(n.id);
+            return {
+              ...n,
+              zIndex: 1,
+              draggable: false,
+              selectable: false,
+              position: layout ? { x: layout.x, y: layout.y } : n.position,
+              selected: isSelected,
+              data: {
+                ...n.data,
+                _allNodes: nodes,
+                _registerColumnRect: registerColumnRect,
+                _viewportVersion: viewportVersion,
+                _hoverState: hoverState,
+                _onColumnClick: (event: any) => {
+                  if (placementMode) {
+                    placeNodeAtEvent(event);
+                    return;
+                  }
+                  const parentSection = nodes.find(
+                    (node: any) =>
+                      node.type === "section" && node.id === n.parentNode
+                  );
+                  if (parentSection) {
+                    setSelectedNode(parentSection);
+                    setSelectedNodes([parentSection]);
+                  }
+                },
+                _onRowMeasure: (rowId: string, height: number) => {
+                  setNodesNormalized((nds: any) =>
+                    nds.map((node: any) => {
+                      if (node.id !== rowId) return node;
+                      if (node.data?.rowHeight === height) return node;
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          rowHeight: height,
+                        },
+                      };
+                    })
+                  );
+                },
+              },
+              style: {
+                ...n.style,
+                zIndex: 1,
+                width: layout?.width ?? n.style?.width,
+              },
+            };
+          }
+          return {
+            ...n,
+            selected: isSelected,
+            draggable: !n.data?.locked,
+            data: {
+              ...n.data,
+              _onResizeStart: () => setIsResizing(true),
+              _onResizeEnd: () => setIsResizing(false),
+              _onRadiusStart: () => setIsEditingRadius(true),
+              _onRadiusEnd: () => setIsEditingRadius(false),
+              _onResize: (_event: any, params: any) => {
+                setNodesNormalized((nds: any) =>
+                  nds.map((node: any) =>
+                    node.id === n.id
+                      ? {
+                          ...node,
+                          position: {
+                            x: params.x,
+                            y: params.y,
+                          },
+                          style: {
+                            ...node.style,
+                            width: params.width,
+                            height: params.height,
+                            zIndex: n.zIndex ?? 10,
+                          },
+                          data: {
+                            ...node.data,
+                            width: Math.round(params.width),
+                            height: Math.round(params.height),
+                          },
+                        }
+                      : node
+                  )
+                );
+              },
+              onUpdateText: (newText: string) => {
+                setNodes((nds: any) =>
+                  nds.map((node: any) => {
+                    if (node.id === n.id) {
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          // Update label for buttons, text for text nodes, placeholder for form inputs
+                          ...(node.type === "button" ? { label: newText } : {}),
+                          ...(node.type === "text" ? { text: newText } : {}),
+                          ...(node.type === "formInput"
+                            ? { placeholder: newText }
+                            : {}),
+                        },
+                      };
+                    }
+                    return node;
+                  })
+                );
+              },
+              _onRadiusChange: (radius: number, corner?: string) => {
+                setNodesNormalized((nds: any) =>
+                  nds.map((node: any) => {
+                    if (node.id !== n.id) return node;
+
+                    if (corner) {
+                      // Individual corner editing (Ctrl pressed)
+                      const currentRadius =
+                        typeof node.data.borderRadius === "number"
+                          ? {
+                              topLeft: node.data.borderRadius,
+                              topRight: node.data.borderRadius,
+                              bottomLeft: node.data.borderRadius,
+                              bottomRight: node.data.borderRadius,
+                            }
+                          : {
+                              topLeft: 0,
+                              topRight: 0,
+                              bottomLeft: 0,
+                              bottomRight: 0,
+                              ...node.data.borderRadius,
+                            };
+
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          borderRadius: {
+                            ...currentRadius,
+                            [corner]: radius,
+                          },
+                        },
+                      };
+                    } else {
+                      // All corners (no Ctrl)
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          borderRadius: radius,
+                        },
+                      };
+                    }
+                  })
+                );
+              },
+            },
+            style: {
+              ...n.style,
+              zIndex: n.zIndex ?? 10,
+            },
+          };
+        })
+    );
+  }, [
+    nodes,
+    selectedNode,
+    selectedNodes,
+    rowLayoutById,
+    registerColumnRect,
+    viewportVersion,
+    hoverState,
+    placementMode,
+    setNodesNormalized,
+    setNodes,
+    placeNodeAtEvent,
+  ]);
 
   return (
     <>
@@ -488,7 +731,9 @@ export default function PageBuilderInner() {
         onToggleGrid={() => setShowGrid(!showGrid)}
         onZoomIn={() => reactFlowInstance.zoomIn()}
         onZoomOut={() => reactFlowInstance.zoomOut()}
-        onZoomToFit={() => reactFlowInstance.fitView({ padding: 0.2, duration: 200 })}
+        onZoomToFit={() =>
+          reactFlowInstance.fitView({ padding: 0.2, duration: 200 })
+        }
         onZoomTo100={handleZoomTo100}
         onViewportChange={setPreviewMode}
         currentViewport={previewMode}
@@ -507,7 +752,9 @@ export default function PageBuilderInner() {
           onCopy={handleCopy}
           onPaste={handlePaste}
           onSetColumns={handleSetColumns}
-          visible={hasFrame && (selectedNodes.length > 0 || selectedNode !== null)}
+          visible={
+            hasFrame && (selectedNodes.length > 0 || selectedNode !== null)
+          }
         />
         {hasFrame && (
           <LayerPanel
@@ -545,7 +792,9 @@ export default function PageBuilderInner() {
                 setSelectedNodes((sns) => sns.filter((n) => n.id !== nodeId));
                 return;
               }
-              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== nodeId));
+              setNodesNormalized((nds: any) =>
+                nds.filter((n: any) => n.id !== nodeId)
+              );
               if (selectedNode?.id === nodeId) {
                 setSelectedNode(null);
               }
@@ -571,12 +820,14 @@ export default function PageBuilderInner() {
             onReorderNodes={(nodeId: string, targetIndex: number) => {
               setNodesNormalized((nds: any) => {
                 const nodesCopy = [...nds];
-                const draggedIndex = nodesCopy.findIndex((n) => n.id === nodeId);
+                const draggedIndex = nodesCopy.findIndex(
+                  (n) => n.id === nodeId
+                );
                 if (draggedIndex === -1) return nds;
-                
+
                 // Remove the dragged node
                 const [draggedNode] = nodesCopy.splice(draggedIndex, 1);
-                
+
                 // Insert at target index
                 nodesCopy.splice(targetIndex, 0, draggedNode);
 
@@ -594,52 +845,57 @@ export default function PageBuilderInner() {
         )}
         <div className="visualbuilder-canvas">
           {placementMode && (
-            <div style={{
-              position: "absolute",
-              top: 20,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#3b82f6",
-              color: "white",
-              padding: "8px 16px",
-              borderRadius: 6,
-              zIndex: 1000,
-              fontSize: 14,
-              fontWeight: 500,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}>
-              Click on canvas to place {placementMode.label} • Press ESC to cancel
+            <div
+              style={{
+                position: "absolute",
+                top: 20,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#3b82f6",
+                color: "white",
+                padding: "8px 16px",
+                borderRadius: 6,
+                zIndex: 1000,
+                fontSize: 14,
+                fontWeight: 500,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              }}
+            >
+              Click on canvas to place {placementMode.label} • Press ESC to
+              cancel
             </div>
           )}
           {drawingMode && (
-            <div style={{
-              position: "absolute",
-              top: 20,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#10b981",
-              color: "white",
-              padding: "8px 16px",
-              borderRadius: 6,
-              zIndex: 1000,
-              fontSize: 14,
-              fontWeight: 500,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}>
+            <div
+              style={{
+                position: "absolute",
+                top: 20,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#10b981",
+                color: "white",
+                padding: "8px 16px",
+                borderRadius: 6,
+                zIndex: 1000,
+                fontSize: 14,
+                fontWeight: 500,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              }}
+            >
               Click and drag to draw {drawingMode.label} • Press ESC to cancel
             </div>
           )}
-          <NodeToolbar 
+          <NodeToolbar
             addNode={(type, label) => {
               // Use drawing mode for shapes and containers
-              if (type === 'shape' || type === 'container') {
+              if (type === "shape" || type === "container") {
                 setDrawingMode({ type, label, start: { x: 0, y: 0 } });
               } else {
                 setPlacementMode({ type, label });
               }
             }}
-            mode={MODE} 
-            hasFrame={hasFrame} 
+            mode={MODE}
+            hasFrame={hasFrame}
           />
 
           {!hasFrame ? (
@@ -665,329 +921,165 @@ export default function PageBuilderInner() {
             </div>
           ) : (
             <>
-            <SmartGuides guides={activeGuides} viewport={viewport} />
-            {drawingPreview && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: drawingPreview.x * viewport.zoom + viewport.x,
-                  top: drawingPreview.y * viewport.zoom + viewport.y,
-                  width: drawingPreview.width * viewport.zoom,
-                  height: drawingPreview.height * viewport.zoom,
-                  border: "2px dashed #3b82f6",
-                  backgroundColor: "rgba(59, 130, 246, 0.1)",
-                  pointerEvents: "none",
-                  zIndex: 1000,
-                }}
-              />
-            )}
-            {showGrid && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  backgroundImage: `
+              <SmartGuides guides={activeGuides} viewport={viewport} />
+              {drawingPreview && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: drawingPreview.x * viewport.zoom + viewport.x,
+                    top: drawingPreview.y * viewport.zoom + viewport.y,
+                    width: drawingPreview.width * viewport.zoom,
+                    height: drawingPreview.height * viewport.zoom,
+                    border: "2px dashed #3b82f6",
+                    backgroundColor: "rgba(59, 130, 246, 0.1)",
+                    pointerEvents: "none",
+                    zIndex: 1000,
+                  }}
+                />
+              )}
+              {showGrid && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    backgroundImage: `
                     linear-gradient(rgba(99, 102, 241, 0.1) 1px, transparent 1px),
                     linear-gradient(90deg, rgba(99, 102, 241, 0.1) 1px, transparent 1px)
                   `,
-                  backgroundSize: "8px 8px",
-                  pointerEvents: "none",
-                  zIndex: 0,
-                }}
+                    backgroundSize: "8px 8px",
+                    pointerEvents: "none",
+                    zIndex: 0,
+                  }}
+                />
+              )}
+              <ZoomControls
+                showGrid={showGrid}
+                onToggleGrid={() => setShowGrid(!showGrid)}
               />
-            )}
-            <ZoomControls showGrid={showGrid} onToggleGrid={() => setShowGrid(!showGrid)} />
-            <ReactFlow
-              nodes={nodes
-                // Render order must respect zIndex to keep rows below content nodes.
-                .filter((n: any) => !n.data?.hidden)
-                .sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
-                .map((n: any) => {
-                  const isSelected =
-                    selectedNode?.id === n.id ||
-                    selectedNodes.some((sn) => sn.id === n.id);
-                  if (n.type === "section") {
-                    return {
-                      ...n,
-                      zIndex: 0,
-                      draggable: false,
-                      selected: isSelected,
-                      data: {
-                        ...n.data,
-                        _allNodes: nodes,
-                        _registerColumnRect: registerColumnRect,
-                        _viewportVersion: viewportVersion,
-                        _hoverState: hoverState,
-                      },
-                      style: {
-                        ...n.style,
-                        zIndex: 0,
-                      },
-                    };
-                  }
-                  if (n.type === "row") {
-                    const layout = rowLayoutById.get(n.id);
-                    return {
-                      ...n,
-                      zIndex: 1,
-                      draggable: false,
-                      selectable: false,
-                      position: layout ? { x: layout.x, y: layout.y } : n.position,
-                      selected: isSelected,
-                      data: {
-                        ...n.data,
-                        _allNodes: nodes,
-                        _registerColumnRect: registerColumnRect,
-                        _viewportVersion: viewportVersion,
-                        _hoverState: hoverState,
-                        _onColumnClick: (event: any) => {
-                          if (placementMode) {
-                            placeNodeAtEvent(event);
-                            return;
-                          }
-                          const parentSection = nodes.find(
-                            (node: any) => node.type === "section" && node.id === n.parentNode
-                          );
-                          if (parentSection) {
-                            setSelectedNode(parentSection);
-                            setSelectedNodes([parentSection]);
-                          }
-                        },
-                        _onRowMeasure: (rowId: string, height: number) => {
-                          setNodesNormalized((nds: any) =>
-                            nds.map((node: any) => {
-                              if (node.id !== rowId) return node;
-                              if (node.data?.rowHeight === height) return node;
-                              return {
-                                ...node,
-                                data: {
-                                  ...node.data,
-                                  rowHeight: height,
-                                },
-                              };
-                            })
-                          );
-                        },
-                      },
-                      style: {
-                        ...n.style,
-                        zIndex: 1,
-                        width: layout?.width ?? n.style?.width,
-                      },
-                    };
-                  }
-                  return {
-                    ...n,
-                    selected: isSelected,
-                    draggable: !n.data?.locked,
-                    data: {
-                      ...n.data,
-                      _onResizeStart: () => setIsResizing(true),
-                      _onResizeEnd: () => setIsResizing(false),
-                      _onRadiusStart: () => setIsEditingRadius(true),
-                      _onRadiusEnd: () => setIsEditingRadius(false),
-                      _onResize: (_event: any, params: any) => {
-                        setNodesNormalized((nds: any) =>
-                          nds.map((node: any) =>
-                            node.id === n.id
-                              ? {
-                                  ...node,
-                                  position: {
-                                    x: params.x,
-                                    y: params.y,
-                                  },
-                                  style: {
-                                    ...node.style,
-                                    width: params.width,
-                                    height: params.height,
-                                    zIndex: n.zIndex ?? 10,
-                                  },
-                                  data: {
-                                    ...node.data,
-                                    width: Math.round(params.width),
-                                    height: Math.round(params.height),
-                                  },
-                                }
-                              : node
-                          )
-                        );
-                      },
-                      onUpdateText: (newText: string) => {
-                        setNodes((nds: any) =>
-                          nds.map((node: any) => {
-                            if (node.id === n.id) {
-                              return {
-                                ...node,
-                                data: {
-                                  ...node.data,
-                                  // Update label for buttons, text for text nodes, placeholder for form inputs
-                                  ...(node.type === "button" ? { label: newText } : {}),
-                                  ...(node.type === "text" ? { text: newText } : {}),
-                                  ...(node.type === "formInput" ? { placeholder: newText } : {}),
-                                },
-                              };
-                            }
-                            return node;
-                          })
-                        );
-                      },
-                      _onRadiusChange: (radius: number, corner?: string) => {
-                        setNodesNormalized((nds: any) =>
-                          nds.map((node: any) => {
-                            if (node.id !== n.id) return node;
-                            
-                            if (corner) {
-                              // Individual corner editing (Ctrl pressed)
-                              const currentRadius = typeof node.data.borderRadius === 'number' 
-                                ? { topLeft: node.data.borderRadius, topRight: node.data.borderRadius, bottomLeft: node.data.borderRadius, bottomRight: node.data.borderRadius }
-                                : { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0, ...node.data.borderRadius };
-                              
-                              return {
-                                ...node,
-                                data: {
-                                  ...node.data,
-                                  borderRadius: {
-                                    ...currentRadius,
-                                    [corner]: radius,
-                                  },
-                                },
-                              };
-                            } else {
-                              // All corners (no Ctrl)
-                              return {
-                                ...node,
-                                data: {
-                                  ...node.data,
-                                  borderRadius: radius,
-                                },
-                              };
-                            }
-                          })
-                        );
-                      },
-                    },
-                    style: {
-                      ...n.style,
-                      zIndex: n.zIndex ?? 10,
-                    },
-                  };
-                })}
-              edges={MODE === "builder" ? [] : edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onNodeClick={(event, node) => {
-                if (node.type === "row") {
-                  const parentSection = nodes.find(
-                    (n: any) => n.type === "section" && n.id === node.parentNode
-                  );
-                  if (parentSection) {
-                    setSelectedNode(parentSection);
-                    setSelectedNodes([parentSection]);
-                  }
-                  return;
-                }
-                event.stopPropagation();
-                if (placementMode) {
-                  placeNodeAtEvent(event);
-                  return;
-                }
-                setSelectedNode(node);
-                setSelectedNodes([node]);
-              }}
-              onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
-              onConnect={MODE === "builder" ? () => {} : onConnect}
-              isValidConnection={() => MODE === "workflow"}
-              nodesConnectable={MODE === "workflow"}
-              nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
-              elementsSelectable={!drawingMode}
-              selectNodesOnDrag={true}
-              elevateNodesOnSelect={false}
-              panOnDrag={drawingMode ? false : true}
-              zoomOnScroll={!drawingMode}
-              onNodeDragStart={(_, node) => {
-                if (node.type === "row") return;
-                setSelectedNode(node);
-                setSelectedNodes([node]);
-                draggingNodeRef.current = node;
-              }}
-              onNodeDrag={(_, node) => {
-                handleNodeDrag(node);
-                handleGuideDrag(node);
-              }}
-              onNodeDragStop={(event, node) => {
-                // Apply snapping on drag stop
-                if (node.positionAbsolute && node.width && node.height) {
-                  const snapped = snapToGuides(node, {
-                    x: node.positionAbsolute.x,
-                    y: node.positionAbsolute.y,
-                  });
-                  
-                  if (snapped.snapped) {
-                    // Calculate the new position based on the snapped absolute position
-                    // positionAbsolute accounts for parent transforms, so we need to use it directly
-                    const currentAbsoluteX = node.positionAbsolute.x;
-                    const currentAbsoluteY = node.positionAbsolute.y;
-                    const deltaX = snapped.x - currentAbsoluteX;
-                    const deltaY = snapped.y - currentAbsoluteY;
-                    
-                    // Update the node's position (relative to parent or flow)
-                    setNodes((nds: any) =>
-                      nds.map((n: any) => {
-                        if (n.id === node.id) {
-                          // If node has a parent, we need to account for parent position
-                          // For now, assume position is in flow coordinates
-                          return {
-                            ...n,
-                            position: {
-                              x: n.position.x + deltaX,
-                              y: n.position.y + deltaY,
-                            },
-                          };
-                        }
-                        return n;
-                      })
+              <ReactFlow
+                nodes={transformedNodes}
+                edges={MODE === "builder" ? [] : edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onNodeClick={(event, node) => {
+                  if (node.type === "row") {
+                    const parentSection = nodes.find(
+                      (n: any) =>
+                        n.type === "section" && n.id === node.parentNode
                     );
+                    if (parentSection) {
+                      setSelectedNode(parentSection);
+                      setSelectedNodes([parentSection]);
+                    }
+                    return;
                   }
-                }
-                
-                handleNodeDragStop(event, node);
-                clearGuides();
-                draggingNodeRef.current = null;
-              }}
-              onPaneClick={(event) => {
-                if (placementMode) {
-                  placeNodeAtEvent(event);
-                  return;
-                }
-                if (!selectFrameAtPoint(event)) {
-                  setSelectedNode(null);
-                  setSelectedNodes([]);
-                }
-              }}
-              multiSelectionKeyCode="Shift"
-              defaultEdgeOptions={{
-                style: { stroke: "transparent" },
-                animated: false,
-              }}
-              fitView
-              style={{ 
-                width: "100%", 
-                height: "100%",
-                cursor: placementMode ? "crosshair" : drawingMode ? "crosshair" : "default"
-              }}
-              onMoveEnd={handleMoveEnd}
-            >
-            </ReactFlow>
+                  event.stopPropagation();
+                  if (placementMode) {
+                    placeNodeAtEvent(event);
+                    return;
+                  }
+                  setSelectedNode(node);
+                  setSelectedNodes([node]);
+                }}
+                onEdgesChange={MODE === "builder" ? () => {} : onEdgesChange}
+                onConnect={MODE === "builder" ? () => {} : onConnect}
+                isValidConnection={() => MODE === "workflow"}
+                nodesConnectable={MODE === "workflow"}
+                nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
+                elementsSelectable={!drawingMode}
+                selectNodesOnDrag={true}
+                elevateNodesOnSelect={false}
+                panOnDrag={drawingMode ? false : true}
+                zoomOnScroll={!drawingMode}
+                onNodeDragStart={(_, node) => {
+                  if (node.type === "row") return;
+                  setSelectedNode(node);
+                  setSelectedNodes([node]);
+                  draggingNodeRef.current = node;
+                }}
+                onNodeDrag={(_, node) => {
+                  handleNodeDrag(node);
+                  handleGuideDrag(node);
+                }}
+                onNodeDragStop={(event, node) => {
+                  // Apply snapping on drag stop
+                  if (node.positionAbsolute && node.width && node.height) {
+                    const snapped = snapToGuides(node, {
+                      x: node.positionAbsolute.x,
+                      y: node.positionAbsolute.y,
+                    });
+
+                    if (snapped.snapped) {
+                      // Calculate the new position based on the snapped absolute position
+                      // positionAbsolute accounts for parent transforms, so we need to use it directly
+                      const currentAbsoluteX = node.positionAbsolute.x;
+                      const currentAbsoluteY = node.positionAbsolute.y;
+                      const deltaX = snapped.x - currentAbsoluteX;
+                      const deltaY = snapped.y - currentAbsoluteY;
+
+                      // Update the node's position (relative to parent or flow)
+                      setNodes((nds: any) =>
+                        nds.map((n: any) => {
+                          if (n.id === node.id) {
+                            // If node has a parent, we need to account for parent position
+                            // For now, assume position is in flow coordinates
+                            return {
+                              ...n,
+                              position: {
+                                x: n.position.x + deltaX,
+                                y: n.position.y + deltaY,
+                              },
+                            };
+                          }
+                          return n;
+                        })
+                      );
+                    }
+                  }
+
+                  handleNodeDragStop(event, node);
+                  clearGuides();
+                  draggingNodeRef.current = null;
+                }}
+                onPaneClick={(event) => {
+                  if (placementMode) {
+                    placeNodeAtEvent(event);
+                    return;
+                  }
+                  if (!selectFrameAtPoint(event)) {
+                    setSelectedNode(null);
+                    setSelectedNodes([]);
+                  }
+                }}
+                multiSelectionKeyCode="Shift"
+                defaultEdgeOptions={{
+                  style: { stroke: "transparent" },
+                  animated: false,
+                }}
+                fitView
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  cursor: placementMode
+                    ? "crosshair"
+                    : drawingMode
+                    ? "crosshair"
+                    : "default",
+                }}
+                onMoveEnd={handleMoveEnd}
+              ></ReactFlow>
             </>
           )}
         </div>
 
         {selectedNodes.length > 0 && (
           <InspectorPanel
-            selectedNodes={selectedNodes.map(sn => nodes.find((n: any) => n.id === sn.id) || sn)}
+            selectedNodes={selectedNodes.map(
+              (sn) => nodes.find((n: any) => n.id === sn.id) || sn
+            )}
             allNodes={nodes}
             updateNode={(id: string, updates: any) => {
               setNodesNormalized((nds: any) => {
@@ -996,25 +1088,34 @@ export default function PageBuilderInner() {
                     return {
                       ...n,
                       data: { ...n.data, ...updates },
-                      position: updates.position !== undefined ? updates.position : n.position,
+                      position:
+                        updates.position !== undefined
+                          ? updates.position
+                          : n.position,
                       style: {
                         ...n.style,
-                        ...(updates.width !== undefined ? { width: updates.width } : {}),
-                        ...(updates.height !== undefined ? { height: updates.height } : {}),
+                        ...(updates.width !== undefined
+                          ? { width: updates.width }
+                          : {}),
+                        ...(updates.height !== undefined
+                          ? { height: updates.height }
+                          : {}),
                       },
                     };
                   }
                   return n;
                 });
-                
+
                 // Update selectedNodes with fresh data from the new nodes array
-                setSelectedNodes(prev =>
-                  prev.map(sn => {
-                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                setSelectedNodes((prev) =>
+                  prev.map((sn) => {
+                    const updated = updatedNodes.find(
+                      (n: any) => n.id === sn.id
+                    );
                     return updated || sn;
                   })
                 );
-                
+
                 return updatedNodes;
               });
             }}
@@ -1030,35 +1131,48 @@ export default function PageBuilderInner() {
                     return {
                       ...n,
                       data: { ...n.data, ...restUpdates },
-                      position: restUpdates.position !== undefined ? restUpdates.position : n.position,
+                      position:
+                        restUpdates.position !== undefined
+                          ? restUpdates.position
+                          : n.position,
                       style: {
                         ...n.style,
-                        ...(restUpdates.width !== undefined ? { width: restUpdates.width } : {}),
-                        ...(restUpdates.height !== undefined ? { height: restUpdates.height } : {}),
+                        ...(restUpdates.width !== undefined
+                          ? { width: restUpdates.width }
+                          : {}),
+                        ...(restUpdates.height !== undefined
+                          ? { height: restUpdates.height }
+                          : {}),
                       },
                     };
                   }
                   return n;
                 });
-                
+
                 // Update selectedNodes with fresh data from the new nodes array
-                setSelectedNodes(prev =>
-                  prev.map(sn => {
-                    const updated = updatedNodes.find((n: any) => n.id === sn.id);
+                setSelectedNodes((prev) =>
+                  prev.map((sn) => {
+                    const updated = updatedNodes.find(
+                      (n: any) => n.id === sn.id
+                    );
                     return updated || sn;
                   })
                 );
-                
+
                 return updatedNodes;
               });
             }}
             deleteNode={(id: string) => {
-              setNodesNormalized((nds: any) => nds.filter((n: any) => n.id !== id));
+              setNodesNormalized((nds: any) =>
+                nds.filter((n: any) => n.id !== id)
+              );
               setSelectedNodes([]);
               setSelectedNode(null);
             }}
             deleteNodes={(ids: string[]) => {
-              setNodesNormalized((nds: any) => nds.filter((n: any) => !ids.includes(n.id)));
+              setNodesNormalized((nds: any) =>
+                nds.filter((n: any) => !ids.includes(n.id))
+              );
               setSelectedNodes([]);
               setSelectedNode(null);
             }}

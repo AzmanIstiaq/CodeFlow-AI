@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
 export type FormRadioNodeData = {
@@ -18,14 +19,14 @@ type Props = {
   selected?: boolean;
 };
 
-export default function FormRadioNode({ data, selected }: Props) {
+function FormRadioNode({ data, selected }: Props) {
   const options = data.options || ["Option 1", "Option 2", "Option 3"];
-  
+
   return (
     <div style={{ position: "relative" }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={100} 
+      <NodeResizer
+        isVisible={selected}
+        minWidth={100}
         minHeight={60}
         onResizeStart={(data as any)._onResizeStart}
         onResizeEnd={(data as any)._onResizeEnd}
@@ -99,3 +100,5 @@ export default function FormRadioNode({ data, selected }: Props) {
     </div>
   );
 }
+
+export default memo(FormRadioNode);

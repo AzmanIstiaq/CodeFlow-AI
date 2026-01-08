@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useInlineEdit } from "../hooks/useInlineEdit";
 import type { NodeProps } from "reactflow";
 import { NodeResizer } from "reactflow";
@@ -10,7 +11,14 @@ export type ButtonNodeData = {
   order: number;
   backgroundColor?: string;
   textColor?: string;
-  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
+  borderRadius:
+    | number
+    | {
+        topLeft?: number;
+        topRight?: number;
+        bottomLeft?: number;
+        bottomRight?: number;
+      };
   padding: string;
   fontSize: number;
   fontWeight: number;
@@ -25,7 +33,7 @@ export type ButtonNodeData = {
   _onRadiusEnd?: () => void;
 };
 
-export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeData>) {
+function ButtonNode({ data, selected }: NodeProps<ButtonNodeData>) {
   const defaultBg = data.variant === "secondary" ? "#374151" : "#3b82f6";
   const bg = data.backgroundColor || defaultBg;
 
@@ -52,10 +60,15 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
     if (data.borderRadius === undefined) {
       return 8;
     }
-    if (typeof data.borderRadius === 'number') {
+    if (typeof data.borderRadius === "number") {
       return data.borderRadius;
     }
-    const { topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = data.borderRadius;
+    const {
+      topLeft = 0,
+      topRight = 0,
+      bottomLeft = 0,
+      bottomRight = 0,
+    } = data.borderRadius;
     return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
   };
 
@@ -122,14 +135,16 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
 
   if (data.href) {
     return (
-      <div style={{ 
-        position: "relative",
-        width: "100%",
-        height: "100%",
-      }}>
-        <NodeResizer 
-          isVisible={selected} 
-          minWidth={120} 
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        <NodeResizer
+          isVisible={selected}
+          minWidth={120}
           minHeight={44}
           keepAspectRatio={false}
           onResizeStart={(data as any)._onResizeStart}
@@ -168,7 +183,15 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
           onDragStart={data._onRadiusStart}
           onDragEnd={data._onRadiusEnd}
         />
-        <a href={data.href} style={{ textDecoration: "none", display: "block", width: "100%", height: "100%" }}>
+        <a
+          href={data.href}
+          style={{
+            textDecoration: "none",
+            display: "block",
+            width: "100%",
+            height: "100%",
+          }}
+        >
           {buttonContent}
         </a>
       </div>
@@ -176,14 +199,16 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
   }
 
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={120} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={120}
         minHeight={44}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
@@ -226,3 +251,5 @@ export default function ButtonNode({ data, selected, id }: NodeProps<ButtonNodeD
     </div>
   );
 }
+
+export default memo(ButtonNode);

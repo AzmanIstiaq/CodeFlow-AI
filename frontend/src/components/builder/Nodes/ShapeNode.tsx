@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
@@ -6,7 +7,14 @@ export type ShapeNodeData = {
   width: number;
   height: number;
   backgroundColor: string;
-  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
+  borderRadius:
+    | number
+    | {
+        topLeft?: number;
+        topRight?: number;
+        bottomLeft?: number;
+        bottomRight?: number;
+      };
   opacity: number;
   rotation: number;
   boxShadow: string;
@@ -21,7 +29,7 @@ type Props = {
   selected?: boolean;
 };
 
-export default function ShapeNode({ data, selected }: Props) {
+function ShapeNode({ data, selected }: Props) {
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
@@ -29,10 +37,15 @@ export default function ShapeNode({ data, selected }: Props) {
   };
 
   const getBorderRadius = () => {
-    if (typeof data.borderRadius === 'number') {
+    if (typeof data.borderRadius === "number") {
       return data.borderRadius;
     }
-    const { topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = data.borderRadius;
+    const {
+      topLeft = 0,
+      topRight = 0,
+      bottomLeft = 0,
+      bottomRight = 0,
+    } = data.borderRadius;
     return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
   };
 
@@ -60,7 +73,9 @@ export default function ShapeNode({ data, selected }: Props) {
           backgroundColor: "transparent",
           borderLeft: `${(data.width || 100) / 2}px solid transparent`,
           borderRight: `${(data.width || 100) / 2}px solid transparent`,
-          borderBottom: `${data.height || 100}px solid ${data.backgroundColor || "#3b82f6"}`,
+          borderBottom: `${data.height || 100}px solid ${
+            data.backgroundColor || "#3b82f6"
+          }`,
         };
       default:
         return { ...baseStyle, borderRadius: getBorderRadius() };
@@ -68,14 +83,16 @@ export default function ShapeNode({ data, selected }: Props) {
   };
 
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={50} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={50}
         minHeight={50}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
@@ -118,7 +135,9 @@ export default function ShapeNode({ data, selected }: Props) {
           />
         </>
       )}
-      <div style={{...getShapeStyle(), width: "100%", height: "100%"}} />
+      <div style={{ ...getShapeStyle(), width: "100%", height: "100%" }} />
     </div>
   );
 }
+
+export default memo(ShapeNode);

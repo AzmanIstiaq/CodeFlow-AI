@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
@@ -6,7 +7,14 @@ export type ImageNodeData = {
   alt: string;
   width: number;
   height: number;
-  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
+  borderRadius:
+    | number
+    | {
+        topLeft?: number;
+        topRight?: number;
+        bottomLeft?: number;
+        bottomRight?: number;
+      };
   opacity: number;
   rotation: number;
   boxShadow: string;
@@ -22,7 +30,7 @@ type Props = {
   selected?: boolean;
 };
 
-export default function ImageNode({ data, selected }: Props) {
+function ImageNode({ data, selected }: Props) {
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
@@ -30,22 +38,29 @@ export default function ImageNode({ data, selected }: Props) {
   };
 
   const getBorderRadius = () => {
-    if (typeof data.borderRadius === 'number') {
+    if (typeof data.borderRadius === "number") {
       return data.borderRadius;
     }
-    const { topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = data.borderRadius;
+    const {
+      topLeft = 0,
+      topRight = 0,
+      bottomLeft = 0,
+      bottomRight = 0,
+    } = data.borderRadius;
     return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
   };
 
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={50} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={50}
         minHeight={50}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
@@ -104,3 +119,5 @@ export default function ImageNode({ data, selected }: Props) {
     </div>
   );
 }
+
+export default memo(ImageNode);

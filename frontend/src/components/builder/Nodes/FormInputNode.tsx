@@ -1,6 +1,7 @@
 import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useInlineEdit } from "../hooks/useInlineEdit";
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
 export type FormInputNodeData = {
@@ -18,7 +19,7 @@ export type FormInputNodeData = {
   onUpdateLabel?: (text: string) => void;
 };
 
-export default function FormInputNode({ data, selected }: NodeProps<FormInputNodeData>) {
+function FormInputNode({ data, selected }: NodeProps<FormInputNodeData>) {
   const {
     isEditing: isEditingLabel,
     value: labelValue,
@@ -47,35 +48,39 @@ export default function FormInputNode({ data, selected }: NodeProps<FormInputNod
     }
   });
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={100} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={100}
         minHeight={30}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
         onResizeEnd={(data as any)._onResizeEnd}
         onResize={(data as any)._onResize}
       />
-      <div style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "4px",
-        padding: "4px",
-        background: selected ? "rgba(59, 130, 246, 0.1)" : "transparent",
-        border: selected ? "2px dotted #3b82f6" : "none",
-        outline: "none",
-        fontFamily: "inherit",
-        cursor: "move",
-        pointerEvents: "auto",
-        boxSizing: "border-box",
-      }}>
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          padding: "4px",
+          background: selected ? "rgba(59, 130, 246, 0.1)" : "transparent",
+          border: selected ? "2px dotted #3b82f6" : "none",
+          outline: "none",
+          fontFamily: "inherit",
+          cursor: "move",
+          pointerEvents: "auto",
+          boxSizing: "border-box",
+        }}
+      >
         {data.label && (
           <label
             onDoubleClick={(e) => {
@@ -120,11 +125,17 @@ export default function FormInputNode({ data, selected }: NodeProps<FormInputNod
         )}
         <input
           type={data.inputType || "text"}
-          placeholder={isEditingPlaceholder ? placeholderValue : (data.placeholder || "Enter text...")}
+          placeholder={
+            isEditingPlaceholder
+              ? placeholderValue
+              : data.placeholder || "Enter text..."
+          }
           disabled={!isEditingPlaceholder}
           value={isEditingPlaceholder ? placeholderValue : ""}
           onChange={isEditingPlaceholder ? handlePlaceholderChange : undefined}
-          onKeyDown={isEditingPlaceholder ? handlePlaceholderKeyDown : undefined}
+          onKeyDown={
+            isEditingPlaceholder ? handlePlaceholderKeyDown : undefined
+          }
           onBlur={isEditingPlaceholder ? handlePlaceholderBlur : undefined}
           onDoubleClick={(e) => {
             e.stopPropagation();
@@ -132,12 +143,18 @@ export default function FormInputNode({ data, selected }: NodeProps<FormInputNod
           }}
           onClick={(e) => isEditingPlaceholder && e.stopPropagation()}
           onMouseDown={(e) => isEditingPlaceholder && e.stopPropagation()}
-          ref={isEditingPlaceholder ? (placeholderInputRef as React.RefObject<HTMLInputElement>) : undefined}
+          ref={
+            isEditingPlaceholder
+              ? (placeholderInputRef as React.RefObject<HTMLInputElement>)
+              : undefined
+          }
           style={{
             width: data.width || 300,
             fontSize: data.fontSize || 14,
             backgroundColor: data.backgroundColor || "#ffffff",
-            border: `1px solid ${isEditingPlaceholder ? "#3b82f6" : (data.borderColor || "#d1d5db")}`,
+            border: `1px solid ${
+              isEditingPlaceholder ? "#3b82f6" : data.borderColor || "#d1d5db"
+            }`,
             borderRadius: data.borderRadius || 6,
             padding: data.padding || 10,
             cursor: isEditingPlaceholder ? "text" : "not-allowed",
@@ -150,3 +167,5 @@ export default function FormInputNode({ data, selected }: NodeProps<FormInputNod
     </div>
   );
 }
+
+export default memo(FormInputNode);

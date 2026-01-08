@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
 export type FormTextareaNodeData = {
@@ -19,16 +20,18 @@ type Props = {
   selected?: boolean;
 };
 
-export default function FormTextareaNode({ data, selected }: Props) {
+function FormTextareaNode({ data, selected }: Props) {
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={100} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={100}
         minHeight={60}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
@@ -57,3 +60,5 @@ export default function FormTextareaNode({ data, selected }: Props) {
     </div>
   );
 }
+
+export default memo(FormTextareaNode);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
@@ -6,7 +7,14 @@ export type ContainerNodeData = {
   width: number;
   height: number;
   backgroundColor: string;
-  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
+  borderRadius:
+    | number
+    | {
+        topLeft?: number;
+        topRight?: number;
+        bottomLeft?: number;
+        bottomRight?: number;
+      };
   padding: number;
   opacity: number;
   rotation: number;
@@ -27,7 +35,7 @@ type Props = {
   selected?: boolean;
 };
 
-export default function ContainerNode({ data, selected }: Props) {
+function ContainerNode({ data, selected }: Props) {
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
@@ -35,22 +43,29 @@ export default function ContainerNode({ data, selected }: Props) {
   };
 
   const getBorderRadius = () => {
-    if (typeof data.borderRadius === 'number') {
+    if (typeof data.borderRadius === "number") {
       return data.borderRadius;
     }
-    const { topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = data.borderRadius;
+    const {
+      topLeft = 0,
+      topRight = 0,
+      bottomLeft = 0,
+      bottomRight = 0,
+    } = data.borderRadius;
     return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
   };
 
   return (
-    <div style={{ 
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    }}>
-      <NodeResizer 
-        isVisible={selected} 
-        minWidth={100} 
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={100}
         minHeight={100}
         keepAspectRatio={false}
         onResizeStart={(data as any)._onResizeStart}
@@ -117,3 +132,5 @@ export default function ContainerNode({ data, selected }: Props) {
     </div>
   );
 }
+
+export default memo(ContainerNode);

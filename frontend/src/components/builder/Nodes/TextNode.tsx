@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useInlineEdit } from "../hooks/useInlineEdit";
@@ -26,7 +26,7 @@ export type TextNodeData = {
   onUpdateText?: (text: string) => void;
 };
 
-export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>) {
+function TextNode({ data, selected, id }: NodeProps<TextNodeData>) {
   const {
     isEditing,
     value,
@@ -102,7 +102,10 @@ export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>
           }}
         />
       ) : data.link ? (
-        <a href={data.link} style={{ color: "inherit", textDecoration: "inherit" }}>
+        <a
+          href={data.link}
+          style={{ color: "inherit", textDecoration: "inherit" }}
+        >
           {data.text}
         </a>
       ) : (
@@ -113,3 +116,5 @@ export default function TextNode({ data, selected, id }: NodeProps<TextNodeData>
     </div>
   );
 }
+
+export default memo(TextNode);
