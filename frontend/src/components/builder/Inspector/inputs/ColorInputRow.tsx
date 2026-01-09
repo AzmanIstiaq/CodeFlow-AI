@@ -1,5 +1,21 @@
+/**
+ * Color Input Row
+ *
+ * Purpose:
+ * - Wrap a color input with a label for inspector layout.
+ *
+ * Role in the system:
+ * - Standardizes labeled color inputs across sections.
+ *
+ * Key responsibilities:
+ * - Pass value and change handlers through to ColorInput.
+ */
+
 import ColorInput from "./ColorInput";
 
+// ================================
+// Types
+// ================================
 interface ColorInputRowProps {
   label: string;
   value: string;
@@ -7,6 +23,12 @@ interface ColorInputRowProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Labeled color control for inspector forms.
+ */
 export default function ColorInputRow({
   label,
   value,

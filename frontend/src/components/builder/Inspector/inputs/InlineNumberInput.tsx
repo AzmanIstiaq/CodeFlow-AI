@@ -1,5 +1,26 @@
+/**
+ * Inline Number Input
+ *
+ * Purpose:
+ * - Provide a compact numeric input with keyboard step controls.
+ *
+ * Role in the system:
+ * - Used in inspector rows where space is limited.
+ *
+ * Key responsibilities:
+ * - Maintain local string state for partial edits.
+ * - Support arrow key increments with shift for larger steps.
+ * - Clamp values to optional min/max and normalize on blur.
+ *
+ * Important constraints and assumptions:
+ * - Emits updates only when the value parses to a valid number.
+ */
+
 import { useState, useEffect } from "react";
 
+// ================================
+// Types
+// ================================
 interface InlineNumberInputProps {
   label: string;
   value: number | string;
@@ -10,6 +31,12 @@ interface InlineNumberInputProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Compact numeric input with inline label and unit.
+ */
 export default function InlineNumberInput({
   label,
   value,
@@ -21,13 +48,20 @@ export default function InlineNumberInput({
 }: InlineNumberInputProps) {
   const [localValue, setLocalValue] = useState(String(value));
 
+  // Keep local input in sync with external value updates.
   useEffect(() => {
     setLocalValue(String(value));
   }, [value]);
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Support arrow key increments and blur on Enter.
+   */
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
-    
+
     const increment = e.shiftKey ? 10 : 1;
     if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -44,11 +78,14 @@ export default function InlineNumberInput({
     }
   };
 
+  /**
+   * Update local state and emit numeric changes when parseable.
+   */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setLocalValue(newValue);
-    
-    // Parse and update immediately if valid number
+
+    // Parse and update immediately if valid number.
     const num = parseFloat(newValue);
     if (!isNaN(num)) {
       let clamped = num;
@@ -58,8 +95,10 @@ export default function InlineNumberInput({
     }
   };
 
+  /**
+   * Normalize the display value to a clamped number on blur.
+   */
   const handleBlur = () => {
-    // On blur, clean up the display value
     const num = parseFloat(localValue);
     if (!isNaN(num)) {
       let clamped = num;

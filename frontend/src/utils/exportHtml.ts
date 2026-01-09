@@ -1,5 +1,28 @@
+/**
+ * HTML Export Utility
+ *
+ * Purpose:
+ * - Convert a tree of builder nodes into a standalone HTML document string.
+ *
+ * Role in the system:
+ * - Enables export of the visual builder output without runtime dependencies.
+ *
+ * Key responsibilities:
+ * - Filter out workflow-only nodes.
+ * - Serialize node styles into inline CSS.
+ * - Preserve layout and positioning semantics from the builder.
+ *
+ * Important constraints and assumptions:
+ * - Output is a static HTML snapshot; no dynamic behavior is included.
+ * - Inline styles mirror the builder's runtime styling choices.
+ * - Column children are associated via internal metadata fields.
+ */
+
 import type { TreeNode } from "./buildTree";
 
+// ================================
+// Node Filtering
+// ================================
 /**
  * Check if a node type should be included in HTML export (builder mode)
  */
@@ -20,15 +43,18 @@ function isBuilderNode(type: string): boolean {
 /**
  * Filters out workflow-only nodes from the tree and removes column children from root
  */
-function filterBuilderNodes(nodes: TreeNode[], allNodes: TreeNode[] = []): TreeNode[] {
+function filterBuilderNodes(
+  nodes: TreeNode[],
+  allNodes: TreeNode[] = []
+): TreeNode[] {
   return nodes
     .filter((n) => {
       // Filter out workflow nodes
       if (!n.type || !isBuilderNode(n.type)) return false;
-      
+
       // Filter out nodes that are owned by a column (they'll be rendered inside their column)
       if (n.data?._ownedByColumn) return false;
-      
+
       return true;
     })
     .map((n) => ({
@@ -37,6 +63,9 @@ function filterBuilderNodes(nodes: TreeNode[], allNodes: TreeNode[] = []): TreeN
     }));
 }
 
+// ================================
+// Node Rendering
+// ================================
 /**
  * Renders a single node to HTML based on its type and data
  */
@@ -62,8 +91,9 @@ function renderNode(node: TreeNode): string {
       const border = node.data.border || "none";
       const width = node.data.width || "auto";
       
+      // Inline styles preserve runtime rendering without external CSS.
       const textStyle = `font-size:${fontSize}px;color:${color};font-weight:${fontWeight};font-family:${fontFamily};text-align:${textAlign};line-height:${lineHeight};letter-spacing:${letterSpacing}px;text-decoration:${textDecoration};padding:${textPadding}px;min-height:44px;display:flex;align-items:center;opacity:${opacity};transform:rotate(${rotation}deg);text-shadow:${textShadow};background-color:${textBgColor};border-radius:${borderRadius}px;border:${border};width:${width}px;`;
-      
+
       if (textLink) {
         return `<div style="${textStyle}"><a href="${textLink}" style="color:inherit;text-decoration:inherit;">${text}</a></div>`;
       }
@@ -77,8 +107,10 @@ function renderNode(node: TreeNode): string {
       const secBgPosition = node.data.backgroundPosition || "center";
       const hasColumns = node.data.columns && node.data.columns.count > 0;
       
-      const bgImageStyle = secBgImage ? `background-image:url(${secBgImage});background-size:${secBgSize};background-position:${secBgPosition};background-repeat:no-repeat;` : "";
-      
+      const bgImageStyle = secBgImage
+        ? `background-image:url(${secBgImage});background-size:${secBgSize};background-position:${secBgPosition};background-repeat:no-repeat;`
+        : "";
+
       if (hasColumns) {
         // Section with absolute positioned children
         return `<section style="padding:${secPadding}px;background-color:${secBgColor};${bgImageStyle}width:100%;min-height:100vh;position:relative;">
@@ -100,7 +132,9 @@ function renderNode(node: TreeNode): string {
       const align = node.data.align || "start";
       const justifyItems = align === "center" ? "center" : "start";
       
-      const colBgImageStyle = colBgImage ? `background-image:url(${colBgImage});background-size:${colBgSize};background-position:${colBgPosition};background-repeat:no-repeat;` : "";
+      const colBgImageStyle = colBgImage
+        ? `background-image:url(${colBgImage});background-size:${colBgSize};background-position:${colBgPosition};background-repeat:no-repeat;`
+        : "";
 
       return `<section style="padding:${colPadding}px;background-color:${colBgColor};${colBgImageStyle}width:100%;min-height:100vh;display:flex;justify-content:center;align-items:center;">
   <div style="max-width:${maxWidth}px;width:100%;">
@@ -109,7 +143,9 @@ function renderNode(node: TreeNode): string {
     case "button":
       const label = node.data.label || "Click Me";
       const href = node.data.href || "#";
-      const btnBg = node.data.backgroundColor || (node.data.variant === "secondary" ? "#374151" : "#3b82f6");
+      const btnBg =
+        node.data.backgroundColor ||
+        (node.data.variant === "secondary" ? "#374151" : "#3b82f6");
       const btnColor = node.data.textColor || "#ffffff";
       const btnFontSize = node.data.fontSize || 16;
       const btnBorderRadius = node.data.borderRadius ?? 8;
@@ -153,7 +189,7 @@ function renderNode(node: TreeNode): string {
       const containerJustifyContent = node.data.justifyContent || "flex-start";
       const containerAlignItems = node.data.alignItems || "flex-start";
       const containerGap = node.data.gap || 12;
-      
+
       return `<div style="width:${containerWidth}px;height:${containerHeight}px;background-color:${containerBg};border-radius:${containerBorderRadius}px;padding:${containerPadding}px;opacity:${containerOpacity};transform:rotate(${containerRotation}deg);box-shadow:${containerBoxShadow};border:${containerBorder};display:${containerDisplay};flex-direction:${containerFlexDirection};justify-content:${containerJustifyContent};align-items:${containerAlignItems};gap:${containerGap}px;"></div>`;
 
     case "formInput":
@@ -167,7 +203,7 @@ function renderNode(node: TreeNode): string {
       const inputBorderRadius = node.data.borderRadius || 6;
       const inputPadding = node.data.padding || 10;
       const inputRequired = node.data.required || false;
-      
+
       return `<div style="display:flex;flex-direction:column;gap:6px;">
         ${inputLabel ? `<label style="font-size:14px;font-weight:500;color:#374151;">${inputLabel}${inputRequired ? '<span style="color:#ef4444;"> *</span>' : ''}</label>` : ''}
         <input type="${inputType}" placeholder="${inputPlaceholder}" style="width:${inputWidth}px;font-size:${inputFontSize}px;background-color:${inputBgColor};border:1px solid ${inputBorderColor};border-radius:${inputBorderRadius}px;padding:${inputPadding}px;" ${inputRequired ? 'required' : ''} />
@@ -185,7 +221,7 @@ function renderNode(node: TreeNode): string {
       const textareaPadding = node.data.padding || 10;
       const textareaRequired = node.data.required || false;
       const textareaRows = node.data.rows || 4;
-      
+
       return `<div style="display:flex;flex-direction:column;gap:6px;">
         ${textareaLabel ? `<label style="font-size:14px;font-weight:500;color:#374151;">${textareaLabel}${textareaRequired ? '<span style="color:#ef4444;"> *</span>' : ''}</label>` : ''}
         <textarea placeholder="${textareaPlaceholder}" rows="${textareaRows}" style="width:${textareaWidth}px;height:${textareaHeight}px;font-size:${textareaFontSize}px;background-color:${textareaBgColor};border:1px solid ${textareaBorderColor};border-radius:${textareaBorderRadius}px;padding:${textareaPadding}px;font-family:inherit;resize:vertical;" ${textareaRequired ? 'required' : ''}></textarea>
@@ -201,13 +237,14 @@ function renderNode(node: TreeNode): string {
       const shapeRotation = node.data.rotation || 0;
       const shapeBoxShadow = node.data.boxShadow || "none";
       const shapeBorder = node.data.border || "none";
-      
+
       let shapeStyle = `width:${shapeWidth}px;height:${shapeHeight}px;background-color:${shapeBg};opacity:${shapeOpacity};transform:rotate(${shapeRotation}deg);box-shadow:${shapeBoxShadow};border:${shapeBorder};`;
-      
+
       if (shapeType === "circle") {
         shapeStyle += "border-radius:50%;";
       } else if (shapeType === "triangle") {
-        shapeStyle += `width:0;height:0;border-left:${shapeWidth/2}px solid transparent;border-right:${shapeWidth/2}px solid transparent;border-bottom:${shapeHeight}px solid ${shapeBg};background-color:transparent;`;
+        // Use borders to construct a triangle, consistent with common CSS patterns.
+        shapeStyle += `width:0;height:0;border-left:${shapeWidth / 2}px solid transparent;border-right:${shapeWidth / 2}px solid transparent;border-bottom:${shapeHeight}px solid ${shapeBg};background-color:transparent;`;
       } else {
         shapeStyle += `border-radius:${shapeBorderRadius}px;`;
       }
@@ -219,6 +256,9 @@ function renderNode(node: TreeNode): string {
   }
 }
 
+// ================================
+// Tree Rendering
+// ================================
 /**
  * Recursively renders a tree of nodes to HTML
  */
@@ -242,12 +282,13 @@ function renderTree(nodes: TreeNode[], allNodes: TreeNode[] = []): string {
             }
           });
           
-          // Render children with absolute positioning using their exact coordinates
+          // Render children with absolute positioning using builder coordinates.
           const childrenHtml = sectionChildren
             .map((childNode) => {
               const nodeHtml = renderNode(childNode);
               const x = childNode.position?.x || 0;
               const y = childNode.position?.y || 0;
+              // Coordinates are emitted verbatim to preserve layout fidelity.
               return `<div style="position:absolute;left:${x}px;top:${y}px;">${nodeHtml}</div>`;
             })
             .join("\n    ");
@@ -269,7 +310,7 @@ function renderTree(nodes: TreeNode[], allNodes: TreeNode[] = []): string {
       if (n.type === "columnsSection") {
         const columnCount = n.data.columns?.count || 2;
         
-        // Build children map from allNodes using _ownedByColumn and _columnIndex
+        // Build children map using internal column metadata.
         const childrenByColumn: { [key: number]: TreeNode[] } = {};
         allNodes.forEach((node) => {
           if (node.data?._ownedByColumn === n.id) {
@@ -289,7 +330,7 @@ function renderTree(nodes: TreeNode[], allNodes: TreeNode[] = []): string {
         // Skip empty columns sections
         if (!hasChildren) return "";
 
-        // Render each column with its children
+        // Render each column with its children, preserving order from source data.
         const columnsHtml = Array.from({ length: columnCount })
           .map((_, colIndex) => {
             const columnChildren = (childrenByColumn[colIndex] || [])
@@ -320,10 +361,14 @@ function renderTree(nodes: TreeNode[], allNodes: TreeNode[] = []): string {
 
       return nodeContent;
     })
-    .filter(Boolean) // Remove empty strings
+    // Remove empty strings to avoid orphaned wrappers in the final output.
+    .filter(Boolean)
     .join("\n");
 }
 
+// ================================
+// Document Export
+// ================================
 /**
  * Exports a tree of nodes to a complete HTML document
  *
@@ -334,6 +379,7 @@ function renderTree(nodes: TreeNode[], allNodes: TreeNode[] = []): string {
 export function exportHTML(tree: TreeNode[], allNodes?: TreeNode[]): string {
   // Filter to only include builder nodes (exclude workflow nodes and column children)
   const filteredTree = filterBuilderNodes(tree, allNodes || tree);
+  // Use the full node set to resolve column ownership during rendering.
   const bodyContent = renderTree(filteredTree, allNodes || filteredTree);
 
   return `<!DOCTYPE html>

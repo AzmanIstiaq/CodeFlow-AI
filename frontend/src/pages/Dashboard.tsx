@@ -1,3 +1,22 @@
+/**
+ * Dashboard Page
+ *
+ * Purpose:
+ * - Provide a workspace to manage workflows: list, create, edit, and delete.
+ *
+ * Role in the system:
+ * - Main hub for workflow CRUD actions and entry point to the builder.
+ *
+ * Key responsibilities:
+ * - Load and display workflows with status and metadata.
+ * - Drive modal-based create and edit flows.
+ * - Navigate into the builder for a selected workflow.
+ *
+ * Important constraints and assumptions:
+ * - Workflows are loaded on mount and when the window regains focus.
+ * - Inline JSON parsing of stored workflow content is guarded against errors.
+ */
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -8,8 +27,18 @@ import {
 } from "../api/api";
 import BackButton from "../components/BackButton";
 import { Container, Row, Col, Card } from "react-bootstrap";
+import { ClipboardList, Pencil, Trash2 } from "lucide-react";
 
+// ================================
+// Component
+// ================================
+/**
+ * Dashboard for managing saved workflows and launching the builder.
+ */
 export default function Dashboard() {
+  // ================================
+  // State
+  // ================================
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -20,6 +49,9 @@ export default function Dashboard() {
   const [editDescription, setEditDescription] = useState("");
   const navigate = useNavigate();
 
+  // ================================
+  // Effects
+  // ================================
   useEffect(() => {
     loadWorkflows();
   }, []);
@@ -33,6 +65,9 @@ export default function Dashboard() {
     return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
+  // ================================
+  // Data Loading
+  // ================================
   const loadWorkflows = async () => {
     try {
       const data = await getWorkflows();
@@ -46,6 +81,9 @@ export default function Dashboard() {
     }
   };
 
+  // ================================
+  // Create Flow
+  // ================================
   const handleCreateNew = () => {
     setNewWorkflowName("");
     setNewWorkflowDescription("");
@@ -61,6 +99,7 @@ export default function Dashboard() {
       const response = await createWorkflow({
         name: name,
         description: description,
+        // Initialize an empty diagram to satisfy backend expectations.
         workflow: JSON.stringify({ nodes: [], edges: [] }),
       });
 
@@ -83,10 +122,16 @@ export default function Dashboard() {
     }
   };
 
+  // ================================
+  // Navigation
+  // ================================
   const handleOpenWorkflow = (id: number) => {
     navigate(`/pageBuilder?id=${id}`);
   };
 
+  // ================================
+  // Delete Flow
+  // ================================
   const handleDeleteWorkflow = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation(); // Prevent opening the workflow
     if (!confirm("Are you sure you want to delete this workflow?")) {
@@ -94,6 +139,7 @@ export default function Dashboard() {
     }
 
     try {
+      // Dynamic import keeps initial bundle size smaller.
       const { deleteWorkflow } = await import("../api/api");
       await deleteWorkflow(id);
       // Reload workflows after deletion
@@ -104,6 +150,9 @@ export default function Dashboard() {
     }
   };
 
+  // ================================
+  // Edit Flow
+  // ================================
   const handleEditWorkflow = (e: React.MouseEvent, workflow: Workflow) => {
     e.stopPropagation(); // Prevent opening the workflow
     setEditingWorkflow(workflow);
@@ -128,11 +177,15 @@ export default function Dashboard() {
     }
   };
 
+  // ================================
+  // Render
+  // ================================
   return (
     <Container fluid className="dashboard-page" style={{ minHeight: "100vh" }}>
       {editingWorkflow && (
         <div className="modal-overlay" onClick={() => setEditingWorkflow(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            {/* Stop propagation to keep overlay click-to-dismiss behavior intact. */}
             <h2>Edit Workflow</h2>
             <input
               type="text"
@@ -170,6 +223,7 @@ export default function Dashboard() {
           onClick={() => setShowCreateDialog(false)}
         >
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            {/* Stop propagation to keep overlay click-to-dismiss behavior intact. */}
             <h2>Create New Workflow</h2>
             <input
               type="text"
@@ -219,7 +273,9 @@ export default function Dashboard() {
           <div className="dashboard-loading">Loading workflows...</div>
         ) : workflows.length === 0 ? (
           <div className="dashboard-empty">
-            <div className="empty-icon">📋</div>
+            <div className="empty-icon">
+              <ClipboardList size={36} aria-hidden="true" />
+            </div>
             <h3>No workflows yet</h3>
             <p>Create your first AI workflow to get started</p>
             <button className="btn-primary" onClick={handleCreateNew}>
@@ -238,6 +294,7 @@ export default function Dashboard() {
                     <div className="workflow-card-header">
                       <Card.Title as="h3">{workflow.name}</Card.Title>
                       <span className="workflow-badge">
+                        {/* Guard parsing to avoid breaking the list on bad data. */}
                         {(() => {
                           try {
                             return workflow.workflow
@@ -268,14 +325,14 @@ export default function Dashboard() {
                             color: "#3b82f6",
                           }}
                         >
-                          ✏️
+                          <Pencil size={16} aria-hidden="true" />
                         </button>
                         <button
                           className="btn-delete"
                           onClick={(e) => handleDeleteWorkflow(e, workflow.id)}
                           title="Delete workflow"
                         >
-                          🗑️
+                          <Trash2 size={16} aria-hidden="true" />
                         </button>
                       </div>
                     </div>

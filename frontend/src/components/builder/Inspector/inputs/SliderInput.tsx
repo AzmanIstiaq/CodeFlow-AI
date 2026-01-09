@@ -1,3 +1,20 @@
+/**
+ * Slider Input
+ *
+ * Purpose:
+ * - Provide a labeled range slider with optional value display.
+ *
+ * Role in the system:
+ * - Used for numeric inspector controls like opacity.
+ *
+ * Key responsibilities:
+ * - Clamp user input via min/max/step configuration.
+ * - Emit numeric changes to the parent handler.
+ */
+
+// ================================
+// Types
+// ================================
 interface SliderInputProps {
   label?: string;
   value: number;
@@ -10,6 +27,12 @@ interface SliderInputProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Range slider with a value readout.
+ */
 export default function SliderInput({
   label,
   value,

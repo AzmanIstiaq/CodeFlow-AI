@@ -1,3 +1,25 @@
+/**
+ * Smart Guides Overlay
+ *
+ * Purpose:
+ * - Render alignment and spacing guides over the canvas during drag operations.
+ *
+ * Role in the system:
+ * - Provides visual feedback for snapping and spacing relationships.
+ *
+ * Key responsibilities:
+ * - Convert flow coordinates into screen space based on the viewport.
+ * - Clip guide rendering to frame bounds for visual containment.
+ * - Display distance labels for spacing guides when provided.
+ *
+ * Important constraints and assumptions:
+ * - Guides are optional and the component renders nothing if none are active.
+ * - Frame bounds are expected, but viewport bounds are used as a fallback.
+ */
+
+// ================================
+// Types
+// ================================
 interface GuideLine {
   position: number;
   type: "vertical" | "horizontal";
@@ -24,10 +46,16 @@ interface SmartGuidesProps {
   };
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * SVG overlay for alignment, spacing, and measurement guides.
+ */
 export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
   if (!guides.vertical.length && !guides.horizontal.length) return null;
   if (!guides.frameBounds) {
-    // If no frame bounds, use viewport bounds as fallback
+    // If no frame bounds, use viewport bounds as a fallback.
     const viewportBounds = {
       left: -viewport.x / viewport.zoom,
       top: -viewport.y / viewport.zoom,
@@ -38,24 +66,30 @@ export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
   }
 
   const frameBounds = guides.frameBounds;
-  
-  // Use manual coordinate conversion for accuracy
-  // The formula: screen = (flow * viewport.zoom) + viewport.offset
-  // ReactFlow's viewport.x and viewport.y represent the translation offset
+
+  // ================================
+  // Coordinate Conversion
+  // ================================
+  // The conversion formula: screen = (flow * zoom) + viewport offset.
   const getScreenCoords = (flowX: number, flowY: number) => {
     return {
-      x: (flowX * viewport.zoom) + viewport.x,
-      y: (flowY * viewport.zoom) + viewport.y,
+      x: flowX * viewport.zoom + viewport.x,
+      y: flowY * viewport.zoom + viewport.y,
     };
   };
 
   const topLeft = getScreenCoords(frameBounds.left, frameBounds.top);
   const bottomRight = getScreenCoords(frameBounds.right, frameBounds.bottom);
-  
+
   const clipWidth = bottomRight.x - topLeft.x;
   const clipHeight = bottomRight.y - topLeft.y;
 
-  // Format distance for display
+  // ================================
+  // Formatting
+  // ================================
+  /**
+   * Round distances for a compact on-canvas label.
+   */
   const formatDistance = (distance: number) => {
     return `${Math.round(distance)}px`;
   };
@@ -106,19 +140,23 @@ export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
           <path d="M 10 0 L 0 5 L 10 10 z" fill="#00FF00" />
         </marker>
       </defs>
-      
+
       <g clipPath="url(#frame-clip)">
         {/* Vertical guides */}
         {guides.vertical.map((guide, i) => {
-          // Use ReactFlow's coordinate conversion for accurate positioning
+          // Convert flow position to screen coordinates for accurate overlay.
           const screenPos = getScreenCoords(guide.position, 0);
           const screenX = screenPos.x;
           const isSpacing = guide.spacing;
-          // Color coding: pink for center alignment, yellow for edge alignment, green for spacing
+          // Color coding: pink for center, yellow for edge, green for spacing.
           const isCenterAlign = guide.snapTarget === "center";
-          const strokeColor = isSpacing ? "#00FF00" : (isCenterAlign ? "#FF00FF" : "#FFFF00");
+          const strokeColor = isSpacing
+            ? "#00FF00"
+            : isCenterAlign
+            ? "#FF00FF"
+            : "#FFFF00";
           const strokeWidth = isSpacing ? 2 : 1.5;
-          
+
           return (
             <g key={`v-${i}`}>
               <line
@@ -129,7 +167,9 @@ export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
                 strokeDasharray={isSpacing ? "8,4" : "5,5"}
-                markerStart={isSpacing ? "url(#spacing-arrow-start)" : undefined}
+                markerStart={
+                  isSpacing ? "url(#spacing-arrow-start)" : undefined
+                }
                 markerEnd={isSpacing ? "url(#spacing-arrow-end)" : undefined}
               />
               {/* Distance label */}
@@ -162,15 +202,19 @@ export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
 
         {/* Horizontal guides */}
         {guides.horizontal.map((guide, i) => {
-          // Use ReactFlow's coordinate conversion for accurate positioning
+          // Convert flow position to screen coordinates for accurate overlay.
           const screenPos = getScreenCoords(0, guide.position);
           const screenY = screenPos.y;
           const isSpacing = guide.spacing;
-          // Color coding: pink for center alignment, yellow for edge alignment, green for spacing
+          // Color coding: pink for center, yellow for edge, green for spacing.
           const isCenterAlign = guide.snapTarget === "center";
-          const strokeColor = isSpacing ? "#00FF00" : (isCenterAlign ? "#FF00FF" : "#FFFF00");
+          const strokeColor = isSpacing
+            ? "#00FF00"
+            : isCenterAlign
+            ? "#FF00FF"
+            : "#FFFF00";
           const strokeWidth = isSpacing ? 2 : 1.5;
-          
+
           return (
             <g key={`h-${i}`}>
               <line
@@ -181,7 +225,9 @@ export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
                 strokeDasharray={isSpacing ? "8,4" : "5,5"}
-                markerStart={isSpacing ? "url(#spacing-arrow-start)" : undefined}
+                markerStart={
+                  isSpacing ? "url(#spacing-arrow-start)" : undefined
+                }
                 markerEnd={isSpacing ? "url(#spacing-arrow-end)" : undefined}
               />
               {/* Distance label */}

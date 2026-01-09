@@ -1,3 +1,18 @@
+/*
+ * Dashboard Styles
+ *
+ * Purpose:
+ * - Style the workflow dashboard and modal dialogs.
+ *
+ * Role in the system:
+ * - Defines layout and visual hierarchy for workflow management UI.
+ *
+ * Key responsibilities:
+ * - Provide grid layouts, card styling, and button treatments.
+ * - Style modal overlays and inputs for create/edit flows.
+ * - Ensure responsive behavior at smaller breakpoints.
+ */
+
 /* =====================================================
    DASHBOARD PAGE - Workflow Management
    ===================================================== */

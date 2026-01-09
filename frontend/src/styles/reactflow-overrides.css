@@ -1,3 +1,18 @@
+/*
+ * React Flow Overrides
+ *
+ * Purpose:
+ * - Remove default React Flow UI elements and adjust selection styling.
+ *
+ * Role in the system:
+ * - Ensures the builder UI controls are custom and uncluttered.
+ *
+ * Key responsibilities:
+ * - Hide attribution, panels, controls, background, and minimap.
+ * - Style selection box to match app branding.
+ * - Remove default edge rendering for builder mode.
+ */
+
 /* Hide ReactFlow attribution and default UI elements */
 .react-flow__attribution {
   display: none !important;

@@ -1,6 +1,26 @@
+/**
+ * Form Checkbox Node
+ *
+ * Purpose:
+ * - Render a checkbox field preview with label.
+ *
+ * Role in the system:
+ * - Provides checkbox elements for builder layouts.
+ *
+ * Key responsibilities:
+ * - Display a disabled checkbox with styling and required indicator.
+ * - Provide resize handles when selected.
+ *
+ * Important constraints and assumptions:
+ * - Inputs are disabled to prevent interaction inside the canvas.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export type FormCheckboxNodeData = {
   label: string;
   checked: boolean;
@@ -16,6 +36,12 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Checkbox preview node with label and required marker.
+ */
 function FormCheckboxNode({ data, selected }: Props) {
   return (
     <div style={{ position: "relative" }}>

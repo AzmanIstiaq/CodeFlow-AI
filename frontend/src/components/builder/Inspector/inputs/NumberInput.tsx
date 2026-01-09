@@ -1,3 +1,20 @@
+/**
+ * Number Input
+ *
+ * Purpose:
+ * - Provide a labeled numeric input with optional unit display.
+ *
+ * Role in the system:
+ * - Used for inspector fields that require numeric values.
+ *
+ * Key responsibilities:
+ * - Enforce numeric input with min/max/step configuration.
+ * - Emit parsed numeric values to the parent handler.
+ */
+
+// ================================
+// Types
+// ================================
 interface NumberInputProps {
   label?: string;
   value: number;
@@ -9,6 +26,12 @@ interface NumberInputProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Numeric input with optional unit suffix.
+ */
 export default function NumberInput({
   label,
   value,

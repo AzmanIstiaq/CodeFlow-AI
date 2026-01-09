@@ -1,3 +1,19 @@
+/**
+ * Select Input
+ *
+ * Purpose:
+ * - Provide a labeled select dropdown for discrete values.
+ *
+ * Role in the system:
+ * - Used for typography and enum-based inspector controls.
+ *
+ * Key responsibilities:
+ * - Render options and emit selection changes.
+ */
+
+// ================================
+// Types
+// ================================
 interface SelectInputProps {
   label?: string;
   value: string;
@@ -6,6 +22,12 @@ interface SelectInputProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Labeled select dropdown.
+ */
 export default function SelectInput({
   label,
   value,

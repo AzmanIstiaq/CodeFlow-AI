@@ -7,7 +7,7 @@
  * Key Operations:
  * 1. Save: Persists workflow to server (creates new or updates existing)
  * 2. Export HTML: Generates downloadable HTML files from site structure
- * 3. Run Workflow: Executes AI workflow by chaining start → AI → output nodes
+ * 3. Run Workflow: Executes AI workflow by chaining start â AI â output nodes
  *
  * Dialog Management:
  * - Show save dialog for new workflows (prompts for name/description)
@@ -156,7 +156,7 @@ export function useWorkflowOperations(
       );
       if (!startNode) {
         alert(
-          "Error: No Start node found. Add a Start node using the '➕ Add Start Node' button."
+          "Error: No Start node found. Add a Start node using the 'Add Start Node' button."
         );
         return;
       }

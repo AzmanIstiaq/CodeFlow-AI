@@ -1,3 +1,18 @@
+/*
+ * Landing Page Styles
+ *
+ * Purpose:
+ * - Style the marketing landing page sections and responsive layout.
+ *
+ * Role in the system:
+ * - Defines the visual language for the homepage experience.
+ *
+ * Key responsibilities:
+ * - Theme hero, preview, features, and CTA sections.
+ * - Provide button styling and type treatments for marketing content.
+ * - Ensure responsive behavior across common breakpoints.
+ */
+
 /* =====================================================
    LANDING PAGE - Homepage Sections
    ===================================================== */
@@ -436,6 +451,14 @@
 .feature-icon {
   font-size: 3rem;
   margin-bottom: 20px;
+  color: #c7d2fe;
+  display: inline-flex;
+  align-items: center;
+}
+
+.feature-icon svg {
+  width: 40px;
+  height: 40px;
 }
 
 /* CTA Section */

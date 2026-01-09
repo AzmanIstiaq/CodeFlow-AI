@@ -1,7 +1,28 @@
+/**
+ * Shape Node
+ *
+ * Purpose:
+ * - Render basic geometric shapes with styling and resize controls.
+ *
+ * Role in the system:
+ * - Provides visual primitives for builder layouts.
+ *
+ * Key responsibilities:
+ * - Apply shape-specific styling for rectangle, circle, and triangle.
+ * - Offer resize handles and optional corner radius controls for rectangles.
+ *
+ * Important constraints and assumptions:
+ * - Triangle shapes are rendered via borders with zero width/height.
+ * - Border radius controls apply only to rectangular shapes.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
+// ================================
+// Types
+// ================================
 export type ShapeNodeData = {
   shapeType: "rectangle" | "circle" | "triangle";
   width: number;
@@ -29,13 +50,25 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Resizable shape node with optional per-corner radius.
+ */
 function ShapeNode({ data, selected }: Props) {
+  // ================================
+  // Border Radius Handling
+  // ================================
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
     }
   };
 
+  /**
+   * Normalize border radius into a CSS-friendly value.
+   */
   const getBorderRadius = () => {
     if (typeof data.borderRadius === "number") {
       return data.borderRadius;
@@ -49,6 +82,9 @@ function ShapeNode({ data, selected }: Props) {
     return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
   };
 
+  /**
+   * Build style rules for the selected shape type.
+   */
   const getShapeStyle = () => {
     const baseStyle = {
       width: data.width || 100,

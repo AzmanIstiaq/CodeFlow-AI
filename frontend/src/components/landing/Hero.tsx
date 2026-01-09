@@ -1,6 +1,31 @@
+/**
+ * Hero Section
+ *
+ * Purpose:
+ * - Present the primary marketing headline and key calls to action.
+ *
+ * Role in the system:
+ * - Anchors the landing page narrative and directs users to core flows.
+ *
+ * Key responsibilities:
+ * - Render headline copy, supporting text, and navigation buttons.
+ * - Provide a lightweight visual preview of the workflow concept.
+ *
+ * Important constraints and assumptions:
+ * - Buttons navigate to dashboard and builder routes.
+ * - Preview content is static and illustrative only.
+ */
+
 import { useNavigate } from "react-router-dom";
 import { Container, Row, Col } from "react-bootstrap";
+import { ArrowRight, Bot, Play, Terminal } from "lucide-react";
 
+// ================================
+// Component
+// ================================
+/**
+ * Landing hero with calls to action and a visual preview.
+ */
 export default function Hero() {
   const navigate = useNavigate();
 
@@ -41,16 +66,26 @@ export default function Hero() {
             <div className="hero-preview">
               <div className="preview-placeholder">
                 <div className="placeholder-node node-start">
-                  <span>🟢 Start</span>
+                  <span>
+                    <Play size={16} aria-hidden="true" /> Start
+                  </span>
                 </div>
-                <div className="placeholder-arrow">→</div>
+                <div className="placeholder-arrow">
+                  <ArrowRight size={16} aria-hidden="true" />
+                </div>
                 <div className="placeholder-node node-ai">
-                  <span>🤖 AI Node</span>
+                  <span>
+                    <Bot size={16} aria-hidden="true" /> AI Node
+                  </span>
                   <small>llama3.2</small>
                 </div>
-                <div className="placeholder-arrow">→</div>
+                <div className="placeholder-arrow">
+                  <ArrowRight size={16} aria-hidden="true" />
+                </div>
                 <div className="placeholder-node node-output">
-                  <span>📤 Output</span>
+                  <span>
+                    <Terminal size={16} aria-hidden="true" /> Output
+                  </span>
                 </div>
               </div>
             </div>

@@ -1,3 +1,19 @@
+/**
+ * Toggle
+ *
+ * Purpose:
+ * - Provide a labeled boolean switch control.
+ *
+ * Role in the system:
+ * - Used in inspector sections for enabling/disabling features.
+ *
+ * Key responsibilities:
+ * - Mirror checked state and emit changes via onChange.
+ */
+
+// ================================
+// Types
+// ================================
 interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -5,6 +21,12 @@ interface ToggleProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Checkbox-based toggle with optional label.
+ */
 export default function Toggle({
   checked,
   onChange,

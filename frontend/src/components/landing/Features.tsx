@@ -1,19 +1,42 @@
-import { Container, Row, Col, Card } from "react-bootstrap";
+/**
+ * Features Section
+ *
+ * Purpose:
+ * - Highlight key product capabilities in a compact grid.
+ *
+ * Role in the system:
+ * - Reinforces product value propositions on the landing page.
+ *
+ * Key responsibilities:
+ * - Define static feature metadata and render feature cards.
+ *
+ * Important constraints and assumptions:
+ * - Feature content is static and intended for marketing copy.
+ */
 
+import { Container, Row, Col, Card } from "react-bootstrap";
+import { Cpu, GitBranch, Puzzle } from "lucide-react";
+
+// ================================
+// Component
+// ================================
+/**
+ * Render marketing feature cards.
+ */
 export default function Features() {
   const features = [
     {
-      icon: "🔄",
+      icon: <GitBranch size={22} aria-hidden="true" />,
       title: "Graph-Driven Execution",
       description: "Execution follows the workflow graph, not button logic.",
     },
     {
-      icon: "🏠",
+      icon: <Cpu size={22} aria-hidden="true" />,
       title: "Local-First AI",
       description: "Run workflows locally using Ollama. No API keys required.",
     },
     {
-      icon: "🧩",
+      icon: <Puzzle size={22} aria-hidden="true" />,
       title: "Extensible by Design",
       description: "Easily add new nodes, models, and providers.",
     },

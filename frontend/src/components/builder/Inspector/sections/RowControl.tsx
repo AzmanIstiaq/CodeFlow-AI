@@ -1,6 +1,31 @@
+/**
+ * Row Control Section
+ *
+ * Purpose:
+ * - Manage rows within a selected frame/section node.
+ *
+ * Role in the system:
+ * - Provides controls for row creation and layout settings.
+ *
+ * Key responsibilities:
+ * - Add new rows with default dimensions and column settings.
+ * - Update row height and column count for existing rows.
+ * - Display rows in order based on their stored order value.
+ *
+ * Important constraints and assumptions:
+ * - Only applies when a single section node is selected.
+ * - Row nodes are created via the updateNodes helper with __addNode.
+ */
+
 import type { SectionProps } from "../types";
 import { NumberInput } from "../inputs";
 
+// ================================
+// Component
+// ================================
+/**
+ * Frame controls for adding and configuring rows.
+ */
 export default function RowControl({
   selectedNodes,
   updateNode,
@@ -20,6 +45,12 @@ export default function RowControl({
     (a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0)
   );
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Append a new row with default sizing and column settings.
+   */
   const handleAddRow = () => {
     const rowId = `row-${Date.now()}`;
     const columnGap = node.data?.gap ?? 24;
@@ -43,6 +74,9 @@ export default function RowControl({
     });
   };
 
+  // ================================
+  // Render
+  // ================================
   return (
     <div className="inspector-section inspector-section-open">
       <div className="inspector-section-title">Frame</div>
@@ -65,7 +99,10 @@ export default function RowControl({
                 const rowGap = row.data?.columns?.gap ?? 24;
                 const rowHeight = row.data?.rowHeight ?? 240;
                 return (
-                  <div key={row.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div
+                    key={row.id}
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
                     <div style={{ fontSize: 12, color: "#6b7280" }}>
                       Row {index + 1}
                     </div>

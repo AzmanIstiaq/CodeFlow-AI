@@ -1,3 +1,17 @@
+/*
+ * Vendor Overrides
+ *
+ * Purpose:
+ * - Override third-party default styles that conflict with the builder UI.
+ *
+ * Role in the system:
+ * - Ensures React Flow nodes render without unwanted default backgrounds.
+ *
+ * Key responsibilities:
+ * - Remove default backgrounds, borders, and padding from nodes.
+ * - Adjust output node handle styling for a clean appearance.
+ */
+
 /* =====================================================
    VENDOR OVERRIDES - ReactFlow and Third-Party Styles
    ===================================================== */

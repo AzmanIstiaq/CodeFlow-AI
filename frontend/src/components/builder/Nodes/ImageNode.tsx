@@ -1,7 +1,28 @@
+/**
+ * Image Node
+ *
+ * Purpose:
+ * - Render an image element with resize and border radius controls.
+ *
+ * Role in the system:
+ * - Provides visual image content for builder layouts.
+ *
+ * Key responsibilities:
+ * - Display the image with sizing, border, and transform styles.
+ * - Offer resize handles and per-corner radius controls when selected.
+ *
+ * Important constraints and assumptions:
+ * - Border radius can be uniform or per-corner.
+ * - NodeResizer events are forwarded through data hooks when present.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
+// ================================
+// Types
+// ================================
 export type ImageNodeData = {
   src: string;
   alt: string;
@@ -30,13 +51,25 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Resizable image node with optional per-corner border radius.
+ */
 function ImageNode({ data, selected }: Props) {
+  // ================================
+  // Border Radius Handling
+  // ================================
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
     }
   };
 
+  /**
+   * Normalize border radius into a CSS-friendly value.
+   */
   const getBorderRadius = () => {
     if (typeof data.borderRadius === "number") {
       return data.borderRadius;

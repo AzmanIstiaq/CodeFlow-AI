@@ -1,9 +1,33 @@
+/**
+ * Tree Builder Utility
+ *
+ * Purpose:
+ * - Convert a flat node/edge graph into a hierarchical tree structure.
+ *
+ * Role in the system:
+ * - Enables ordered, nested rendering for layout and inspector features.
+ *
+ * Key responsibilities:
+ * - Map parent-child relationships using edges.
+ * - Produce stable ordering for children and root sections.
+ *
+ * Important constraints and assumptions:
+ * - Edges encode parent (source) to child (target) relationships.
+ * - Node ordering uses the optional data.order field when present.
+ */
+
 import type { Node, Edge } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export interface TreeNode extends Node {
   children: TreeNode[];
 }
 
+// ================================
+// Builder
+// ================================
 /**
  * Converts a flat list of nodes and edges into a hierarchical tree structure.
  * Edges represent parent-child relationships: source is parent, target is child.

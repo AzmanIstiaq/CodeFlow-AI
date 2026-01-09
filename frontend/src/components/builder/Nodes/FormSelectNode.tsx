@@ -1,6 +1,27 @@
+/**
+ * Form Select Node
+ *
+ * Purpose:
+ * - Render a select dropdown preview with label and options.
+ *
+ * Role in the system:
+ * - Provides dropdown elements for builder layouts.
+ *
+ * Key responsibilities:
+ * - Display label, placeholder, and option list.
+ * - Render a disabled select with custom caret styling.
+ * - Provide resize handles when selected.
+ *
+ * Important constraints and assumptions:
+ * - Inputs are disabled to prevent interaction inside the canvas.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export type FormSelectNodeData = {
   label: string;
   placeholder: string;
@@ -20,6 +41,12 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Select dropdown preview node.
+ */
 function FormSelectNode({ data, selected }: Props) {
   const options = data.options || ["Option 1", "Option 2", "Option 3"];
 

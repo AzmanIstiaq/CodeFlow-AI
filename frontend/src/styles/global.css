@@ -1,3 +1,18 @@
+/*
+ * Global Styles
+ *
+ * Purpose:
+ * - Provide consolidated base styles merged from legacy App and index styles.
+ *
+ * Role in the system:
+ * - Establish default typography, layout, and theme behavior globally.
+ *
+ * Key responsibilities:
+ * - Define root typography and color scheme defaults.
+ * - Apply base layout for the app root and common elements.
+ * - Provide light mode overrides and animation preferences.
+ */
+
 /* Consolidated global styles (merged App.css + index.css) */
 
 :root {

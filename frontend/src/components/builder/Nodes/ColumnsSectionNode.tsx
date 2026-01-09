@@ -1,5 +1,27 @@
+/**
+ * Columns Section Node
+ *
+ * Purpose:
+ * - Render a section with grid-based columns for structured layouts.
+ *
+ * Role in the system:
+ * - Provides column containers and registers drop target bounds.
+ *
+ * Key responsibilities:
+ * - Create a grid with the requested column count.
+ * - Register column rectangles for drag-and-drop targeting.
+ * - Display hover feedback when a column is targeted.
+ *
+ * Important constraints and assumptions:
+ * - Column rect registration runs on layout changes and viewport updates.
+ * - Children are managed externally; this component renders drop zones only.
+ */
+
 import { useRef, useLayoutEffect } from "react";
 
+// ================================
+// Types
+// ================================
 type ColumnsSectionNodeProps = {
   id: string;
   columns: number;
@@ -21,6 +43,12 @@ type ColumnsSectionNodeProps = {
   };
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Section layout with column drop zones.
+ */
 export default function ColumnsSectionNode({
   id,
   columns,
@@ -36,8 +64,9 @@ export default function ColumnsSectionNode({
 }: ColumnsSectionNodeProps) {
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  // Register column rects on layout effect
-  // Note: frameHeight intentionally excluded from deps to prevent re-registration during drag
+  // ================================
+  // Column Rect Registration
+  // ================================
   useLayoutEffect(() => {
     requestAnimationFrame(() => {
       Object.entries(columnRefs.current).forEach(([colIndex, el]) => {
@@ -64,42 +93,43 @@ export default function ColumnsSectionNode({
       }}
     >
       {Array.from({ length: columns }).map((_, colIndex) => {
-        const isHovered = hoverState?.sectionId === id && hoverState?.columnIndex === colIndex;
-        
+        const isHovered =
+          hoverState?.sectionId === id && hoverState?.columnIndex === colIndex;
+
         return (
-        <div
-          key={colIndex}
-          id={`column-${id}-${colIndex}`}
-          ref={(el) => {
-            columnRefs.current[colIndex] = el;
-          }}
-          data-column-index={colIndex}
-          style={{
-            position: "relative",
-            zIndex: 10,
-            pointerEvents: "auto",
-            padding: "40px 32px",
-            backgroundColor: isHovered ? "rgba(59,130,246,0.15)" : "transparent",
-            border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : undefined,
-            transition: "all 0.2s ease",
-          }}
-        >
-          {!childrenByColumn[colIndex]?.length && (
-            <div
-              style={{
-                marginTop: 40,
-                textAlign: "center",
-                color: "#3b82f6",
-                opacity: 0.6,
-                fontSize: 12,
-                userSelect: "none",
-              }}
-            >
-              Drop content here
-            </div>
-          )}
-        </div>
-      );
+          <div
+            key={colIndex}
+            id={`column-${id}-${colIndex}`}
+            ref={(el) => {
+              columnRefs.current[colIndex] = el;
+            }}
+            data-column-index={colIndex}
+            style={{
+              position: "relative",
+              zIndex: 10,
+              pointerEvents: "auto",
+              padding: "40px 32px",
+              backgroundColor: isHovered ? "rgba(59,130,246,0.15)" : "transparent",
+              border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : undefined,
+              transition: "all 0.2s ease",
+            }}
+          >
+            {!childrenByColumn[colIndex]?.length && (
+              <div
+                style={{
+                  marginTop: 40,
+                  textAlign: "center",
+                  color: "#3b82f6",
+                  opacity: 0.6,
+                  fontSize: 12,
+                  userSelect: "none",
+                }}
+              >
+                Drop content here
+              </div>
+            )}
+          </div>
+        );
       })}
     </div>
   );

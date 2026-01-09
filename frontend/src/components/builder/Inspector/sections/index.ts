@@ -1,3 +1,16 @@
+/**
+ * Inspector Sections Index
+ *
+ * Purpose:
+ * - Aggregate exports for inspector section components.
+ *
+ * Role in the system:
+ * - Provides a single import surface for the inspector panel.
+ *
+ * Key responsibilities:
+ * - Re-export section modules without additional logic.
+ */
+
 export { default as LayoutPosition } from "./LayoutPosition";
 export { default as RowControl } from "./RowControl";
 export { default as Style } from "./Style";

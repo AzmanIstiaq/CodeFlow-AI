@@ -1,3 +1,18 @@
+/*
+ * Base Styles
+ *
+ * Purpose:
+ * - Provide typography, resets, and global element defaults.
+ *
+ * Role in the system:
+ * - Establish the foundational look and feel across the app.
+ *
+ * Key responsibilities:
+ * - Import fonts and set base typography.
+ * - Define default link, button, and input behaviors.
+ * - Configure base layout and scrolling constraints.
+ */
+
 /* =====================================================
    BASE STYLES - Fonts, Reset, Body, Buttons
    ===================================================== */

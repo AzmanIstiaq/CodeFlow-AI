@@ -1,12 +1,41 @@
+/**
+ * Advanced Section
+ *
+ * Purpose:
+ * - Provide diagnostics and destructive actions for selected nodes.
+ *
+ * Role in the system:
+ * - Houses reset and delete controls plus metadata display.
+ *
+ * Key responsibilities:
+ * - Show node identifiers and parent context when available.
+ * - Reset common style fields to defaults.
+ * - Delete nodes with confirmation while respecting protected types.
+ *
+ * Important constraints and assumptions:
+ * - Section nodes are protected from deletion.
+ * - Multi-selection delete is blocked if any section is included.
+ */
+
 import { useState } from "react";
 import type { SectionProps } from "../types";
 import { IconButton } from "../inputs";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
+// ================================
+// Types
+// ================================
 interface AdvancedProps extends SectionProps {
   deleteNode: (id: string) => void;
   deleteNodes: (ids: string[]) => void;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Advanced actions and metadata for the current selection.
+ */
 export default function Advanced({
   selectedNodes,
   updateNode,
@@ -20,11 +49,17 @@ export default function Advanced({
 
   if (!node) return null;
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Confirm and delete nodes based on selection scope.
+   */
   const handleDelete = () => {
     if (isMultiSelect) {
-      if (selectedNodes.some(n => n.type === "section")) return;
+      if (selectedNodes.some((n) => n.type === "section")) return;
       if (confirm(`Delete ${selectedNodes.length} layers?`)) {
-        deleteNodes(selectedNodes.map(n => n.id));
+        deleteNodes(selectedNodes.map((n) => n.id));
       }
     } else {
       if (node.type === "section") return;
@@ -34,9 +69,12 @@ export default function Advanced({
     }
   };
 
+  /**
+   * Reset visual styles to their default values.
+   */
   const handleResetStyles = () => {
     if (isMultiSelect) {
-      selectedNodes.forEach(n => {
+      selectedNodes.forEach((n) => {
         updateNode(n.id, {
           backgroundColor: "#ffffff",
           borderColor: "#000000",
@@ -56,24 +94,33 @@ export default function Advanced({
     }
   };
 
-  const parentNode = allNodes?.find(n =>
-    n.id === node.data?._ownedByColumn
-  );
+  const parentNode = allNodes?.find((n) => n.id === node.data?._ownedByColumn);
 
   const isDeleteBlocked = isMultiSelect
-    ? selectedNodes.some(n => n.type === "section")
+    ? selectedNodes.some((n) => n.type === "section")
     : node.type === "section";
 
+  // ================================
+  // Render
+  // ================================
   return (
-    <div className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}>
+    <div
+      className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}
+    >
       <div
         className="inspector-section-title"
         onClick={() => setIsOpen(!isOpen)}
       >
         Advanced
-        <span className="inspector-section-toggle">{isOpen ? "ƒ-¬" : "ƒ-"}</span>
+        <span className="inspector-section-toggle">
+          {isOpen ? (
+            <ChevronUp size={14} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={14} aria-hidden="true" />
+          )}
+        </span>
       </div>
-      
+
       {isOpen && (
         <div className="inspector-section-content">
           {!isMultiSelect && (
@@ -95,19 +142,18 @@ export default function Advanced({
           )}
 
           <div className="inspector-actions">
-            <button
-              className="inspector-button"
-              onClick={handleResetStyles}
-            >
+            <button className="inspector-button" onClick={handleResetStyles}>
               Reset Styles
             </button>
 
             {!isDeleteBlocked && (
               <IconButton
-                icon="dY-`"
+                icon={<Trash2 size={16} aria-hidden="true" />}
                 onClick={handleDelete}
                 variant="danger"
-                tooltip={isMultiSelect ? "Delete selected layers" : "Delete layer"}
+                tooltip={
+                  isMultiSelect ? "Delete selected layers" : "Delete layer"
+                }
               />
             )}
           </div>

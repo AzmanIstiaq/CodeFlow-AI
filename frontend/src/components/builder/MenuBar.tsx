@@ -1,6 +1,28 @@
+/**
+ * Menu Bar
+ *
+ * Purpose:
+ * - Provide top-level application actions, view controls, and page navigation.
+ *
+ * Role in the system:
+ * - Acts as the global command surface for the builder.
+ *
+ * Key responsibilities:
+ * - Assemble menu definitions and drive dropdown behavior.
+ * - Forward actions to parent callbacks.
+ * - Offer page selection and quick save/export buttons.
+ *
+ * Important constraints and assumptions:
+ * - All actions are optional and should be null-safe.
+ * - Inline hover styles are used to avoid external style dependencies.
+ */
+
 import { useState } from "react";
 
-type MenuItem = 
+// ================================
+// Types
+// ================================
+type MenuItem =
   | { type: "divider" }
   | { label: string; shortcut?: string; action?: () => void; disabled?: boolean };
 
@@ -39,14 +61,20 @@ interface MenuBarProps {
   onZoomOut?: () => void;
   onZoomToFit?: () => void;
   onZoomTo100?: () => void;
-  onViewportChange?: (viewport: 'desktop' | 'tablet' | 'mobile') => void;
-  currentViewport?: 'desktop' | 'tablet' | 'mobile';
+  onViewportChange?: (viewport: "desktop" | "tablet" | "mobile") => void;
+  currentViewport?: "desktop" | "tablet" | "mobile";
   showGrid?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
   hasSelection?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Global menu bar for navigation, editing, view, and object actions.
+ */
 export default function MenuBar({
   onSave,
   onExport,
@@ -77,7 +105,7 @@ export default function MenuBar({
   onZoomToFit,
   onZoomTo100,
   onViewportChange,
-  currentViewport = 'desktop',
+  currentViewport = "desktop",
   showGrid = false,
   canUndo = false,
   canRedo = false,
@@ -85,8 +113,11 @@ export default function MenuBar({
 }: MenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  const activePage = pages.find(p => p.id === activePageId);
-  
+  const activePage = pages.find((p) => p.id === activePageId);
+
+  // ================================
+  // Menu Definitions
+  // ================================
   const menus: Array<{ name: string; items: MenuItem[] }> = [
     {
       name: "File",
@@ -121,11 +152,27 @@ export default function MenuBar({
         { label: "Zoom to 100%", shortcut: "Ctrl+0", action: onZoomTo100 },
         { label: "Zoom to Fit", shortcut: "Shift+1", action: onZoomToFit },
         { type: "divider" },
-        { label: showGrid ? "Hide Grid" : "Show Grid", shortcut: "Ctrl+'", action: onToggleGrid },
+        {
+          label: showGrid ? "Hide Grid" : "Show Grid",
+          shortcut: "Ctrl+'",
+          action: onToggleGrid,
+        },
         { type: "divider" },
-        { label: currentViewport === 'desktop' ? '✓ Desktop View' : 'Desktop View', action: () => onViewportChange?.('desktop') },
-        { label: currentViewport === 'tablet' ? '✓ Tablet View' : 'Tablet View', action: () => onViewportChange?.('tablet') },
-        { label: currentViewport === 'mobile' ? '✓ Mobile View' : 'Mobile View', action: () => onViewportChange?.('mobile') },
+        {
+          label:
+            currentViewport === "desktop" ? "?\" Desktop View" : "Desktop View",
+          action: () => onViewportChange?.("desktop"),
+        },
+        {
+          label:
+            currentViewport === "tablet" ? "?\" Tablet View" : "Tablet View",
+          action: () => onViewportChange?.("tablet"),
+        },
+        {
+          label:
+            currentViewport === "mobile" ? "?\" Mobile View" : "Mobile View",
+          action: () => onViewportChange?.("mobile"),
+        },
       ],
     },
     {
@@ -142,10 +189,19 @@ export default function MenuBar({
     },
   ];
 
+  // ================================
+  // Interaction Handlers
+  // ================================
+  /**
+   * Toggle a menu open or closed by name.
+   */
   const handleMenuClick = (menuName: string) => {
     setActiveMenu(activeMenu === menuName ? null : menuName);
   };
 
+  /**
+   * Execute a menu action and close the active menu.
+   */
   const handleItemClick = (action?: () => void) => {
     if (action) {
       action();
@@ -153,6 +209,9 @@ export default function MenuBar({
     setActiveMenu(null);
   };
 
+  // ================================
+  // Render
+  // ================================
   return (
     <div
       style={{
@@ -195,7 +254,7 @@ export default function MenuBar({
       >
         CodeFlow AI
       </button>
-      
+
       <button
         onClick={onNavigateDashboard}
         style={{
@@ -220,7 +279,9 @@ export default function MenuBar({
         Dashboard
       </button>
 
-      <div style={{ width: 1, height: 24, background: "#374151", margin: "0 4px" }} />
+      <div
+        style={{ width: 1, height: 24, background: "#374151", margin: "0 4px" }}
+      />
 
       {/* Menu Bar */}
       {menus.map((menu) => (
@@ -228,7 +289,10 @@ export default function MenuBar({
           <button
             onClick={() => handleMenuClick(menu.name)}
             style={{
-              background: activeMenu === menu.name ? "rgba(255,255,255,0.15)" : "transparent",
+              background:
+                activeMenu === menu.name
+                  ? "rgba(255,255,255,0.15)"
+                  : "transparent",
               border: "none",
               padding: "6px 12px",
               fontSize: 13,
@@ -343,7 +407,9 @@ export default function MenuBar({
           <div style={{ flex: 1 }} />
           <div style={{ position: "relative" }}>
             <button
-              onClick={() => setActiveMenu(activeMenu === "pages" ? null : "pages")}
+              onClick={() =>
+                setActiveMenu(activeMenu === "pages" ? null : "pages")
+              }
               style={{
                 background: "rgba(255,255,255,0.1)",
                 border: "1px solid #374151",
@@ -359,7 +425,14 @@ export default function MenuBar({
               }}
             >
               <span>{activePage?.name || "Select Page"}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
@@ -416,7 +489,8 @@ export default function MenuBar({
                     }}
                     style={{
                       width: "100%",
-                      background: page.id === activePageId ? "#eff6ff" : "transparent",
+                      background:
+                        page.id === activePageId ? "#eff6ff" : "transparent",
                       border: "none",
                       padding: "8px 16px",
                       fontSize: 13,
@@ -432,7 +506,8 @@ export default function MenuBar({
                       }
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = page.id === activePageId ? "#eff6ff" : "transparent";
+                      e.currentTarget.style.background =
+                        page.id === activePageId ? "#eff6ff" : "transparent";
                     }}
                   >
                     {page.name}

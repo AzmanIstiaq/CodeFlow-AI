@@ -1,3 +1,18 @@
+/*
+ * Inspector Panel Styles
+ *
+ * Purpose:
+ * - Define the visual presentation for the inspector sidebar and inputs.
+ *
+ * Role in the system:
+ * - Provides consistent styling for inspector sections and controls.
+ *
+ * Key responsibilities:
+ * - Layout and typography for header, sections, and rows.
+ * - Visual states for toggles, sliders, and input focus.
+ * - Scrollbar and hover styling for usability.
+ */
+
 /* Inspector Panel - Modern Framer/Figma Style */
 
 .inspector-panel {
@@ -88,8 +103,21 @@
 }
 
 .inspector-section-toggle {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #9ca3af;
+  line-height: 1;
+  min-width: 16px;
+  min-height: 16px;
+}
+
+.inspector-section-toggle svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  opacity: 1;
 }
 
 .inspector-section-open .inspector-section-title {
@@ -262,12 +290,35 @@
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   background: #ffffff;
+  color: #374151;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.15s;
+  position: relative;
+}
+
+.toggle-icon-render {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.toggle-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: #374151;
+  stroke-width: 2;
+  fill: none;
+}
+
+.toggle-icon.active svg {
+  stroke: #ffffff;
 }
 
 .toggle-icon:hover {

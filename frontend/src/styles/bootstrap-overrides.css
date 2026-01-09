@@ -1,3 +1,18 @@
+/*
+ * Bootstrap Overrides
+ *
+ * Purpose:
+ * - Align Bootstrap components with the CodeFlow dark theme.
+ *
+ * Role in the system:
+ * - Ensures third-party defaults match the product's visual language.
+ *
+ * Key responsibilities:
+ * - Override body and container styling for dark mode.
+ * - Theme Bootstrap cards used in dashboard and features.
+ * - Apply responsive tweaks for landing layout.
+ */
+
 /* =====================================================
    BOOTSTRAP OVERRIDES - Maintain CodeFlow Dark Theme
    ===================================================== */

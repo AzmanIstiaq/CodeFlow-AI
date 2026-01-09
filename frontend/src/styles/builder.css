@@ -1,3 +1,18 @@
+/*
+ * Builder Styles
+ *
+ * Purpose:
+ * - Style the visual builder canvas, toolbar, nodes, and editor panels.
+ *
+ * Role in the system:
+ * - Provides layout and interaction styling for the builder experience.
+ *
+ * Key responsibilities:
+ * - Position navigation, canvas, and toolbars.
+ * - Style node types and execution state visuals.
+ * - Define editor panel field styling and buttons.
+ */
+
 /* =====================================================
    VISUAL BUILDER - Canvas, Toolbar, Nodes, Editor
    ===================================================== */

@@ -1,5 +1,26 @@
+/**
+ * Color Input
+ *
+ * Purpose:
+ * - Provide a combined color picker and hex input field.
+ *
+ * Role in the system:
+ * - Used across inspector sections to edit color properties.
+ *
+ * Key responsibilities:
+ * - Maintain a local hex value while editing.
+ * - Validate hex input on blur and commit only valid values.
+ *
+ * Important constraints and assumptions:
+ * - Only 6-digit hex colors are accepted for manual input.
+ * - Local value mirrors the external value unless user input is invalid.
+ */
+
 import { useState, useEffect } from "react";
 
+// ================================
+// Types
+// ================================
 interface ColorInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -7,6 +28,12 @@ interface ColorInputProps {
   disabled?: boolean;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Color picker with a synchronized hex text field.
+ */
 export default function ColorInput({
   value,
   onChange,
@@ -15,10 +42,17 @@ export default function ColorInput({
 }: ColorInputProps) {
   const [localValue, setLocalValue] = useState(value);
 
+  // Keep local input in sync with external value updates.
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Validate and commit the hex value when the input loses focus.
+   */
   const handleBlur = () => {
     if (/^#[0-9A-F]{6}$/i.test(localValue)) {
       onChange(localValue);

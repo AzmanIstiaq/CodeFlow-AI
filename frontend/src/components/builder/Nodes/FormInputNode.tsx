@@ -1,9 +1,31 @@
+/**
+ * Form Input Node
+ *
+ * Purpose:
+ * - Render a single-line form input with editable label and placeholder.
+ *
+ * Role in the system:
+ * - Provides form field elements for builder layouts.
+ *
+ * Key responsibilities:
+ * - Support inline editing for the label and placeholder text.
+ * - Render a styled input with required indicator.
+ * - Provide resize handles and connection handles.
+ *
+ * Important constraints and assumptions:
+ * - Placeholder editing disables the input for consistent editing UX.
+ * - Visual selection state is shown via a dotted border.
+ */
+
 import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useInlineEdit } from "../hooks/useInlineEdit";
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export type FormInputNodeData = {
   placeholder: string;
   inputType: "text" | "email" | "password" | "number" | "tel" | "url";
@@ -19,7 +41,16 @@ export type FormInputNodeData = {
   onUpdateLabel?: (text: string) => void;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Form input node with inline-editable label and placeholder.
+ */
 function FormInputNode({ data, selected }: NodeProps<FormInputNodeData>) {
+  // ================================
+  // Inline Editing (Label)
+  // ================================
   const {
     isEditing: isEditingLabel,
     value: labelValue,
@@ -34,6 +65,9 @@ function FormInputNode({ data, selected }: NodeProps<FormInputNodeData>) {
     }
   });
 
+  // ================================
+  // Inline Editing (Placeholder)
+  // ================================
   const {
     isEditing: isEditingPlaceholder,
     value: placeholderValue,
@@ -47,6 +81,7 @@ function FormInputNode({ data, selected }: NodeProps<FormInputNodeData>) {
       data.onUpdateText(newValue);
     }
   });
+
   return (
     <div
       style={{

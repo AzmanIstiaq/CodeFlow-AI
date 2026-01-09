@@ -1,7 +1,33 @@
+/**
+ * Text Section
+ *
+ * Purpose:
+ * - Configure typography settings for text-like nodes.
+ *
+ * Role in the system:
+ * - Provides font and alignment controls in the inspector.
+ *
+ * Key responsibilities:
+ * - Support multi-selection updates with mixed-value handling.
+ * - Apply font family, size, weight, line height, spacing, and color.
+ * - Gate rendering to text-capable node types.
+ *
+ * Important constraints and assumptions:
+ * - Only text and button nodes expose these properties.
+ * - Mixed values are represented with a placeholder indicator.
+ */
+
 import { useState } from "react";
 import type { SectionProps } from "../types";
 import { SelectInput, NumberInput, ColorInputRow } from "../inputs";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
+// ================================
+// Component
+// ================================
+/**
+ * Typography controls for text and button nodes.
+ */
 export default function Text({
   selectedNodes,
   updateNode,
@@ -13,18 +39,33 @@ export default function Text({
 
   if (!node || (node.type !== "text" && node.type !== "button")) return null;
 
+  // ================================
+  // Value Resolution
+  // ================================
+  /**
+   * Resolve values across selection, returning a mixed indicator when needed.
+   */
   const getValue = (field: string, defaultValue: any = "") => {
     if (isMultiSelect) {
-      const values = selectedNodes.map(n => n.data?.[field]);
-      const allSame = values.every(v => v === values[0]);
-      return allSame ? values[0] || defaultValue : "—";
+      const values = selectedNodes.map((n) => n.data?.[field]);
+      const allSame = values.every((v) => v === values[0]);
+      return allSame ? values[0] || defaultValue : "mixed";
     }
     return node.data?.[field] || defaultValue;
   };
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Apply a typography update to one or many nodes.
+   */
   const handleChange = (field: string, value: any) => {
     if (isMultiSelect) {
-      updateNodes(selectedNodes.map(n => n.id), { [field]: value });
+      updateNodes(
+        selectedNodes.map((n) => n.id),
+        { [field]: value }
+      );
     } else {
       updateNode(node.id, { [field]: value });
     }
@@ -38,16 +79,27 @@ export default function Text({
   const textAlign = getValue("textAlign", "left");
   const color = getValue("color", "#000000");
 
+  // ================================
+  // Render
+  // ================================
   return (
-    <div className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}>
-      <div 
+    <div
+      className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}
+    >
+      <div
         className="inspector-section-title"
         onClick={() => setIsOpen(!isOpen)}
       >
         Text
-        <span className="inspector-section-toggle">{isOpen ? "▼" : "▶"}</span>
+        <span className="inspector-section-toggle">
+          {isOpen ? (
+            <ChevronUp size={14} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={14} aria-hidden="true" />
+          )}
+        </span>
       </div>
-      
+
       {isOpen && (
         <div className="inspector-section-content">
           <SelectInput
@@ -61,7 +113,7 @@ export default function Text({
               { value: "Times New Roman", label: "Times New Roman" },
             ]}
             onChange={(v) => handleChange("fontFamily", v)}
-            disabled={isMultiSelect && fontFamily === "—"}
+            disabled={isMultiSelect && fontFamily === "mixed"}
           />
 
           <NumberInput
@@ -71,7 +123,7 @@ export default function Text({
             min={8}
             max={120}
             unit="px"
-            disabled={isMultiSelect && fontSize === "—"}
+            disabled={isMultiSelect && fontSize === "mixed"}
           />
 
           <SelectInput
@@ -85,7 +137,7 @@ export default function Text({
               { value: "700", label: "Bold" },
             ]}
             onChange={(v) => handleChange("fontWeight", v)}
-            disabled={isMultiSelect && fontWeight === "—"}
+            disabled={isMultiSelect && fontWeight === "mixed"}
           />
 
           <NumberInput
@@ -95,7 +147,7 @@ export default function Text({
             min={0.5}
             max={3}
             step={0.1}
-            disabled={isMultiSelect && lineHeight === "—"}
+            disabled={isMultiSelect && lineHeight === "mixed"}
           />
 
           <NumberInput
@@ -106,7 +158,7 @@ export default function Text({
             max={10}
             step={0.1}
             unit="px"
-            disabled={isMultiSelect && letterSpacing === "—"}
+            disabled={isMultiSelect && letterSpacing === "mixed"}
           />
 
           <SelectInput
@@ -119,14 +171,14 @@ export default function Text({
               { value: "justify", label: "Justify" },
             ]}
             onChange={(v) => handleChange("textAlign", v)}
-            disabled={isMultiSelect && textAlign === "—"}
+            disabled={isMultiSelect && textAlign === "mixed"}
           />
 
           <ColorInputRow
             label="Text Color"
             value={color}
             onChange={(v) => handleChange("color", v)}
-            disabled={isMultiSelect && color === "—"}
+            disabled={isMultiSelect && color === "mixed"}
           />
         </div>
       )}

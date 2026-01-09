@@ -1,3 +1,18 @@
+/*
+ * Visual Builder Styles
+ *
+ * Purpose:
+ * - Style the builder canvas, toolbar, and inspector panel layout.
+ *
+ * Role in the system:
+ * - Provides the structural layout for the visual builder experience.
+ *
+ * Key responsibilities:
+ * - Position canvas and panels relative to the fixed header.
+ * - Provide toolbar positioning and responsive viewport sizing.
+ * - Style node editor panel elements and input controls.
+ */
+
 /* Visual Builder consolidated styles (moved to src/styles) */
 
 .visualbuilder-root {
@@ -70,7 +85,7 @@
   background-color: #ef4444;
 }
 
-/* Save button — shifts when panel is open using .panel-open on root */
+/* Save button shifts when panel is open using .panel-open on root */
 .save-button {
   position: absolute;
   top: 10px;

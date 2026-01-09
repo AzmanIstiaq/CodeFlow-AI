@@ -1,7 +1,28 @@
+/**
+ * Container Node
+ *
+ * Purpose:
+ * - Render a flexible container for grouping and layout.
+ *
+ * Role in the system:
+ * - Provides a resizable box with flex or block layout properties.
+ *
+ * Key responsibilities:
+ * - Apply background, border, padding, and layout styles.
+ * - Offer resize and per-corner radius controls when selected.
+ *
+ * Important constraints and assumptions:
+ * - Border radius can be uniform or per-corner.
+ * - NodeResizer events are forwarded through data hooks when present.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 import RadiusHandle from "../RadiusHandle";
 
+// ================================
+// Types
+// ================================
 export type ContainerNodeData = {
   label: string;
   width: number;
@@ -35,13 +56,25 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Resizable container node with layout controls.
+ */
 function ContainerNode({ data, selected }: Props) {
+  // ================================
+  // Border Radius Handling
+  // ================================
   const handleRadiusChange = (radius: number, corner?: string) => {
     if (data._onRadiusChange) {
       data._onRadiusChange(radius, corner);
     }
   };
 
+  /**
+   * Normalize border radius into a CSS-friendly value.
+   */
   const getBorderRadius = () => {
     if (typeof data.borderRadius === "number") {
       return data.borderRadius;

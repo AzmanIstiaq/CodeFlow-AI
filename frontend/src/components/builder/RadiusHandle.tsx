@@ -1,7 +1,31 @@
+/**
+ * Radius Handle
+ *
+ * Purpose:
+ * - Provide a draggable handle for editing border radius on nodes.
+ *
+ * Role in the system:
+ * - Enables direct manipulation of corner radii in the builder canvas.
+ *
+ * Key responsibilities:
+ * - Track drag state and translate pointer movement into radius values.
+ * - Support per-corner updates when Ctrl/Cmd is held.
+ * - Notify parent callbacks on drag start/end and value changes.
+ *
+ * Important constraints and assumptions:
+ * - Radius values are clamped to a 0..100 range for UI stability.
+ * - Mouse listeners are attached to document to preserve drag behavior.
+ */
+
 import { useState, useRef, useEffect } from "react";
 
+// ================================
+// Types
+// ================================
 interface RadiusHandleProps {
-  borderRadius: number | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
+  borderRadius:
+    | number
+    | { topLeft?: number; topRight?: number; bottomLeft?: number; bottomRight?: number };
   onRadiusChange: (radius: number, corner?: string) => void;
   isVisible: boolean;
   position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -9,6 +33,12 @@ interface RadiusHandleProps {
   onDragEnd?: () => void;
 }
 
+// ================================
+// Component
+// ================================
+/**
+ * Draggable corner handle that updates a node's border radius.
+ */
 export default function RadiusHandle({
   borderRadius,
   onRadiusChange,
@@ -22,7 +52,12 @@ export default function RadiusHandle({
   const startRadiusRef = useRef(0);
   const startPosRef = useRef({ x: 0, y: 0 });
 
-  // Get the radius value for this specific corner
+  // ================================
+  // Helpers
+  // ================================
+  /**
+   * Resolve the current radius for the active corner.
+   */
   const getCornerRadius = () => {
     if (typeof borderRadius === "number") {
       return borderRadius;
@@ -36,18 +71,21 @@ export default function RadiusHandle({
     return cornerMap[position];
   };
 
+  // ================================
+  // Drag Handling
+  // ================================
   useEffect(() => {
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startPosRef.current.x;
       const deltaY = e.clientY - startPosRef.current.y;
-      
-      // Calculate radius change based on diagonal movement
+
+      // Use diagonal delta to make dragging feel consistent across axes.
       const delta = (deltaX + deltaY) / 2;
       const newRadius = Math.max(0, Math.min(100, startRadiusRef.current + delta));
-      
-      // Pass corner info if Ctrl is pressed
+
+      // Pass corner info if Ctrl/Cmd is pressed to update a single corner.
       if (isCtrlPressed) {
         const cornerMap = {
           "top-left": "topLeft",
@@ -99,10 +137,13 @@ export default function RadiusHandle({
     };
   }, []);
 
+  /**
+   * Begin drag tracking and initialize starting values.
+   */
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('RadiusHandle mousedown', position, getCornerRadius());
+    console.log("RadiusHandle mousedown", position, getCornerRadius());
     setIsDragging(true);
     setIsCtrlPressed(e.ctrlKey || e.metaKey);
     startRadiusRef.current = getCornerRadius();
@@ -114,6 +155,9 @@ export default function RadiusHandle({
 
   if (!isVisible) return null;
 
+  // ================================
+  // Layout
+  // ================================
   const positions = {
     "top-left": { top: 2, left: 2 },
     "top-right": { top: 2, right: 2 },
@@ -130,6 +174,9 @@ export default function RadiusHandle({
 
   const currentRadius = getCornerRadius();
 
+  // ================================
+  // Render
+  // ================================
   return (
     <div
       className="nodrag"

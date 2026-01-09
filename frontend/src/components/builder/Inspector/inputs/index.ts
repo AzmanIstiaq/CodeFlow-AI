@@ -1,3 +1,16 @@
+/**
+ * Inspector Inputs Index
+ *
+ * Purpose:
+ * - Aggregate exports for reusable inspector input components.
+ *
+ * Role in the system:
+ * - Provides a single import surface for inspector inputs.
+ *
+ * Key responsibilities:
+ * - Re-export input modules without additional logic.
+ */
+
 export { default as InlineNumberInput } from "./InlineNumberInput";
 export { default as ColorInput } from "./ColorInput";
 export { default as ColorInputRow } from "./ColorInputRow";

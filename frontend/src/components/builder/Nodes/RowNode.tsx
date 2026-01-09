@@ -1,7 +1,30 @@
+/**
+ * Row Node
+ *
+ * Purpose:
+ * - Render a grid row inside a section to host column-based content.
+ *
+ * Role in the system:
+ * - Acts as a layout container that registers column rects for drop zones.
+ *
+ * Key responsibilities:
+ * - Create a grid with configurable column count and background styling.
+ * - Register column bounding boxes for drag/drop targeting.
+ * - Report measured row height for layout calculations.
+ * - Expose column hover state and click handling for placement.
+ *
+ * Important constraints and assumptions:
+ * - Pointer events are disabled on the row container to avoid intercepting node interactions.
+ * - Column elements re-enable pointer events to allow hover and click feedback.
+ */
+
 import { useRef, useLayoutEffect } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { type NodeProps } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export type RowNodeData = {
   columns?: {
     count: number;
@@ -25,16 +48,24 @@ export type RowNodeData = {
     columnIndex: number | null;
   };
   _onRowMeasure?: (rowId: string, height: number) => void;
-  _onColumnClick?: (event: ReactMouseEvent, rowId: string, columnIndex: number) => void;
+  _onColumnClick?: (
+    event: ReactMouseEvent,
+    rowId: string,
+    columnIndex: number
+  ) => void;
 };
 
-export default function RowNode({
-  id,
-  data,
-}: NodeProps<RowNodeData>) {
+// ================================
+// Component
+// ================================
+/**
+ * Grid-based row container for section layouts.
+ */
+export default function RowNode({ id, data }: NodeProps<RowNodeData>) {
   const columns = data.columns?.count ?? 1;
   const gap = data.columns?.gap ?? 16;
-  const rowHeight = typeof data.rowHeight === "number" ? data.rowHeight : undefined;
+  const rowHeight =
+    typeof data.rowHeight === "number" ? data.rowHeight : undefined;
 
   const rowRef = useRef<HTMLDivElement | null>(null);
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -48,6 +79,9 @@ export default function RowNode({
     )
   );
 
+  // ================================
+  // Column Rect Registration
+  // ================================
   useLayoutEffect(() => {
     if (!data._registerColumnRect) return;
 
@@ -59,6 +93,9 @@ export default function RowNode({
     });
   }, [columns, gap, id, data._registerColumnRect, data._viewportVersion]);
 
+  // ================================
+  // Row Measurement
+  // ================================
   useLayoutEffect(() => {
     if (!rowRef.current || !data._onRowMeasure) return;
     const height = rowRef.current.offsetHeight;
@@ -68,6 +105,9 @@ export default function RowNode({
     }
   });
 
+  // ================================
+  // Render
+  // ================================
   return (
     <div
       ref={rowRef}

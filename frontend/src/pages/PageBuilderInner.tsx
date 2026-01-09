@@ -45,6 +45,7 @@ import ReactFlow, { type NodeTypes } from "reactflow";
 import type { Node as ReactFlowNode } from "reactflow";
 import "reactflow/dist/style.css";
 import "../styles/reactflow-overrides.css";
+import { ArrowRight, Plus } from "lucide-react";
 
 import NodeToolbar from "../components/builder/NodeToolbar";
 import StartNode from "../components/builder/Nodes/StartNode";
@@ -89,7 +90,7 @@ const MODE: "workflow" | "builder" = "builder";
 // ===== NODE TYPE REGISTRY =====
 // Maps node type strings to React components
 // Defined outside component to preserve referential equality across renders
-// ✅ Static nodeTypes - defined ONCE outside component (referential equality preserved)
+// â Static nodeTypes - defined ONCE outside component (referential equality preserved)
 const nodeTypes: NodeTypes = {
   start: StartNode,
   ai: AINode,
@@ -251,7 +252,7 @@ export default function PageBuilderInner() {
     "desktop" | "tablet" | "mobile"
   >("desktop");
 
-  // Node placement mode (toolbar button → click canvas to place)
+  // Node placement mode (toolbar button â click canvas to place)
   const [placementMode, setPlacementMode] = useState<{
     type: string;
     label: string;
@@ -951,7 +952,9 @@ export default function PageBuilderInner() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              Click on canvas to place {placementMode.label} • Press ESC to
+              Click on canvas to place {placementMode.label}
+              {" "}
+              <ArrowRight size={14} aria-hidden="true" /> Press ESC to
               cancel
             </div>
           )}
@@ -972,7 +975,9 @@ export default function PageBuilderInner() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              Click and drag to draw {drawingMode.label} • Press ESC to cancel
+              Click and drag to draw {drawingMode.label}
+              {" "}
+              <ArrowRight size={14} aria-hidden="true" /> Press ESC to cancel
             </div>
           )}
           <NodeToolbar
@@ -1006,7 +1011,7 @@ export default function PageBuilderInner() {
                 className="btn-primary"
                 onClick={() => addNode("section", "Frame")}
               >
-                ➕ Add Frame
+                <Plus size={16} aria-hidden="true" /> Add Frame
               </button>
             </div>
           ) : (
@@ -1091,10 +1096,16 @@ export default function PageBuilderInner() {
                   draggingNodeRef.current = node;
                 }}
                 onNodeDrag={(_, node) => {
+                  if (!node) return;
                   handleNodeDrag(node);
                   handleGuideDrag(node);
                 }}
                 onNodeDragStop={(event, node) => {
+                  if (!node) {
+                    clearGuides();
+                    draggingNodeRef.current = null;
+                    return;
+                  }
                   // Apply snapping on drag stop
                   if (node.positionAbsolute && node.width && node.height) {
                     const snapped = snapToGuides(node, {

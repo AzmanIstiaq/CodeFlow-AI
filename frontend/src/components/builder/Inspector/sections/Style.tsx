@@ -1,7 +1,33 @@
+/**
+ * Style Section
+ *
+ * Purpose:
+ * - Edit visual styling properties for selected nodes.
+ *
+ * Role in the system:
+ * - Central place for fill, stroke, border radius, and opacity controls.
+ *
+ * Key responsibilities:
+ * - Support multi-selection updates with mixed-value handling.
+ * - Toggle between uniform and per-corner border radius controls.
+ * - Propagate style changes through parent update handlers.
+ *
+ * Important constraints and assumptions:
+ * - Mixed values are represented with a placeholder indicator.
+ * - Per-corner editing is disabled for multi-selection to avoid ambiguity.
+ */
+
 import { useState } from "react";
 import type { SectionProps } from "../types";
 import { ColorInputRow, SliderInput, NumberInput, Toggle } from "../inputs";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
+// ================================
+// Component
+// ================================
+/**
+ * Style controls for fill, stroke, border radius, and opacity.
+ */
 export default function Style({
   selectedNodes,
   updateNode,
@@ -13,18 +39,37 @@ export default function Style({
 
   if (!node) return null;
 
+  // ================================
+  // Value Resolution
+  // ================================
+  /**
+   * Resolve values across selection, returning a mixed indicator when needed.
+   */
   const getValue = (field: string, defaultValue: any = "") => {
     if (isMultiSelect) {
-      const values = selectedNodes.map(n => n.data?.[field]);
-      const allSame = values.every(v => v === values[0]);
-      return allSame ? (values[0] !== undefined ? values[0] : defaultValue) : "—";
+      const values = selectedNodes.map((n) => n.data?.[field]);
+      const allSame = values.every((v) => v === values[0]);
+      return allSame
+        ? values[0] !== undefined
+          ? values[0]
+          : defaultValue
+        : "mixed";
     }
     return node.data?.[field] !== undefined ? node.data[field] : defaultValue;
   };
 
+  // ================================
+  // Handlers
+  // ================================
+  /**
+   * Apply a style update to one or many nodes.
+   */
   const handleChange = (field: string, value: any) => {
     if (isMultiSelect) {
-      updateNodes(selectedNodes.map(n => n.id), { [field]: value });
+      updateNodes(
+        selectedNodes.map((n) => n.id),
+        { [field]: value }
+      );
     } else {
       updateNode(node.id, { [field]: value });
     }
@@ -35,11 +80,16 @@ export default function Style({
   const borderWidth = getValue("borderWidth", 0);
   const borderRadius = getValue("borderRadius", 0);
   const opacity = getValue("opacity", 100);
-  
-  // Determine if we're in per-corner mode based on current value
+
+  // Determine if we're in per-corner mode based on current value.
   const perCorner = typeof borderRadius === "object" && borderRadius !== null;
-  
-  // Helper to get border radius values
+
+  // ================================
+  // Border Radius Helpers
+  // ================================
+  /**
+   * Normalize the border radius into either a number or per-corner object.
+   */
   const getBorderRadiusValue = () => {
     if (typeof borderRadius === "object" && borderRadius !== null) {
       return {
@@ -51,18 +101,22 @@ export default function Style({
     }
     return typeof borderRadius === "number" ? borderRadius : 0;
   };
-  
+
+  /**
+   * Switch between uniform and per-corner radius modes.
+   */
   const togglePerCorner = () => {
     if (perCorner) {
-      // Switching from per-corner to uniform
+      // Switching from per-corner to uniform.
       const corners = getBorderRadiusValue() as any;
-      const allEqual = corners.topLeft === corners.topRight && 
-                       corners.topRight === corners.bottomLeft && 
-                       corners.bottomLeft === corners.bottomRight;
+      const allEqual =
+        corners.topLeft === corners.topRight &&
+        corners.topRight === corners.bottomLeft &&
+        corners.bottomLeft === corners.bottomRight;
       const uniformValue = allEqual ? corners.topLeft : corners.topLeft;
       handleChange("borderRadius", uniformValue);
     } else {
-      // Switching from uniform to per-corner
+      // Switching from uniform to per-corner.
       const currentValue = typeof borderRadius === "number" ? borderRadius : 0;
       handleChange("borderRadius", {
         topLeft: currentValue,
@@ -73,30 +127,41 @@ export default function Style({
     }
   };
 
+  // ================================
+  // Render
+  // ================================
   return (
-    <div className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}>
-      <div 
+    <div
+      className={`inspector-section ${isOpen ? "inspector-section-open" : ""}`}
+    >
+      <div
         className="inspector-section-title"
         onClick={() => setIsOpen(!isOpen)}
       >
         Style
-        <span className="inspector-section-toggle">{isOpen ? "▼" : "▶"}</span>
+        <span className="inspector-section-toggle">
+          {isOpen ? (
+            <ChevronUp size={14} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={14} aria-hidden="true" />
+          )}
+        </span>
       </div>
-      
+
       {isOpen && (
         <div className="inspector-section-content">
           <ColorInputRow
             label="Fill"
             value={backgroundColor}
             onChange={(v) => handleChange("backgroundColor", v)}
-            disabled={isMultiSelect && backgroundColor === "—"}
+            disabled={isMultiSelect && backgroundColor === "mixed"}
           />
 
           <ColorInputRow
             label="Stroke"
             value={borderColor}
             onChange={(v) => handleChange("borderColor", v)}
-            disabled={isMultiSelect && borderColor === "—"}
+            disabled={isMultiSelect && borderColor === "mixed"}
           />
 
           <NumberInput
@@ -106,7 +171,7 @@ export default function Style({
             min={0}
             max={20}
             unit="px"
-            disabled={isMultiSelect && borderWidth === "—"}
+            disabled={isMultiSelect && borderWidth === "mixed"}
           />
 
           <div className="inspector-field">
@@ -128,7 +193,7 @@ export default function Style({
                 min={0}
                 max={100}
                 unit="px"
-                disabled={isMultiSelect && borderRadius === "—"}
+                disabled={isMultiSelect && borderRadius === "mixed"}
               />
             ) : (
               <div className="inspector-corner-grid">
@@ -203,7 +268,7 @@ export default function Style({
             max={100}
             onChange={(v) => handleChange("opacity", v)}
             unit="%"
-            disabled={isMultiSelect && opacity === "—"}
+            disabled={isMultiSelect && opacity === "mixed"}
           />
         </div>
       )}

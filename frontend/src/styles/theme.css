@@ -1,3 +1,17 @@
+/*
+ * Theme Styles
+ *
+ * Purpose:
+ * - Define global theme variables and color scheme defaults.
+ *
+ * Role in the system:
+ * - Establish base color scheme settings for the app.
+ *
+ * Key responsibilities:
+ * - Configure root typography and rendering defaults.
+ * - Provide light mode overrides via media query.
+ */
+
 /* =====================================================
    THEME - Color Variables and Theme Styles
    ===================================================== */

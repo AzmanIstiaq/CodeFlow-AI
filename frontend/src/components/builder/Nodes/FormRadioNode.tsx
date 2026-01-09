@@ -1,6 +1,27 @@
+/**
+ * Form Radio Node
+ *
+ * Purpose:
+ * - Render a radio group preview with labeled options.
+ *
+ * Role in the system:
+ * - Provides radio button groups for builder layouts.
+ *
+ * Key responsibilities:
+ * - Display label and options in a vertical or horizontal layout.
+ * - Indicate selected value and required marker.
+ * - Provide resize handles when selected.
+ *
+ * Important constraints and assumptions:
+ * - Inputs are disabled to prevent interaction inside the canvas.
+ */
+
 import { memo } from "react";
 import { NodeResizer } from "reactflow";
 
+// ================================
+// Types
+// ================================
 export type FormRadioNodeData = {
   label: string;
   groupName: string;
@@ -19,6 +40,12 @@ type Props = {
   selected?: boolean;
 };
 
+// ================================
+// Component
+// ================================
+/**
+ * Radio group preview node with selectable options.
+ */
 function FormRadioNode({ data, selected }: Props) {
   const options = data.options || ["Option 1", "Option 2", "Option 3"];
 
