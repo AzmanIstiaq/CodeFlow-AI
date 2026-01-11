@@ -82,6 +82,7 @@ import { useSiteState } from "../components/builder/hooks/useSiteState";
 import { useNodeOperations } from "../components/builder/hooks/useNodeOperations";
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
 import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOperations";
+import { exportNextJSZip } from "../utils/exportNextJsZip";
 
 // ===== APPLICATION MODE =====
 // "workflow" enables AI execution; "builder" is page design only
@@ -145,8 +146,6 @@ const getDefaultNodeData = (type: string, label: string) => {
         padding: 16,
         borderRadius: 0,
         border: "none",
-        width: 200,
-        height: 60,
       };
     case "button":
       return {
@@ -321,12 +320,16 @@ export default function PageBuilderInner() {
 
   const hasFrame = nodes.some((n: any) => n.type === "section");
 
-  const { save, handleExportHTML, dialogProps } = useWorkflowOperations(
+  const { save, dialogProps } = useWorkflowOperations(
     id,
     site,
     activePage,
     setNodesNormalized
   );
+
+  const handleExportNextJSZip = () => {
+    exportNextJSZip(site as any);
+  };
 
   // Smart guides for alignment
   const reactFlowInstance = useReactFlow();
@@ -795,7 +798,7 @@ export default function PageBuilderInner() {
       <SaveWorkflowDialog {...dialogProps} />
       <MenuBar
         onSave={save}
-        onExport={handleExportHTML}
+        onExportNextJSZip={handleExportNextJSZip}
         onNavigateHome={() => navigate("/")}
         onNavigateDashboard={() => navigate("/dashboard")}
         pages={site.pages}

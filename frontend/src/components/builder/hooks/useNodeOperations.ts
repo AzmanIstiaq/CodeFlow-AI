@@ -236,9 +236,7 @@ export function useNodeOperations(
           y: section.position.y + 100 + textCount * 80,
         },
         draggable: true,
-        style: {
-          width: 200,
-        },
+        style: {},
         data: {
           text: "Sample Text",
           fontSize: 16,
@@ -255,7 +253,6 @@ export function useNodeOperations(
           padding: 16,
           borderRadius: 0,
           border: "none",
-          width: 200,
           layout: undefined,
         },
       };

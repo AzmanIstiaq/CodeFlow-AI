@@ -231,50 +231,6 @@ export default function AlignmentToolbar({
           </div>
         </>
       )}
-      {isSectionSelected && onSetColumns && (
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            paddingRight: 8,
-            borderRight: "1px solid #e5e7eb",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              color: "#6b7280",
-              alignSelf: "center",
-              marginRight: 4,
-            }}
-          >
-            Columns:
-          </span>
-          {[1, 2, 3, 4].map((count) => (
-            <ToolbarButton
-              key={count}
-              onClick={() => onSetColumns(count)}
-              title={`${count} Column${count > 1 ? "s" : ""}`}
-              active={currentColumns === count}
-            >
-              <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-                {Array.from({ length: count }).map((_, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      width:
-                        count === 1 ? 12 : count === 2 ? 6 : count === 3 ? 4 : 3,
-                      height: 12,
-                      background: "currentColor",
-                      borderRadius: 1,
-                    }}
-                  />
-                ))}
-              </div>
-            </ToolbarButton>
-          ))}
-        </div>
-      )}
       <div style={{ display: "flex", gap: 4 }}>
         <ToolbarButton onClick={onCopy} title="Copy (Ctrl+C)">
           <svg

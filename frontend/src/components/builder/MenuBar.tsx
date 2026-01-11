@@ -28,7 +28,7 @@ type MenuItem =
 
 interface MenuBarProps {
   onSave?: () => void;
-  onExport?: () => void;
+  onExportNextJSZip?: () => void;
   onNavigateHome?: () => void;
   onNavigateDashboard?: () => void;
   pages?: any[];
@@ -77,7 +77,6 @@ interface MenuBarProps {
  */
 export default function MenuBar({
   onSave,
-  onExport,
   onNavigateHome,
   onNavigateDashboard,
   pages = [],
@@ -110,6 +109,7 @@ export default function MenuBar({
   canUndo = false,
   canRedo = false,
   hasSelection = false,
+  onExportNextJSZip,
 }: MenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -125,7 +125,11 @@ export default function MenuBar({
         { label: "New Page", shortcut: "Ctrl+N", action: onPageAdd },
         { type: "divider" },
         { label: "Save", shortcut: "Ctrl+S", action: onSave },
-        { label: "Export HTML", shortcut: "Ctrl+Shift+E", action: onExport },
+        {
+          label: "Export \u2192 Next.js (ZIP)",
+          shortcut: "Ctrl+Shift+X",
+          action: onExportNextJSZip,
+        },
       ],
     },
     {
@@ -534,10 +538,10 @@ export default function MenuBar({
           </button>
 
           <button
-            onClick={onExport}
+            onClick={onExportNextJSZip}
             style={{
-              background: "#10b981",
-              border: "none",
+              background: "#1f2937",
+              border: "1px solid #111827",
               padding: "8px 16px",
               fontSize: 13,
               color: "#ffffff",
@@ -546,7 +550,7 @@ export default function MenuBar({
               fontWeight: 500,
             }}
           >
-            Export HTML
+            Export → Next.js (ZIP)
           </button>
         </>
       )}
