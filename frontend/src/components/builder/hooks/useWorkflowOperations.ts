@@ -2,12 +2,11 @@
  * useWorkflowOperations Hook
  *
  * Manages workflow persistence and execution operations.
- * Handles saving new workflows, updating existing ones, exporting HTML, and running AI workflows.
+ * Handles saving new workflows, updating existing ones, and running AI workflows.
  *
  * Key Operations:
  * 1. Save: Persists workflow to server (creates new or updates existing)
- * 2. Export HTML: Generates downloadable HTML files from site structure
- * 3. Run Workflow: Executes AI workflow by chaining start â AI â output nodes
+ * 2. Run Workflow: Executes AI workflow by chaining start → AI → output nodes
  *
  * Dialog Management:
  * - Show save dialog for new workflows (prompts for name/description)
@@ -22,7 +21,6 @@ import { useNavigate } from "react-router-dom";
 import type { SiteSchema, PageSchema } from "../../../types/siteSchema";
 import { saveDiagram, executeWorkflow } from "../../../api/api";
 import { buildTree } from "../../../utils/buildTree";
-import { exportHTML } from "../../../utils/exportHtml";
 
 const MODE: "workflow" | "builder" = "builder";
 
@@ -272,48 +270,12 @@ export function useWorkflowOperations(
   };
 
   // =====================================
-  // EXPORT OPERATION
-  // =====================================
-  /**
-   * Export site pages as standalone HTML files
-   *
-   * For each page:
-   * 1. Build node tree from flat nodes array (respects parent-child relationships)
-   * 2. Generate HTML from tree using CSS-based layout
-   * 3. Download as file: "page-name.html"
-   *
-   * Note: This generates static HTML - dynamic functionality requires Node.js backend
-   */
-  const handleExportHTML = () => {
-    site.pages.forEach((page) => {
-      // Build hierarchical tree from flat nodes array
-      const tree = buildTree(page.nodes, page.edges);
-      // Generate HTML from tree
-      const html = exportHTML(tree, page.nodes as any);
-
-      // Create blob and trigger browser download
-      const blob = new Blob([html], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${page.name.toLowerCase().replace(/\s+/g, "-")}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
-    alert(`Exported ${site.pages.length} page(s)!`);
-  };
-
-  // =====================================
   // HOOK EXPORTS
   // =====================================
   return {
     isExecuting,
     save,
     runWorkflow,
-    handleExportHTML,
     dialogProps: {
       isOpen: showSaveDialog,
       workflowName,
