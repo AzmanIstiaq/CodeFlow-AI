@@ -19,6 +19,41 @@ type TreeNode = {
   children: TreeNode[];
 };
 
+// Layout modes describe whether siblings can be auto-structured (row/column/grid) or must stay free/absolute.
+type LayoutMode = "free" | "row" | "column" | "grid";
+
+// Recorded decision per node about how its children should be laid out.
+type LayoutDecision = {
+  mode: LayoutMode;
+  confidence: number;
+  reasons: string[];
+};
+
+// Canonical style token shared across nodes to dedupe inline styles.
+type StyleToken = {
+  id: string;
+  style: Record<string, any>;
+  usageCount: number;
+};
+
+// Aggregate output of the normalization pass.
+type NormalizationResult = {
+  normalizedNodes: TreeNode[];
+  styleTokens: StyleToken[];
+  nodeStyleRef: Record<string, string>;
+  diagnostics: Array<{
+    nodeId: string;
+    parentId?: string;
+    decision: LayoutDecision;
+  }>;
+};
+
+// Tree node annotated with layoutDecision for downstream export.
+type NormalizedTreeNode = TreeNode & { layoutDecision?: LayoutDecision };
+const EPS = 4;
+const GAP_STD_THRESHOLD = 6;
+const STRUCTURE_CONFIDENCE = 0.75;
+
 /* =========================
    Utilities
 ========================= */
@@ -151,6 +186,285 @@ const buildTree = (nodes: any[]): TreeNode[] => {
 };
 
 /* =========================
+   Stage 2: Normalize
+   - Analyze node positions to choose safe layout modes.
+   - Canonicalize styles into reusable tokens.
+   - Attach layout decisions to the tree for exporter use.
+========================= */
+
+type BoundingBox = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  cx: number;
+  cy: number;
+};
+
+// Gracefully parse numeric-ish values with a fallback.
+const coerceNumber = (value: any, fallback: number) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+// Compute bounding box and derived centers for a node.
+
+const computeBBox = (node: any): BoundingBox => {
+  const style = node?.style || {};
+  const data = node?.data || {};
+  const w = coerceNumber(style.width ?? data.width, 100);
+  const h = coerceNumber(style.height ?? data.height, 100);
+  const x = coerceNumber(node?.position?.x, 0);
+  const y = coerceNumber(node?.position?.y, 0);
+  const left = x;
+  const top = y;
+  const right = x + w;
+  const bottom = y + h;
+  const cx = (left + right) / 2;
+  const cy = (top + bottom) / 2;
+  return { x, y, w, h, left, right, top, bottom, cx, cy };
+};
+
+// Inclusive AABB overlap with small epsilon to detect near-touching items.
+const overlaps = (a: BoundingBox, b: BoundingBox) => {
+  return !(
+    a.right <= b.left + EPS ||
+    b.right <= a.left + EPS ||
+    a.bottom <= b.top + EPS ||
+    b.bottom <= a.top + EPS
+  );
+};
+
+const average = (values: number[]) =>
+  values.length === 0
+    ? 0
+    : values.reduce((acc, v) => acc + v, 0) / values.length;
+
+const stddev = (values: number[]) => {
+  if (values.length === 0) return 0;
+  const mean = average(values);
+  const variance = average(values.map((v) => (v - mean) ** 2));
+  return Math.sqrt(variance);
+};
+
+// Sort children along primary axis and measure gaps/uniformity.
+
+const computeGapStats = (
+  boxes: Array<{ id: string; box: BoundingBox }>,
+  mode: LayoutMode
+) => {
+  if (boxes.length < 2) return { gaps: [] as number[], mean: 0, std: 0 };
+  const sorted = [...boxes].sort((a, b) => {
+    if (mode === "column") {
+      return a.box.top - b.box.top || a.box.cx - b.box.cx;
+    }
+    return a.box.left - b.box.left || a.box.cy - b.box.cy;
+  });
+
+  const gaps: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const curr = sorted[i].box;
+    const next = sorted[i + 1].box;
+    const gap =
+      mode === "column" ? next.top - curr.bottom : next.left - curr.right;
+    gaps.push(Math.max(0, gap));
+  }
+
+  const mean = average(gaps);
+  const sd = stddev(gaps);
+  return { gaps, mean, std: sd };
+};
+
+// Decide whether a parent can safely adopt a structured layout for its children.
+const analyzeChildrenLayout = (
+  _parent: any,
+  children: TreeNode[]
+): LayoutDecision => {
+  if (!children.length) {
+    return { mode: "free", confidence: 1, reasons: ["no-children"] };
+  }
+
+  const boxes = children.map((c) => ({
+    id: c.node.id,
+    box: computeBBox(c.node),
+  }));
+
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      if (overlaps(boxes[i].box, boxes[j].box)) {
+        return { mode: "free", confidence: 1, reasons: ["overlap-detected"] };
+      }
+    }
+  }
+
+  const cyVals = boxes.map((b) => b.box.cy);
+  const cxVals = boxes.map((b) => b.box.cx);
+  const meanCy = average(cyVals);
+  const meanCx = average(cxVals);
+  const maxCyDelta = Math.max(...cyVals.map((cy) => Math.abs(cy - meanCy)));
+  const maxCxDelta = Math.max(...cxVals.map((cx) => Math.abs(cx - meanCx)));
+  const rowAligned = maxCyDelta <= EPS;
+  const colAligned = maxCxDelta <= EPS;
+
+  let candidate: LayoutMode | null = null;
+  if (rowAligned) candidate = "row";
+  if (colAligned) candidate = candidate ? "grid" : "column";
+  if (!candidate) {
+    return { mode: "free", confidence: 0.6, reasons: ["no-axis-alignment"] };
+  }
+
+  const gaps = computeGapStats(boxes, candidate === "grid" ? "row" : candidate);
+  const secondaryDelta = candidate === "column" ? maxCxDelta : maxCyDelta;
+  const reasons: string[] = [];
+  let confidence = 1;
+  if (gaps.std > GAP_STD_THRESHOLD) {
+    confidence -= 0.25;
+    reasons.push("gap-variance");
+  }
+  if (secondaryDelta > EPS) {
+    confidence -= 0.25;
+    reasons.push("off-axis-nudge");
+  }
+  if (candidate === "grid") {
+    confidence -= 0.2;
+    reasons.push("ambiguous-grid");
+  }
+  confidence = Math.max(0, Math.min(1, confidence));
+
+  if (secondaryDelta > EPS || confidence < STRUCTURE_CONFIDENCE) {
+    return {
+      mode: "free",
+      confidence: Math.max(confidence, 0.5),
+      reasons: reasons.length ? reasons : ["low-confidence"],
+    };
+  }
+
+  const finalMode: LayoutMode = candidate === "grid" ? "grid" : candidate;
+
+  return {
+    mode: finalMode,
+    confidence,
+    reasons: reasons.length ? reasons : [`aligned-${finalMode}`],
+  };
+};
+
+// Layout-related props must NEVER be part of style tokens
+
+const STRIP_FROM_TOKENS = new Set([
+  "display",
+  "flexDirection",
+  "gridTemplateColumns",
+  "gridTemplateRows",
+  "gap",
+  "rowGap",
+  "columnGap",
+  "position",
+  "left",
+  "right",
+  "top",
+  "bottom",
+]);
+
+// Merge, sort, and round a style object so it can be hashed deterministically.
+const canonicalizeStyle = (style: Record<string, any>) => {
+  const entries = Object.entries(style || {})
+    .filter(
+      ([k, v]) => v !== undefined && v !== null && !STRIP_FROM_TOKENS.has(k) // 🔒 strip layout props
+    )
+    .map(([k, v]) => [k, typeof v === "number" ? Math.round(v * 100) / 100 : v])
+    .sort(([a], [b]) => a.localeCompare(b));
+  return Object.fromEntries(entries);
+};
+
+const hashString = (input: string) => {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(16);
+};
+
+// Deduplicate styles across nodes into stable tokens (s_0001, s_0002, ...).
+
+const createStyleTokens = (nodes: any[]) => {
+  const tokens: StyleToken[] = [];
+  const nodeStyleRef: Record<string, string> = {};
+  const cache = new Map<string, string>();
+  const tokenMap = new Map<string, StyleToken>();
+  nodes.forEach((n) => {
+    const mergedRaw = { ...(n.style || {}), ...(n.data?.style || {}) };
+    const merged: Record<string, any> = {};
+    for (const [key, value] of Object.entries(mergedRaw)) {
+      if (!STRIP_FROM_TOKENS.has(key)) {
+        merged[key] = value;
+      }
+    }
+
+    const canonical = canonicalizeStyle(merged);
+    const json = JSON.stringify(canonical);
+    const signature = `${hashString(json)}:${json}`;
+
+    let tokenId = cache.get(signature);
+
+    if (!tokenId) {
+      tokenId = `s_${(tokens.length + 1).toString().padStart(4, "0")}`;
+      const token: StyleToken = {
+        id: tokenId,
+        style: canonical,
+        usageCount: 0,
+      };
+      tokens.push(token);
+      cache.set(signature, tokenId);
+      tokenMap.set(tokenId, token);
+    }
+    nodeStyleRef[n.id] = tokenId;
+    const token = tokenMap.get(tokenId);
+    if (token) token.usageCount += 1;
+  });
+  return { styleTokens: tokens, nodeStyleRef };
+};
+
+// Collect all nodes for style tokenization.
+
+const flattenTree = (roots: TreeNode[]) => {
+  const collected: any[] = [];
+  const visit = (tree: TreeNode) => {
+    collected.push(tree.node);
+    tree.children.forEach(visit);
+  };
+  roots.forEach(visit);
+  return collected;
+};
+
+// Walk the tree, attach layout decisions, and produce style tokens.
+const normalizeTree = (roots: TreeNode[]): NormalizationResult => {
+  const diagnostics: NormalizationResult["diagnostics"] = [];
+  const annotate = (tree: TreeNode, parentId?: string) => {
+    const decision = analyzeChildrenLayout(tree.node, tree.children);
+    (tree as NormalizedTreeNode).layoutDecision = decision;
+    (tree.node as any).layoutDecision = decision;
+    diagnostics.push({ nodeId: tree.node.id, parentId, decision });
+    tree.children.forEach((child) => annotate(child, tree.node.id));
+  };
+  roots.forEach((root) => annotate(root));
+
+  const allNodes = flattenTree(roots);
+  const { styleTokens, nodeStyleRef } = createStyleTokens(allNodes);
+  return { normalizedNodes: roots, styleTokens, nodeStyleRef, diagnostics };
+};
+
+// Public entry: normalize a flat node list (page) into all Stage 2 outputs.
+export const normalizePageNodes = (nodes: any[]): NormalizationResult => {
+  const tree = buildTree(nodes || []);
+  return normalizeTree(tree);
+};
+
+/* =========================
    Text Semantics
 ========================= */
 
@@ -163,11 +477,39 @@ const headingForFontSize = (size?: number) => {
   return "p";
 };
 
+// Estimate gap from child geometry to keep structured layouts visually stable.
+const inferGapFromChildren = (mode: LayoutMode, children: TreeNode[]) => {
+  if (!children || children.length < 2) return undefined;
+  const boxes = children.map((c) => computeBBox(c.node));
+  const sorted =
+    mode === "column"
+      ? [...boxes].sort((a, b) => a.top - b.top || a.cx - b.cx)
+      : [...boxes].sort((a, b) => a.left - b.left || a.cy - b.cy);
+  const gaps: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const curr = sorted[i];
+    const next = sorted[i + 1];
+    const gap =
+      mode === "column" ? next.top - curr.bottom : next.left - curr.right;
+    gaps.push(Math.max(0, gap));
+  }
+  if (!gaps.length) return undefined;
+  return roundValue(average(gaps));
+};
+
 /* =========================
    Core JSX Generator
 ========================= */
 
-const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefined, originalLeft: any, originalRight: any, widthHint: number | undefined, frameWidth?: number, node?: any) => {
+const applyHorizontalPositioning = (
+  baseStyle: any,
+  positionX: number | undefined,
+  originalLeft: any,
+  originalRight: any,
+  widthHint: number | undefined,
+  frameWidth?: number,
+  node?: any
+) => {
   // If original right/left exists, use them
   if (originalRight !== undefined) {
     baseStyle.right = originalRight;
@@ -179,9 +521,10 @@ const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefine
     // Calculate distances: left edge vs right edge
     const distanceFromLeft = positionX;
     const distanceFromRight = frameWidth - (positionX + widthHint);
-    
+
     // Debug logging for buttons and shapes
-    if (node.type === 'button' || node.type === 'shape') {
+
+    if (node.type === "button" || node.type === "shape") {
       console.log(`Positioning analysis for ${node.type} (${node.id}):`, {
         positionX,
         widthHint,
@@ -189,10 +532,12 @@ const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefine
         distanceFromLeft,
         distanceFromRight,
         useRight: distanceFromRight < distanceFromLeft,
-        comparison: `${distanceFromRight} < ${distanceFromLeft} = ${distanceFromRight < distanceFromLeft}`
+        comparison: `${distanceFromRight} < ${distanceFromLeft} = ${
+          distanceFromRight < distanceFromLeft
+        }`,
       });
     }
-    
+
     // Use whichever edge is closer
     if (distanceFromRight < distanceFromLeft) {
       baseStyle.right = distanceFromRight;
@@ -201,13 +546,13 @@ const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefine
       baseStyle.left = positionX;
       delete baseStyle.right;
     }
-  } else if (positionX !== undefined && frameWidth && node.type === 'button') {
+  } else if (positionX !== undefined && frameWidth && node.type === "button") {
     // For buttons without explicit width, estimate based on text content
-    const text = node.data?.label || node.data?.text || 'Button';
+    const text = node.data?.label || node.data?.text || "Button";
     const estimatedWidth = Math.max(80, text.length * 8 + 40); // Rough estimate
     const distanceFromLeft = positionX;
     const distanceFromRight = frameWidth - (positionX + estimatedWidth);
-    
+
     console.log(`Button positioning analysis (estimated width):`, {
       nodeId: node.id,
       positionX,
@@ -216,9 +561,12 @@ const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefine
       distanceFromLeft,
       distanceFromRight,
       useRight: distanceFromRight < distanceFromLeft,
-      comparison: `${distanceFromRight} < ${distanceFromLeft} = ${distanceFromRight < distanceFromLeft}`
+
+      comparison: `${distanceFromRight} < ${distanceFromLeft} = ${
+        distanceFromRight < distanceFromLeft
+      }`,
     });
-    
+
     if (distanceFromRight < distanceFromLeft) {
       baseStyle.right = distanceFromRight;
       delete baseStyle.left;
@@ -232,7 +580,12 @@ const applyHorizontalPositioning = (baseStyle: any, positionX: number | undefine
   }
 };
 
-const applyVerticalPositioning = (baseStyle: any, positionY: number | undefined, originalTop: any, originalBottom: any) => {
+const applyVerticalPositioning = (
+  baseStyle: any,
+  positionY: number | undefined,
+  originalTop: any,
+  originalBottom: any
+) => {
   // If original top/bottom exists, use them
   if (originalBottom !== undefined) {
     baseStyle.bottom = originalBottom;
@@ -262,17 +615,66 @@ const resolveColumnCount = (data: any, children: TreeNode[]) => {
 };
 
 const nodeToJSX = (
-  tree: TreeNode,
+  tree: NormalizedTreeNode,
+
   indent = 6,
-  parentType?: string,
-  parentHasAbsolutePos?: boolean,
-  frameWidth?: number
+
+  parentLayoutMode: LayoutMode = "free",
+
+  parentHasAbsolutePos = false,
+
+  frameWidth?: number,
+
+  styleCtx?: {
+    styleTokenMap: Record<string, StyleToken>;
+    nodeStyleRef: Record<string, string>;
+  }
 ): string => {
   const { node, children } = tree;
   const data = node.data || {};
-  const baseStyle: Record<string, any> = {
-    ...(node.style || {}),
-    ...(data.style || {}),
+
+  const layoutDecision = tree.layoutDecision;
+
+  // Only respect structured layout if confidence is high enough; otherwise treat as free/absolute.
+
+  const layoutModeForChildren: LayoutMode =
+    layoutDecision && layoutDecision.confidence >= STRUCTURE_CONFIDENCE
+      ? layoutDecision.mode
+      : "free";
+
+  const tokenId = styleCtx?.nodeStyleRef?.[node.id];
+
+  const tokenStyle = tokenId
+    ? styleCtx?.styleTokenMap?.[tokenId]?.style
+    : undefined;
+
+  const baseStyle: Record<string, any> = tokenStyle
+    ? { ...tokenStyle }
+    : {
+        ...(node.style || {}),
+
+        ...(data.style || {}),
+      };
+
+  const layoutModeIsFree =
+    layoutModeForChildren === "free" || layoutDecision?.mode === "free";
+
+  const stripLayoutPropsForFreeMode = () => {
+    if (!layoutModeIsFree) return;
+
+    delete baseStyle.display;
+
+    delete baseStyle.flexDirection;
+
+    delete baseStyle.gridTemplateColumns;
+
+    delete baseStyle.gridTemplateRows;
+
+    delete baseStyle.gap;
+
+    delete baseStyle.rowGap;
+
+    delete baseStyle.columnGap;
   };
 
   // Capture original positioning values before deletion
@@ -281,12 +683,9 @@ const nodeToJSX = (
   const originalBottom = baseStyle.bottom;
   const originalTop = baseStyle.top;
 
-  // We'll preserve right/bottom positioning - don't delete them yet
-
   // Capture dimensional hints before stripping canvas geometry.
   const widthHint = baseStyle.width ?? data.width;
   const heightHint = baseStyle.height ?? data.height;
-
   const positionX = node.position?.x;
   const positionY = node.position?.y;
 
@@ -298,12 +697,14 @@ const nodeToJSX = (
     baseStyle.left !== undefined ||
     baseStyle.top !== undefined;
 
-  // Remove canvas positioning only if in structured layouts (rows/columns)
+  // Remove canvas positioning only if in structured layouts (row/column/grid)
+
   const inStructuredLayout =
-    parentType === "row" || parentType === "columns" || parentType === "column";
+    parentLayoutMode !== "free" && !parentHasAbsolutePos;
 
   // Handle positioning - export coordinates exactly as-is, no offset subtraction
-  if (inStructuredLayout && !parentHasAbsolutePos) {
+
+  if (inStructuredLayout) {
     // In structured layouts (not inside absolute parents), remove position
     delete baseStyle.position;
     delete baseStyle.left;
@@ -315,11 +716,18 @@ const nodeToJSX = (
   } else if (hasAbsolutePosition) {
     // Absolutely positioned - preserve original positioning (left/right/top/bottom)
     baseStyle.position = "absolute";
-    
     // Apply horizontal positioning with right/left detection
-    applyHorizontalPositioning(baseStyle, positionX, originalLeft, originalRight, widthHint, frameWidth, node);
-    
-    // Apply vertical positioning with top/bottom detection  
+    applyHorizontalPositioning(
+      baseStyle,
+      positionX,
+      originalLeft,
+      originalRight,
+      widthHint,
+      frameWidth,
+      node
+    );
+
+    // Apply vertical positioning with top/bottom detection
     applyVerticalPositioning(baseStyle, positionY, originalTop, originalBottom);
   } else {
     // Default: remove positioning
@@ -342,21 +750,75 @@ const nodeToJSX = (
     delete baseStyle.top;
   }
 
+  const structuredGap =
+    layoutModeForChildren !== "free"
+      ? inferGapFromChildren(
+          layoutModeForChildren === "grid" ? "row" : layoutModeForChildren,
+
+          children
+        )
+      : undefined;
+
   let tag = "div";
   let content = "";
+  let isSelfClosing = false;
+  let imageSrc = "";
+  let imageAlt = "";
 
   switch (node.type) {
     case "page":
     case "frame":
       tag = "section";
       baseStyle.position = "relative";
-      // Only use flex if this frame doesn't contain only absolutely positioned children
-      baseStyle.display ||= "flex";
-      baseStyle.flexDirection ||= "column";
-      baseStyle.gap ||= data.gap ?? 32;
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "row";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 32;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "column";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 32;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display ||= "grid";
+
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
+            data,
+
+            children
+          )}, 1fr)`;
+        }
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 32;
+      } else {
+        baseStyle.display = "block";
+
+        // 🔒 Hard stop: free-layout containers must not carry layout props
+
+        delete baseStyle.gridTemplateColumns;
+
+        delete baseStyle.gridTemplateRows;
+
+        delete baseStyle.flexDirection;
+
+        delete baseStyle.gap;
+
+        delete baseStyle.rowGap;
+
+        delete baseStyle.columnGap;
+      }
+
       baseStyle.margin ||= "0 auto";
-      if (widthHint) baseStyle.width = widthHint;
-      if (heightHint) baseStyle.minHeight = heightHint;
+
+      if (widthHint) baseStyle.width ??= widthHint;
+
+      if (heightHint) baseStyle.minHeight ??= heightHint;
+
       if (data.backgroundColor)
         baseStyle.backgroundColor ||= data.backgroundColor;
       break;
@@ -364,20 +826,42 @@ const nodeToJSX = (
     case "section":
     case "container":
       tag = "section";
-      baseStyle.display ||= "flex";
-      baseStyle.flexDirection ||= "column";
-      baseStyle.gap ||= data.gap ?? 16;
+
       baseStyle.backgroundColor ||= data.backgroundColor ?? "transparent";
       applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "row";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "column";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display ||= "grid";
+
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
+            data,
+
+            children
+          )}, 1fr)`;
+        }
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (!hasAbsolutePosition && !inStructuredLayout) {
+        baseStyle.position ||= "relative";
+      }
       // Only set absolute position on section itself if it's a direct canvas child
       if (hasAbsolutePosition && !inStructuredLayout && !parentHasAbsolutePos) {
         baseStyle.position = "absolute";
         if (widthHint) baseStyle.width = widthHint;
         if (heightHint) baseStyle.height = heightHint;
-      } else if (!inStructuredLayout && !hasAbsolutePosition) {
-        baseStyle.position = "relative";
       }
-      // When this section is absolute and contains absolute children,
+
       // When this section is absolute and contains absolute children,
       // switch from flex to relative positioning so children can use absolute positioning
       if (
@@ -393,7 +877,6 @@ const nodeToJSX = (
           baseStyle.position = "relative";
           baseStyle.display = "block";
           baseStyle.width = "100%";
-          // Set minimum height to contain absolutely positioned children
           baseStyle.minHeight = bounds.height;
           delete baseStyle.flexDirection;
           delete baseStyle.gap;
@@ -405,46 +888,101 @@ const nodeToJSX = (
 
     case "row": {
       tag = "div";
-      // If parent is absolutely positioned, don't use grid - keep relative with absolute children
-      if (parentHasAbsolutePos) {
-        baseStyle.position = "relative";
-        baseStyle.width = "100%";
-        if (heightHint) baseStyle.height = heightHint;
-      } else {
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "row";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "column";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (layoutModeForChildren === "grid") {
         const colCount = resolveColumnCount(data, children);
-        baseStyle.display = "grid";
-        baseStyle.gridTemplateColumns = `repeat(${colCount}, 1fr)`;
-        baseStyle.gap ||= data.gap ?? 24;
-        if (heightHint) baseStyle.minHeight ||= heightHint;
+
+        baseStyle.display ||= "grid";
+
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${colCount}, 1fr)`;
+        }
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (parentHasAbsolutePos) {
+        baseStyle.position = "relative";
+
+        baseStyle.width ||= "100%";
+
+        if (heightHint) baseStyle.height ||= heightHint;
       }
       break;
     }
 
     case "columns": {
       tag = "div";
-      // If parent is absolutely positioned, don't use grid - keep relative with absolute children
-      if (parentHasAbsolutePos) {
-        baseStyle.position = "relative";
-        baseStyle.width = "100%";
-        if (heightHint) baseStyle.height = heightHint;
-      } else {
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "row";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+
+        baseStyle.flexDirection ||= "column";
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (layoutModeForChildren === "grid") {
         const cols = resolveColumnCount(data, children);
-        baseStyle.display = "grid";
-        baseStyle.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        baseStyle.gap ||= data.gap ?? 24;
+
+        baseStyle.display ||= "grid";
+
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${cols}, 1fr)`;
+        }
+
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
+      } else if (parentHasAbsolutePos) {
+        baseStyle.position = "relative";
+
+        baseStyle.width ||= "100%";
+
+        if (heightHint) baseStyle.height ||= heightHint;
       }
+
       break;
     }
 
     case "column":
       tag = "div";
-      // If parent is absolutely positioned, don't use flex - keep relative with absolute children
-      if (parentHasAbsolutePos) {
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "row";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "column";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display ||= "grid";
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
+            data,
+            children
+          )}, 1fr)`;
+        }
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (parentHasAbsolutePos) {
         baseStyle.position = "relative";
-        baseStyle.width = "100%";
+        baseStyle.width ||= "100%";
       } else {
-        baseStyle.display = "flex";
-        baseStyle.flexDirection = "column";
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "column";
         baseStyle.gap ||= data.gap ?? 16;
         if (widthHint) baseStyle.maxWidth ||= widthHint;
       }
@@ -458,7 +996,7 @@ const nodeToJSX = (
       baseStyle.fontWeight ||= data.fontWeight;
       baseStyle.lineHeight ||= data.lineHeight;
       baseStyle.textAlign ||= data.textAlign;
-      // Text should be absolutely positioned if it has position data
+
       if (hasAbsolutePosition) {
         baseStyle.position = "absolute";
         if (positionX !== undefined) baseStyle.left = positionX;
@@ -474,19 +1012,30 @@ const nodeToJSX = (
       baseStyle.backgroundColor ||= "#3b82f6";
       baseStyle.color ||= "#ffffff";
       baseStyle.border ||= "none";
-      baseStyle.margin = "0"; // Remove default button margin
-      baseStyle.outline = "none"; // Remove focus outline
-      baseStyle.verticalAlign = "top"; // Prevent baseline alignment gaps
+      baseStyle.margin = "0";
+      baseStyle.outline = "none";
+      baseStyle.verticalAlign = "top";
+
       applyCornerRadius(baseStyle, data.borderRadius ?? data.radius ?? 8);
       baseStyle.padding ||= "12px 20px";
       baseStyle.fontWeight ||= 700;
       baseStyle.cursor = "pointer";
-      baseStyle.userSelect = "none"; // Prevent text selection
-      // Buttons should be absolutely positioned if they have position data
+
+      baseStyle.userSelect = "none";
+
       if (hasAbsolutePosition) {
         baseStyle.position = "absolute";
-        // Apply the same right/left logic for buttons
-        applyHorizontalPositioning(baseStyle, positionX, originalLeft, originalRight, widthHint, frameWidth, node);
+
+        applyHorizontalPositioning(
+          baseStyle,
+          positionX,
+          originalLeft,
+          originalRight,
+          widthHint,
+          frameWidth,
+          node
+        );
+
         if (positionY !== undefined) baseStyle.top = positionY;
         baseStyle.display = "block";
         if (widthHint) baseStyle.width = widthHint;
@@ -498,6 +1047,9 @@ const nodeToJSX = (
 
     case "image":
       tag = "img";
+      isSelfClosing = true;
+      imageSrc = data.src || "";
+      imageAlt = data.alt || "";
       baseStyle.display ||= "block";
       if (widthHint) baseStyle.width = widthHint;
       if (heightHint) baseStyle.height = heightHint;
@@ -506,11 +1058,7 @@ const nodeToJSX = (
         if (positionX !== undefined) baseStyle.left = positionX;
         if (positionY !== undefined) baseStyle.top = positionY;
       }
-      return `${" ".repeat(indent)}<img${styleToPropString(
-        baseStyle
-      )} src={${JSON.stringify(data.src || "")}} alt={${JSON.stringify(
-        data.alt || ""
-      )}} />`;
+      break;
 
     case "spacer":
       tag = "div";
@@ -521,33 +1069,75 @@ const nodeToJSX = (
       if (data.semantic === false) return "";
       tag = "div";
       baseStyle.backgroundColor ||= data.backgroundColor ?? "#3b82f6";
-      // Preserve exact border radius: per-corner or uniform, never infer
       const shapeRadius = data.borderRadius ?? data.radius;
       if (shapeRadius !== undefined) {
         applyCornerRadius(baseStyle, shapeRadius);
       }
       if (widthHint) baseStyle.width = widthHint;
       if (heightHint) baseStyle.height = heightHint;
-      // Shapes should always be absolutely positioned if they have position data
       if (hasAbsolutePosition) {
         baseStyle.position = "absolute";
-        // Apply the same right/left logic for shapes
-        applyHorizontalPositioning(baseStyle, positionX, originalLeft, originalRight, widthHint, frameWidth, node);
+
+        applyHorizontalPositioning(
+          baseStyle,
+          positionX,
+          originalLeft,
+          originalRight,
+          widthHint,
+          frameWidth,
+          node
+        );
+
         if (positionY !== undefined) baseStyle.top = positionY;
       }
       break;
 
     default:
       tag = "div";
-      baseStyle.display ||= "flex";
-      baseStyle.flexDirection ||= "column";
-      baseStyle.gap ||= data.gap ?? 12;
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "row";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 12;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "column";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 12;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display ||= "grid";
+
+        if (layoutModeForChildren === "grid") {
+          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
+            data,
+            children
+          )}, 1fr)`;
+        }
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 12;
+      } else {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "column";
+        baseStyle.gap ||= data.gap ?? 12;
+      }
   }
+  stripLayoutPropsForFreeMode();
 
   const indentStr = " ".repeat(indent);
+  if (isSelfClosing) {
+    return `${indentStr}<img${styleToPropString(
+      baseStyle
+    )} src={${JSON.stringify(imageSrc)}} alt={${JSON.stringify(imageAlt)}} />`;
+  }
+
   const childrenJSX = children
     .map((c) =>
-      nodeToJSX(c, indent + 2, node.type, hasAbsolutePosition, frameWidth)
+      nodeToJSX(
+        c as NormalizedTreeNode,
+        indent + 2,
+        layoutModeForChildren,
+        hasAbsolutePosition,
+        frameWidth,
+        styleCtx
+      )
     )
     .filter(Boolean)
     .join("\n");
@@ -566,7 +1156,21 @@ ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
    Page Generator
 ========================= */
 
-const generatePageTSX = (tree: TreeNode[]) => {
+const generatePageTSX = (normalized: NormalizationResult) => {
+  const tree = normalized.normalizedNodes as NormalizedTreeNode[];
+
+  const styleTokenMap = normalized.styleTokens.reduce<
+    Record<string, StyleToken>
+  >(
+    (acc, token) => {
+      acc[token.id] = token;
+
+      return acc;
+    },
+
+    {}
+  );
+
   const globalCss = `
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif; }
@@ -596,10 +1200,22 @@ body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Se
   const body =
     tree.length === 0
       ? "        <section><p>Empty export</p></section>"
-      : tree.map((n) => {
-          const frameWidth = rootData.width ?? rootData.frameWidth ?? rootStyle.width ?? 1280;
-          return nodeToJSX(n, 10, undefined, false, frameWidth);
-        }).join("\n");
+      : tree
+          .map((n) => {
+            const frameWidth =
+              rootData.width ?? rootData.frameWidth ?? rootStyle.width ?? 1280;
+
+            // nodeToJSX consumes layout decisions + style tokens to decide structured vs absolute output.
+            return nodeToJSX(
+              n as NormalizedTreeNode,
+              10,
+              "free",
+              false,
+              frameWidth,
+              { styleTokenMap, nodeStyleRef: normalized.nodeStyleRef }
+            );
+          })
+          .join("\n");
 
   return `export default function Page() {
   return (
@@ -636,8 +1252,11 @@ export async function exportNextJSZip(site: SiteSchema) {
   const page =
     site.pages.find((p) => p.id === site.activePageId) || site.pages[0];
 
+  // Stage 2 normalize before generating JSX so we can honor safe layouts and shared styles.
   const tree = page ? buildTree(page.nodes || []) : [];
-  zip.file("export-nextjs/app/page.tsx", generatePageTSX(tree));
+  const normalized = normalizeTree(tree);
+
+  zip.file("export-nextjs/app/page.tsx", generatePageTSX(normalized));
 
   const blob = await zip.generateAsync({ type: "blob" });
   const a = document.createElement("a");
