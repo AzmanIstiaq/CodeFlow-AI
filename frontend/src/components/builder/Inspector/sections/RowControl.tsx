@@ -133,8 +133,10 @@ export default function RowControl({
                           }
                           style={{
                             flex: "1 1 40px",
-                            background: rowColumns === count ? "#eff6ff" : "#ffffff",
-                            borderColor: rowColumns === count ? "#3b82f6" : "#e5e7eb",
+                            background:
+                              rowColumns === count ? "#eff6ff" : "#ffffff",
+                            borderColor:
+                              rowColumns === count ? "#3b82f6" : "#e5e7eb",
                             color: rowColumns === count ? "#3b82f6" : "#374151",
                           }}
                         >

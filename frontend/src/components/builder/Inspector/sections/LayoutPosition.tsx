@@ -36,6 +36,10 @@ export default function LayoutPosition({
   const [aspectLocked, setAspectLocked] = useState(false);
   const isMultiSelect = selectedNodes.length > 1;
   const node = selectedNodes[0];
+  const positionMode = node?.data?.positionMode || "absolute";
+  const isFlow = positionMode === "flow";
+
+  if (node.type === "section" || node.type === "row") return null;
 
   if (!node) return null;
 
@@ -71,7 +75,10 @@ export default function LayoutPosition({
   /**
    * Apply updates to position or size, handling multi-selection and aspect lock.
    */
-  const handleChange = (field: "x" | "y" | "width" | "height", value: number) => {
+  const handleChange = (
+    field: "x" | "y" | "width" | "height",
+    value: number
+  ) => {
     if (isMultiSelect) {
       const updates: any = {};
 
@@ -123,18 +130,62 @@ export default function LayoutPosition({
     <div className="inspector-section inspector-section-open">
       <div className="inspector-section-title">Layout & Position</div>
       <div className="inspector-section-content">
+        <div className="inspector-field">
+          <label>Layout Mode</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="inspector-button"
+              style={{
+                background: isFlow ? "#eff6ff" : "#ffffff",
+                borderColor: isFlow ? "#3b82f6" : "#e5e7eb",
+                color: isFlow ? "#3b82f6" : "#374151",
+              }}
+              onClick={() =>
+                updateNode(node.id, {
+                  positionMode: "flow",
+                  position: { x: 0, y: 0 }, // ignored later
+                })
+              }
+            >
+              Flow
+            </button>
+
+            <button
+              className="inspector-button"
+              style={{
+                background: !isFlow ? "#eff6ff" : "#ffffff",
+                borderColor: !isFlow ? "#3b82f6" : "#e5e7eb",
+                color: !isFlow ? "#3b82f6" : "#374151",
+              }}
+              onClick={() =>
+                updateNode(node.id, {
+                  positionMode: "absolute",
+                })
+              }
+            >
+              Absolute
+            </button>
+          </div>
+
+          {isFlow && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+              This element follows row & column layout
+            </div>
+          )}
+        </div>
+
         <div className="inspector-inline-row">
           <InlineNumberInput
             label="X"
             value={x}
             onChange={(v) => handleChange("x", v)}
-            disabled={isMultiSelect && x === "mixed"}
+            disabled={isFlow || (isMultiSelect && x === "mixed")}
           />
           <InlineNumberInput
             label="Y"
             value={y}
             onChange={(v) => handleChange("y", v)}
-            disabled={isMultiSelect && y === "mixed"}
+            disabled={isFlow || (isMultiSelect && y === "mixed")}
           />
         </div>
 

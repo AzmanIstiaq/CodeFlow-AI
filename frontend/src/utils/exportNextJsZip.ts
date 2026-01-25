@@ -85,35 +85,6 @@ const styleToPropString = (style: Record<string, any>) => {
   return entries.length ? ` style={{ ${entries.join(", ")} }}` : "";
 };
 
-const calculateChildrenBounds = (nodes: any[]) => {
-  if (nodes.length === 0) return null;
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-
-  nodes.forEach((n) => {
-    const x = n.position?.x ?? 0;
-    const y = n.position?.y ?? 0;
-    const w = n.style?.width ?? n.data?.width ?? 100;
-    const h = n.style?.height ?? n.data?.height ?? 100;
-
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + w);
-    maxY = Math.max(maxY, y + h);
-  });
-
-  return minX === Infinity
-    ? null
-    : {
-        width: maxX - minX,
-        height: maxY - minY,
-        offsetX: minX,
-        offsetY: minY,
-      };
-};
-
 const applyCornerRadius = (target: Record<string, any>, radius: any) => {
   if (radius === undefined || radius === null) return;
 
@@ -285,6 +256,37 @@ const analyzeChildrenLayout = (
   _parent: any,
   children: TreeNode[]
 ): LayoutDecision => {
+  const hasExplicitFreeChildren = children.some(
+    (c) => c.node.data?.layout === "free"
+  );
+
+  if (hasExplicitFreeChildren) {
+    return {
+      mode: "free",
+      confidence: 1,
+      reasons: ["explicit-free-layout"],
+    };
+  }
+
+  const hasManualPositioning = children.some((c) => {
+    const s = c.node.style || {};
+    return (
+      s.position === "absolute" ||
+      s.left !== undefined ||
+      s.right !== undefined ||
+      s.top !== undefined ||
+      s.bottom !== undefined
+    );
+  });
+
+  if (hasManualPositioning) {
+    return {
+      mode: "free",
+      confidence: 1,
+      reasons: ["manual-positioning"],
+    };
+  }
+
   if (!children.length) {
     return { mode: "free", confidence: 1, reasons: ["no-children"] };
   }
@@ -293,6 +295,17 @@ const analyzeChildrenLayout = (
     id: c.node.id,
     box: computeBBox(c.node),
   }));
+
+  const spreadX =
+    Math.max(...boxes.map((b) => b.box.right)) -
+    Math.min(...boxes.map((b) => b.box.left));
+  const spreadY =
+    Math.max(...boxes.map((b) => b.box.bottom)) -
+    Math.min(...boxes.map((b) => b.box.top));
+
+  if (spreadX > 600 || spreadY > 600) {
+    return { mode: "free", confidence: 1, reasons: ["canvas-spread"] };
+  }
 
   for (let i = 0; i < boxes.length; i += 1) {
     for (let j = i + 1; j < boxes.length; j += 1) {
@@ -313,7 +326,8 @@ const analyzeChildrenLayout = (
 
   let candidate: LayoutMode | null = null;
   if (rowAligned) candidate = "row";
-  if (colAligned) candidate = candidate ? "grid" : "column";
+  if (colAligned && children.length > 2)
+    candidate = candidate ? "grid" : "column";
   if (!candidate) {
     return { mode: "free", confidence: 0.6, reasons: ["no-axis-alignment"] };
   }
@@ -441,7 +455,9 @@ const flattenTree = (roots: TreeNode[]) => {
   return collected;
 };
 
-// Walk the tree, attach layout decisions, and produce style tokens.
+// Stage 2 normalization: attach layout decisions + shared style tokens ahead of export.
+// Baking these choices here keeps the generated Next.js page free of layout heuristics at runtime.
+// Diagnostics capture the confidence trail so downstream tooling can surface potential drift.
 const normalizeTree = (roots: TreeNode[]): NormalizationResult => {
   const diagnostics: NormalizationResult["diagnostics"] = [];
   const annotate = (tree: TreeNode, parentId?: string) => {
@@ -503,13 +519,13 @@ const inferGapFromChildren = (mode: LayoutMode, children: TreeNode[]) => {
 
 const applyHorizontalPositioning = (
   baseStyle: any,
-  positionX: number | undefined,
+  relativeX: number | undefined,
   originalLeft: any,
   originalRight: any,
   widthHint: number | undefined,
   frameWidth?: number,
   node?: any
-) => {
+): void => {
   // If original right/left exists, use them
   if (originalRight !== undefined) {
     baseStyle.right = originalRight;
@@ -517,72 +533,42 @@ const applyHorizontalPositioning = (
   } else if (originalLeft !== undefined) {
     baseStyle.left = originalLeft;
     delete baseStyle.right;
-  } else if (positionX !== undefined && frameWidth && widthHint) {
+  } else if (relativeX !== undefined && frameWidth && widthHint) {
     // Calculate distances: left edge vs right edge
-    const distanceFromLeft = positionX;
-    const distanceFromRight = frameWidth - (positionX + widthHint);
-
-    // Debug logging for buttons and shapes
-
-    if (node.type === "button" || node.type === "shape") {
-      console.log(`Positioning analysis for ${node.type} (${node.id}):`, {
-        positionX,
-        widthHint,
-        frameWidth,
-        distanceFromLeft,
-        distanceFromRight,
-        useRight: distanceFromRight < distanceFromLeft,
-        comparison: `${distanceFromRight} < ${distanceFromLeft} = ${
-          distanceFromRight < distanceFromLeft
-        }`,
-      });
-    }
+    const distanceFromLeft = relativeX;
+    const distanceFromRight = frameWidth - (relativeX + widthHint);
 
     // Use whichever edge is closer
     if (distanceFromRight < distanceFromLeft) {
       baseStyle.right = distanceFromRight;
       delete baseStyle.left;
     } else {
-      baseStyle.left = positionX;
+      baseStyle.left = relativeX;
       delete baseStyle.right;
     }
-  } else if (positionX !== undefined && frameWidth && node.type === "button") {
+  } else if (relativeX !== undefined && frameWidth && node.type === "button") {
     // For buttons without explicit width, estimate based on text content
     const text = node.data?.label || node.data?.text || "Button";
     const estimatedWidth = Math.max(80, text.length * 8 + 40); // Rough estimate
-    const distanceFromLeft = positionX;
-    const distanceFromRight = frameWidth - (positionX + estimatedWidth);
-
-    console.log(`Button positioning analysis (estimated width):`, {
-      nodeId: node.id,
-      positionX,
-      estimatedWidth,
-      frameWidth,
-      distanceFromLeft,
-      distanceFromRight,
-      useRight: distanceFromRight < distanceFromLeft,
-
-      comparison: `${distanceFromRight} < ${distanceFromLeft} = ${
-        distanceFromRight < distanceFromLeft
-      }`,
-    });
+    const distanceFromLeft = relativeX;
+    const distanceFromRight = frameWidth - (relativeX + estimatedWidth);
 
     if (distanceFromRight < distanceFromLeft) {
       baseStyle.right = distanceFromRight;
       delete baseStyle.left;
     } else {
-      baseStyle.left = positionX;
+      baseStyle.left = relativeX;
       delete baseStyle.right;
     }
-  } else if (positionX !== undefined) {
-    baseStyle.left = positionX;
+  } else if (relativeX !== undefined) {
+    baseStyle.left = relativeX;
     delete baseStyle.right;
   }
 };
 
 const applyVerticalPositioning = (
   baseStyle: any,
-  positionY: number | undefined,
+  relativeY: number | undefined,
   originalTop: any,
   originalBottom: any
 ) => {
@@ -593,8 +579,8 @@ const applyVerticalPositioning = (
   } else if (originalTop !== undefined) {
     baseStyle.top = originalTop;
     delete baseStyle.bottom;
-  } else if (positionY !== undefined) {
-    baseStyle.top = positionY;
+  } else if (relativeY !== undefined) {
+    baseStyle.top = relativeY;
     delete baseStyle.bottom;
   }
 };
@@ -614,6 +600,9 @@ const resolveColumnCount = (data: any, children: TreeNode[]) => {
   return typeof colCount === "number" ? colCount : 1;
 };
 
+// Render a normalized tree node into static JSX while respecting flow vs absolute layout intent.
+// LayoutMode steers flex/grid wrapping so the exported page avoids recomputing structure at runtime.
+// Assumes upstream normalization baked in positions/styles; this layer only formats safe markup.
 const nodeToJSX = (
   tree: NormalizedTreeNode,
 
@@ -628,7 +617,8 @@ const nodeToJSX = (
   styleCtx?: {
     styleTokenMap: Record<string, StyleToken>;
     nodeStyleRef: Record<string, string>;
-  }
+  },
+  parentPosition?: { x?: number; y?: number }
 ): string => {
   const { node, children } = tree;
   const data = node.data || {};
@@ -661,19 +651,12 @@ const nodeToJSX = (
 
   const stripLayoutPropsForFreeMode = () => {
     if (!layoutModeIsFree) return;
-
     delete baseStyle.display;
-
     delete baseStyle.flexDirection;
-
     delete baseStyle.gridTemplateColumns;
-
     delete baseStyle.gridTemplateRows;
-
     delete baseStyle.gap;
-
     delete baseStyle.rowGap;
-
     delete baseStyle.columnGap;
   };
 
@@ -689,21 +672,30 @@ const nodeToJSX = (
   const positionX = node.position?.x;
   const positionY = node.position?.y;
 
-  // Check if THIS node is absolutely positioned in canvas
-  const hasAbsolutePosition =
-    node.position?.x !== undefined ||
-    node.position?.y !== undefined ||
-    baseStyle.position === "absolute" ||
-    baseStyle.left !== undefined ||
-    baseStyle.top !== undefined;
+  const parentX = parentHasAbsolutePos ? (parentPosition?.x ?? 0) : 0;
+  const parentY = parentHasAbsolutePos ? (parentPosition?.y ?? 0) : 0;
+
+  const relativeX =
+    typeof positionX === "number" ? positionX - parentX : undefined;
+  const relativeY =
+    typeof positionY === "number" ? positionY - parentY : undefined;
 
   // Remove canvas positioning only if in structured layouts (row/column/grid)
-
   const inStructuredLayout =
     parentLayoutMode !== "free" && !parentHasAbsolutePos;
 
-  // Handle positioning - export coordinates exactly as-is, no offset subtraction
+  //ReactFlow always has position; absolute export only when in free layout or explicitly absolute
+  const isLeafNode =
+    !children.length ||
+    ["button", "text", "image", "shape"].includes(node.type);
 
+  const shouldExportAsAbsolute =
+    isLeafNode &&
+    parentLayoutMode === "free" &&
+    typeof positionX === "number" &&
+    typeof positionY === "number";
+
+  // Handle positioning - export coordinates exactly as-is, no offset subtraction
   if (inStructuredLayout) {
     // In structured layouts (not inside absolute parents), remove position
     delete baseStyle.position;
@@ -713,13 +705,14 @@ const nodeToJSX = (
     delete baseStyle.bottom;
     delete baseStyle.x;
     delete baseStyle.y;
-  } else if (hasAbsolutePosition) {
+  } else if (shouldExportAsAbsolute) {
     // Absolutely positioned - preserve original positioning (left/right/top/bottom)
     baseStyle.position = "absolute";
+
     // Apply horizontal positioning with right/left detection
     applyHorizontalPositioning(
       baseStyle,
-      positionX,
+      relativeX,
       originalLeft,
       originalRight,
       widthHint,
@@ -728,7 +721,7 @@ const nodeToJSX = (
     );
 
     // Apply vertical positioning with top/bottom detection
-    applyVerticalPositioning(baseStyle, positionY, originalTop, originalBottom);
+    applyVerticalPositioning(baseStyle, relativeY, originalTop, originalBottom);
   } else {
     // Default: remove positioning
     delete baseStyle.position;
@@ -769,7 +762,7 @@ const nodeToJSX = (
     case "page":
     case "frame":
       tag = "section";
-      baseStyle.position = "relative";
+      // baseStyle.position = "relative";
 
       if (layoutModeForChildren === "row") {
         baseStyle.display ||= "flex";
@@ -827,62 +820,63 @@ const nodeToJSX = (
     case "container":
       tag = "section";
 
+      const hasAbsoluteChildren = children.some((c) => {
+        const s = c.node.style || {};
+        return (
+          s.position === "absolute" ||
+          s.left !== undefined ||
+          s.right !== undefined ||
+          s.top !== undefined ||
+          s.bottom !== undefined
+        );
+      });
+
+      if (hasAbsoluteChildren) {
+        baseStyle.position = "relative";
+        baseStyle.display = "block";
+
+        // 🔒 CRITICAL: kill layout systems
+        delete baseStyle.flexDirection;
+        delete baseStyle.gridTemplateColumns;
+        delete baseStyle.gridTemplateRows;
+        delete baseStyle.gap;
+        delete baseStyle.rowGap;
+        delete baseStyle.columnGap;
+      }
+
       baseStyle.backgroundColor ||= data.backgroundColor ?? "transparent";
       applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
-      if (layoutModeForChildren === "row") {
-        baseStyle.display ||= "flex";
-
-        baseStyle.flexDirection ||= "row";
-
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (layoutModeForChildren === "column") {
-        baseStyle.display ||= "flex";
-
-        baseStyle.flexDirection ||= "column";
-
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (layoutModeForChildren === "grid") {
-        baseStyle.display ||= "grid";
-
-        if (layoutModeForChildren === "grid") {
+      if (!hasAbsoluteChildren) {
+        if (layoutModeForChildren === "row") {
+          baseStyle.display ||= "flex";
+          baseStyle.flexDirection ||= "row";
+          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+        } else if (layoutModeForChildren === "column") {
+          baseStyle.display ||= "flex";
+          baseStyle.flexDirection ||= "column";
+          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+        } else if (layoutModeForChildren === "grid") {
+          baseStyle.display ||= "grid";
           baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
             data,
-
             children
           )}, 1fr)`;
+          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+        } else if (!shouldExportAsAbsolute && !inStructuredLayout) {
+          baseStyle.position ||= "relative";
         }
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (!hasAbsolutePosition && !inStructuredLayout) {
+      } else if (!shouldExportAsAbsolute && !inStructuredLayout) {
         baseStyle.position ||= "relative";
       }
       // Only set absolute position on section itself if it's a direct canvas child
-      if (hasAbsolutePosition && !inStructuredLayout && !parentHasAbsolutePos) {
+      if (
+        shouldExportAsAbsolute &&
+        !inStructuredLayout &&
+        !parentHasAbsolutePos
+      ) {
         baseStyle.position = "absolute";
         if (widthHint) baseStyle.width = widthHint;
         if (heightHint) baseStyle.height = heightHint;
-      }
-
-      // When this section is absolute and contains absolute children,
-      // switch from flex to relative positioning so children can use absolute positioning
-      if (
-        hasAbsolutePosition &&
-        children.some((c) => {
-          return (
-            c.node.position?.x !== undefined || c.node.position?.y !== undefined
-          );
-        })
-      ) {
-        const bounds = calculateChildrenBounds(children.map((c) => c.node));
-        if (bounds) {
-          baseStyle.position = "relative";
-          baseStyle.display = "block";
-          baseStyle.width = "100%";
-          baseStyle.minHeight = bounds.height;
-          delete baseStyle.flexDirection;
-          delete baseStyle.gap;
-          delete baseStyle.left;
-          delete baseStyle.top;
-        }
       }
       break;
 
@@ -997,10 +991,10 @@ const nodeToJSX = (
       baseStyle.lineHeight ||= data.lineHeight;
       baseStyle.textAlign ||= data.textAlign;
 
-      if (hasAbsolutePosition) {
+      if (shouldExportAsAbsolute) {
         baseStyle.position = "absolute";
-        if (positionX !== undefined) baseStyle.left = positionX;
-        if (positionY !== undefined) baseStyle.top = positionY;
+        if (relativeX !== undefined) baseStyle.left = relativeX;
+        if (relativeY !== undefined) baseStyle.top = relativeY;
         if (widthHint) baseStyle.width = widthHint;
         if (heightHint) baseStyle.height = heightHint;
       }
@@ -1023,12 +1017,12 @@ const nodeToJSX = (
 
       baseStyle.userSelect = "none";
 
-      if (hasAbsolutePosition) {
+      if (shouldExportAsAbsolute) {
         baseStyle.position = "absolute";
 
         applyHorizontalPositioning(
           baseStyle,
-          positionX,
+          relativeX,
           originalLeft,
           originalRight,
           widthHint,
@@ -1036,7 +1030,7 @@ const nodeToJSX = (
           node
         );
 
-        if (positionY !== undefined) baseStyle.top = positionY;
+        if (relativeY !== undefined) baseStyle.top = relativeY;
         baseStyle.display = "block";
         if (widthHint) baseStyle.width = widthHint;
         if (heightHint) baseStyle.height = heightHint;
@@ -1053,10 +1047,10 @@ const nodeToJSX = (
       baseStyle.display ||= "block";
       if (widthHint) baseStyle.width = widthHint;
       if (heightHint) baseStyle.height = heightHint;
-      if (hasAbsolutePosition) {
+      if (shouldExportAsAbsolute) {
         baseStyle.position = "absolute";
-        if (positionX !== undefined) baseStyle.left = positionX;
-        if (positionY !== undefined) baseStyle.top = positionY;
+        if (relativeX !== undefined) baseStyle.left = relativeX;
+        if (relativeY !== undefined) baseStyle.top = relativeY;
       }
       break;
 
@@ -1075,12 +1069,12 @@ const nodeToJSX = (
       }
       if (widthHint) baseStyle.width = widthHint;
       if (heightHint) baseStyle.height = heightHint;
-      if (hasAbsolutePosition) {
+      if (shouldExportAsAbsolute) {
         baseStyle.position = "absolute";
 
         applyHorizontalPositioning(
           baseStyle,
-          positionX,
+          relativeX,
           originalLeft,
           originalRight,
           widthHint,
@@ -1088,7 +1082,7 @@ const nodeToJSX = (
           node
         );
 
-        if (positionY !== undefined) baseStyle.top = positionY;
+        if (relativeY !== undefined) baseStyle.top = relativeY;
       }
       break;
 
@@ -1119,7 +1113,23 @@ const nodeToJSX = (
         baseStyle.gap ||= data.gap ?? 12;
       }
   }
-  stripLayoutPropsForFreeMode();
+
+  const isAbsoluteFrame =
+    baseStyle.position === "relative" &&
+    children.some((c) => {
+      const s = c.node.style || {};
+      return (
+        s.position === "absolute" ||
+        s.left !== undefined ||
+        s.right !== undefined ||
+        s.top !== undefined ||
+        s.bottom !== undefined
+      );
+    });
+
+  if (!isAbsoluteFrame && layoutModeForChildren === "free") {
+    stripLayoutPropsForFreeMode();
+  }
 
   const indentStr = " ".repeat(indent);
   if (isSelfClosing) {
@@ -1128,15 +1138,23 @@ const nodeToJSX = (
     )} src={${JSON.stringify(imageSrc)}} alt={${JSON.stringify(imageAlt)}} />`;
   }
 
+  const effectiveFrameWidth =
+    typeof baseStyle.width === "number"
+      ? baseStyle.width
+      : typeof widthHint === "number"
+        ? widthHint
+        : frameWidth;
+
   const childrenJSX = children
     .map((c) =>
       nodeToJSX(
         c as NormalizedTreeNode,
         indent + 2,
         layoutModeForChildren,
-        hasAbsolutePosition,
-        frameWidth,
-        styleCtx
+        baseStyle.position === "absolute",
+        effectiveFrameWidth,
+        styleCtx,
+        { x: positionX ?? 0, y: positionY ?? 0 }
       )
     )
     .filter(Boolean)
@@ -1156,6 +1174,9 @@ ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
    Page Generator
 ========================= */
 
+// Compose a Next.js page using normalized layout choices and deduped style tokens.
+// All positioning is baked into markup/CSS to keep the exported app deterministic at runtime.
+// Main/shell wrappers mirror the builder canvas bounds without re-running layout math in the client.
 const generatePageTSX = (normalized: NormalizationResult) => {
   const tree = normalized.normalizedNodes as NormalizedTreeNode[];
 
@@ -1236,6 +1257,9 @@ ${body}
    ZIP EXPORT
 ========================= */
 
+// Export pipeline: copy the scaffold, normalize the active page, emit static page.tsx, then download.
+// Keeps builder-only state out of the bundle so the exported app never reruns layout heuristics.
+// Relies on the normalization stage for deterministic HTML/CSS across repeated exports.
 export async function exportNextJSZip(site: SiteSchema) {
   const zip = new JSZip();
 

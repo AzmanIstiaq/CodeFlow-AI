@@ -91,7 +91,7 @@ const MODE: "workflow" | "builder" = "builder";
 // ===== NODE TYPE REGISTRY =====
 // Maps node type strings to React components
 // Defined outside component to preserve referential equality across renders
-// â Static nodeTypes - defined ONCE outside component (referential equality preserved)
+// Static nodeTypes - defined ONCE outside component (referential equality preserved)
 const nodeTypes: NodeTypes = {
   start: StartNode,
   ai: AINode,
@@ -146,6 +146,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         padding: 16,
         borderRadius: 0,
         border: "none",
+        positionMode: "flow",
       };
     case "button":
       return {
@@ -155,6 +156,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         borderRadius: 8,
         opacity: 1,
         rotation: 0,
+        positionMode: "flow",
       };
     case "image":
       return {
@@ -166,6 +168,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         opacity: 1,
         rotation: 0,
         objectFit: "cover",
+        positionMode: "flow",
       };
     case "container":
       return {
@@ -182,6 +185,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         justifyContent: "flex-start",
         alignItems: "flex-start",
         gap: 12,
+        positionMode: "flow",
       };
     case "shape":
       return {
@@ -192,6 +196,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         borderRadius: 0,
         opacity: 1,
         rotation: 0,
+        positionMode: "flow",
       };
     case "formInput":
       return {
@@ -201,6 +206,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         fontSize: 14,
         padding: 10,
         required: false,
+        positionMode: "flow",
       };
     case "formTextarea":
       return {
@@ -211,6 +217,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         padding: 10,
         required: false,
         rows: 4,
+        positionMode: "flow",
       };
     case "section":
       return {
@@ -220,6 +227,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         align: "start",
         maxWidth: 1200,
         backgroundColor: "#000000",
+        positionMode: "flow",
       };
     default:
       return { label };
@@ -297,7 +305,9 @@ export default function PageBuilderInner() {
     handlePageRename,
   } = useSiteState(id);
 
-  // Normalize zIndex on every node update to keep rows below content.
+  // Centralized node setter keeps z-index canonical so rows/sections sit beneath content.
+  // This wrapper ensures every hook mutation flows through the same layering guardrail.
+  // Column extent + flow math expect normalized order, so avoid bypassing this setter.
   const setNodesNormalized = (updater: any) => {
     setNodes((nds: any) => {
       const next = typeof updater === "function" ? updater(nds) : updater;
@@ -310,6 +320,8 @@ export default function PageBuilderInner() {
 
   const {
     registerColumnRect,
+    addNodeToColumn,
+    removeNodeFromColumn,
     handleMoveEnd,
     handleNodeDrag,
     handleNodeDragStop,
@@ -328,6 +340,8 @@ export default function PageBuilderInner() {
   );
 
   const handleExportNextJSZip = () => {
+    // Export uses the static Next.js scaffold so layout math stays precomputed at build time.
+    // Keep this call thin to avoid touching canvas state while the archive is generated.
     exportNextJSZip(site as any);
   };
 
@@ -345,8 +359,7 @@ export default function PageBuilderInner() {
     setGridSnap,
   } = useSmartGuides(nodes, reactFlowInstance);
 
-  // Track currently dragging node for snapping
-  const draggingNodeRef = useRef<ReactFlowNode | null>(null);
+  const prevPositionModeRef = useRef(new Map<string, string>());
 
   // Handle override key (Ctrl/Cmd) for free movement
   useEffect(() => {
@@ -431,14 +444,77 @@ export default function PageBuilderInner() {
     reactFlowInstance,
   });
 
+  // Reconcile mode transitions between absolute and flow layouts.
+  useEffect(() => {
+    const prev = prevPositionModeRef.current;
+
+    nodes.forEach((n: any) => {
+      if (!n || n.type === "section" || n.type === "row") return;
+      const currentMode = n.data?.positionMode ?? "absolute";
+      const prevMode = prev.get(n.id);
+
+      if (
+        prevMode === undefined &&
+        currentMode === "flow" &&
+        n.data?._ownedByColumn !== undefined &&
+        n.data?._columnIndex !== undefined
+      ) {
+        prev.set(n.id, currentMode);
+        return;
+      }
+
+      if (prevMode === currentMode) {
+        return;
+      }
+
+      if (currentMode === "flow") {
+        if (
+          n.data?._ownedByColumn !== undefined &&
+          n.data?._columnIndex !== undefined
+        ) {
+          prev.set(n.id, currentMode);
+          return;
+        }
+
+        const absX = n.positionAbsolute?.x ?? n.position?.x;
+        const absY = n.positionAbsolute?.y ?? n.position?.y;
+        const width =
+          (n.style?.width as number | undefined) ??
+          (n.width as number | undefined) ??
+          (n.data?.width as number | undefined) ??
+          0;
+        const height =
+          (n.style?.height as number | undefined) ??
+          (n.height as number | undefined) ??
+          (n.data?.height as number | undefined) ??
+          0;
+        const centerPoint =
+          absX !== undefined && absY !== undefined
+            ? { x: absX + width / 2, y: absY + height / 2 }
+            : null;
+        const target = centerPoint ? findDropTarget(centerPoint) : null;
+        if (target) {
+          addNodeToColumn(target.ownerId, n.id, target.columnIndex, centerPoint || undefined);
+        }
+      } else if (currentMode === "absolute" && n.data?._ownedByColumn) {
+        const point = n.positionAbsolute
+          ? { x: n.positionAbsolute.x, y: n.positionAbsolute.y }
+          : n.position;
+        removeNodeFromColumn(n.id, point);
+      }
+
+      prev.set(n.id, currentMode);
+    });
+  }, [nodes, addNodeToColumn, removeNodeFromColumn, findDropTarget]);
+
   // Keyboard shortcuts
   useKeyboardShortcuts({
     selectedNodes:
       selectedNodes.length > 0
         ? selectedNodes
         : selectedNode
-        ? [selectedNode]
-        : [],
+          ? [selectedNode]
+          : [],
     onDelete: handleDelete,
     onDuplicate: handleDuplicate,
     onCopy: handleCopy,
@@ -449,6 +525,31 @@ export default function PageBuilderInner() {
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
 
+  // Walk parent chains to convert nested positions into canvas space for drop/extent math.
+  // ReactFlow stores positions relative to parents, so this keeps absolute layout deterministic.
+  // Must stay read-only to avoid mutating node graphs during drag/drop inspection.
+  const getAbsolutePosition = useCallback(
+    (nodeId: string | undefined | null) => {
+      if (!nodeId) return { x: 0, y: 0 };
+      let accX = 0;
+      let accY = 0;
+      let current = nodes.find((n: any) => n.id === nodeId);
+      const visited = new Set<string>();
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        accX += current.position?.x ?? 0;
+        accY += current.position?.y ?? 0;
+        if (!current.parentNode) break;
+        current = nodes.find((n: any) => n.id === current!.parentNode);
+      }
+      return { x: accX, y: accY };
+    },
+    [nodes]
+  );
+
+  // Anchor each row to a deterministic origin inside its owning section for flow rendering.
+  // Flow stacks depend on these offsets remaining stable so column math doesn't reorder nodes.
+  // Section width is captured here to avoid recalculating it per child transform.
   const rowLayoutById = useMemo(() => {
     const layout = new Map<string, { x: number; y: number; width: number }>();
     const sections = nodes.filter((n: any) => n.type === "section");
@@ -468,8 +569,8 @@ export default function PageBuilderInner() {
         const isOnlyRow = rows.length === 1;
         layout.set(row.id, { x: 0, y: currentY, width: sectionWidth });
         const rowHeight = isOnlyRow
-          ? section.data?.pageHeight ?? row.data?.rowHeight ?? row.height ?? 0
-          : row.data?.rowHeight ?? row.height ?? 0;
+          ? (section.data?.pageHeight ?? row.data?.rowHeight ?? row.height ?? 0)
+          : (row.data?.rowHeight ?? row.height ?? 0);
         currentY += rowHeight + sectionGap;
       });
     });
@@ -488,54 +589,86 @@ export default function PageBuilderInner() {
   const placeNodeAtEvent = useCallback(
     (event: any) => {
       if (!placementMode) return false;
+      const defaultData = getDefaultNodeData(
+        placementMode.type,
+        placementMode.label
+      );
+      const width =
+        (defaultData.width as number | undefined) ??
+        (defaultData as any)?.style?.width ??
+        0;
+      const height =
+        (defaultData.height as number | undefined) ??
+        (defaultData as any)?.style?.height ??
+        0;
       const flowPoint = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
       const target = findDropTarget(flowPoint);
 
-      let position, parentNode, extraData;
+      let position, parentNode, extraData: any = {};
 
       if (!target) {
-        // Fallback: place at clicked position
-        position = flowPoint;
-        parentNode = undefined;
-        extraData = {};
-      } else {
-        const { ownerId, columnIndex, rect } = target;
-        const columnWidth = rect.right - rect.left;
-        const localX = Math.max(
-          0,
-          Math.min(columnWidth, flowPoint.x - rect.left)
-        );
-        const localY = flowPoint.y - rect.top;
-
         position = {
-          x: columnWidth * columnIndex + localX,
-          y: localY,
+          x: flowPoint.x - width / 2,
+          y: flowPoint.y - height / 2,
         };
+        parentNode = undefined;
+      } else {
+        const { ownerId, columnIndex } = target;
         parentNode = ownerId;
-        extraData = {
-          _rowId: ownerId,
-          _ownedByColumn: ownerId,
-          _columnIndex: columnIndex,
-          _localY: localY,
-          columnIndex,
-        };
+        if (defaultData.positionMode === "flow") {
+          extraData = {
+            ...extraData,
+            _rowId: ownerId,
+            _ownedByColumn: ownerId,
+            _columnIndex: columnIndex,
+            columnIndex,
+          };
+          const siblings = nodes
+            .filter(
+              (n: any) =>
+                n.data?._ownedByColumn === ownerId &&
+                n.data?._columnIndex === columnIndex
+            )
+            .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+          extraData.order = siblings.length;
+          position = { x: 0, y: 0 };
+        } else {
+          const parentAbs = getAbsolutePosition(ownerId);
+          const colRect =
+            (target as any)?.rect ??
+            null;
+          if (colRect) {
+            position = {
+              x: flowPoint.x - width / 2 - colRect.left,
+              y: flowPoint.y - height / 2 - colRect.top,
+            };
+          } else {
+            position = {
+              x: flowPoint.x - width / 2 - parentAbs.x,
+              y: flowPoint.y - height / 2 - parentAbs.y,
+            };
+          }
+        }
+      }
+
+      if (defaultData.positionMode === "flow") {
+        if (!parentNode) return false;
+
+        const parent = nodes.find((n) => n.id === parentNode);
+        if (!parent || parent.type !== "row") return false;
       }
 
       const nodeId = `${placementMode.type}-${Date.now()}`;
-      const defaultData = getDefaultNodeData(
-        placementMode.type,
-        placementMode.label
-      );
-      console.log("Default data:", defaultData);
+
       const newNode: any = {
         id: nodeId,
         type: placementMode.type,
         parentNode: parentNode,
         position: position,
-        draggable: true,
+        draggable: defaultData.positionMode === "absolute",
         style: defaultData.width
           ? {
               width: defaultData.width,
@@ -554,9 +687,12 @@ export default function PageBuilderInner() {
       setSelectedNodes([newNode]);
       return true;
     },
-    [placementMode, reactFlowInstance, findDropTarget, setNodesNormalized]
+    [placementMode, reactFlowInstance, findDropTarget, setNodesNormalized, nodes, getAbsolutePosition]
   );
 
+  // Lets the pane click-through pick the frame when clicking empty space inside it.
+  // Coordinates stay in flow space, so section bounds guard against accidental off-canvas selection.
+  // Keeps selection lifecycle predictable when toggling between placement and drag interactions.
   const selectFrameAtPoint = useCallback(
     (event: any) => {
       const flowPoint = reactFlowInstance.screenToFlowPosition({
@@ -582,7 +718,87 @@ export default function PageBuilderInner() {
     [nodes, reactFlowInstance]
   );
 
-  // Memoize the transformed nodes for ReactFlow to avoid expensive re-mapping on every render
+  // Precompute vertical offsets for flow nodes within each column so rendering avoids rescanning siblings.
+  // Offsets rely only on saved order metadata, keeping absolute and flow coordinate systems decoupled.
+  // This keeps ReactFlow painting deterministic even while drag/drop mutates selection state.
+  const flowStackOffsets = useMemo(() => {
+    const offsets = new Map<string, number>();
+    const groups = new Map<string, any[]>();
+
+    const getNodeHeight = (node: any) => {
+      const h =
+        (node.style?.height as number | undefined) ??
+        (node.height as number | undefined) ??
+        (node.data?.height as number | undefined);
+      return typeof h === "number" ? Math.max(h, 16) : 48;
+    };
+
+    nodes.forEach((n: any) => {
+      if (n.data?.positionMode !== "flow") return;
+      if (n.data?._ownedByColumn === undefined || n.data?._columnIndex === undefined)
+        return;
+      const key = `${n.data._ownedByColumn}:${n.data._columnIndex}`;
+      const list = groups.get(key) ?? [];
+      list.push(n);
+      groups.set(key, list);
+    });
+
+    groups.forEach((list, key) => {
+      const [ownerId, colIndex] = key.split(":");
+      const owner = nodes.find((n: any) => n.id === ownerId);
+      const columnGap =
+        (owner?.data?.columns?.gap as number | undefined) !== undefined
+          ? owner?.data?.columns?.gap
+          : 16;
+      const columnPaddingY = owner?.type === "section" ? 40 : 0;
+
+      list
+        .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
+        .forEach((n: any, idx: number) => {
+          const prevHeight = idx === 0 ? 0 : getNodeHeight(list[idx - 1]);
+          const prevOffset = idx === 0 ? columnPaddingY : offsets.get(list[idx - 1].id) ?? columnPaddingY;
+          const nextOffset =
+            idx === 0 ? columnPaddingY : prevOffset + prevHeight + (columnGap ?? 0);
+          offsets.set(n.id, nextOffset);
+        });
+    });
+
+    return offsets;
+  }, [nodes]);
+
+  const getFlowRenderPosition = useCallback(
+    (node: any) => {
+      if (node?.data?.positionMode !== "flow") return node?.position;
+      const flowY = flowStackOffsets.get(node.id) ?? 0;
+      let flowX = 0;
+      if (
+        node.data?._columnIndex !== undefined &&
+        node.data?._ownedByColumn
+      ) {
+        const owner = nodes.find(
+          (n: any) => n.id === node.data?._ownedByColumn
+        );
+        const ownerLayout = rowLayoutById.get(node.data?._ownedByColumn);
+        const ownerWidth =
+          ownerLayout?.width ??
+          owner?.style?.width ??
+          owner?.width ??
+          owner?.data?.width ??
+          0;
+        const columnCount =
+          owner?.data?.columns?.count ?? owner?.data?.columns ?? 1;
+        if (ownerWidth && columnCount > 0) {
+          flowX = (ownerWidth / columnCount) * node.data._columnIndex;
+        }
+      }
+      return { x: flowX, y: flowY };
+    },
+    [flowStackOffsets, nodes, rowLayoutById]
+  );
+
+  // Project builder nodes into ReactFlow props while preserving flow/absolute intent and layering.
+  // Ordering and z-index normalization here must stay stable or selection/extent math drifts.
+  // Keep this pure so downstream hooks can trust node data remains untouched during render.
   const transformedNodes = useMemo(() => {
     return (
       nodes
@@ -664,10 +880,44 @@ export default function PageBuilderInner() {
               },
             };
           }
+          const isFlow = n.data?.positionMode === "flow";
+          const baseDraggable = n.draggable !== false;
+          const flowY = flowStackOffsets.get(n.id);
+          let flowX = 0;
+          if (
+            isFlow &&
+            n.data?._columnIndex !== undefined &&
+            n.data?._ownedByColumn
+          ) {
+            const owner = nodes.find(
+              (node: any) => node.id === n.data?._ownedByColumn
+            );
+            const ownerLayout = rowLayoutById.get(n.data?._ownedByColumn);
+            const ownerWidth =
+              ownerLayout?.width ??
+              owner?.style?.width ??
+              owner?.width ??
+              owner?.data?.width ??
+              0;
+            const columnCount =
+              owner?.data?.columns?.count ??
+              owner?.data?.columns ??
+              1;
+            if (ownerWidth && columnCount > 0) {
+              flowX = (ownerWidth / columnCount) * n.data._columnIndex;
+            }
+          }
+
           return {
             ...n,
             selected: isSelected,
-            draggable: !n.data?.locked,
+            draggable: !n.data?.locked && (isFlow ? true : baseDraggable),
+            position: isFlow
+              ? {
+                  x: flowX,
+                  y: flowY ?? n.position.y ?? 0,
+                }
+              : n.position,
             data: {
               ...n.data,
               _onResizeStart: () => setIsResizing(true),
@@ -680,10 +930,9 @@ export default function PageBuilderInner() {
                     node.id === n.id
                       ? {
                           ...node,
-                          position: {
-                            x: params.x,
-                            y: params.y,
-                          },
+                          ...(node.data?.positionMode === "absolute"
+                            ? { position: { x: params.x, y: params.y } }
+                            : {}),
                           style: {
                             ...node.style,
                             width: params.width,
@@ -787,6 +1036,7 @@ export default function PageBuilderInner() {
     setNodesNormalized,
     setNodes,
     placeNodeAtEvent,
+    flowStackOffsets,
   ]);
 
   // =====================================
@@ -955,10 +1205,8 @@ export default function PageBuilderInner() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              Click on canvas to place {placementMode.label}
-              {" "}
-              <ArrowRight size={14} aria-hidden="true" /> Press ESC to
-              cancel
+              Click on canvas to place {placementMode.label}{" "}
+              <ArrowRight size={14} aria-hidden="true" /> Press ESC to cancel
             </div>
           )}
           {drawingMode && (
@@ -978,8 +1226,7 @@ export default function PageBuilderInner() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
               }}
             >
-              Click and drag to draw {drawingMode.label}
-              {" "}
+              Click and drag to draw {drawingMode.label}{" "}
               <ArrowRight size={14} aria-hidden="true" /> Press ESC to cancel
             </div>
           )}
@@ -1096,57 +1343,28 @@ export default function PageBuilderInner() {
                   if (node.type === "row") return;
                   setSelectedNode(node);
                   setSelectedNodes([node]);
-                  draggingNodeRef.current = node;
                 }}
-                onNodeDrag={(_, node) => {
+                onNodeDrag={(event, node) => {
                   if (!node) return;
-                  handleNodeDrag(node);
-                  handleGuideDrag(node);
+
+                  handleNodeDrag(event, node);
+                  if (node.data?.positionMode !== "flow") {
+                    handleGuideDrag(node);
+                  }
                 }}
                 onNodeDragStop={(event, node) => {
                   if (!node) {
-                    clearGuides();
-                    draggingNodeRef.current = null;
                     return;
                   }
-                  // Apply snapping on drag stop
-                  if (node.positionAbsolute && node.width && node.height) {
-                    const snapped = snapToGuides(node, {
-                      x: node.positionAbsolute.x,
-                      y: node.positionAbsolute.y,
-                    });
 
-                    if (snapped.snapped) {
-                      // Calculate the new position based on the snapped absolute position
-                      // positionAbsolute accounts for parent transforms, so we need to use it directly
-                      const currentAbsoluteX = node.positionAbsolute.x;
-                      const currentAbsoluteY = node.positionAbsolute.y;
-                      const deltaX = snapped.x - currentAbsoluteX;
-                      const deltaY = snapped.y - currentAbsoluteY;
-
-                      // Update the node's position (relative to parent or flow)
-                      setNodes((nds: any) =>
-                        nds.map((n: any) => {
-                          if (n.id === node.id) {
-                            // If node has a parent, we need to account for parent position
-                            // For now, assume position is in flow coordinates
-                            return {
-                              ...n,
-                              position: {
-                                x: n.position.x + deltaX,
-                                y: n.position.y + deltaY,
-                              },
-                            };
-                          }
-                          return n;
-                        })
-                      );
-                    }
+                  if (node.data?.positionMode === "flow") {
+                    handleNodeDragStop(event, node);
+                    clearGuides();
+                    return;
                   }
 
                   handleNodeDragStop(event, node);
                   clearGuides();
-                  draggingNodeRef.current = null;
                 }}
                 onPaneClick={(event) => {
                   if (placementMode) {
@@ -1170,8 +1388,8 @@ export default function PageBuilderInner() {
                   cursor: placementMode
                     ? "crosshair"
                     : drawingMode
-                    ? "crosshair"
-                    : "default",
+                      ? "crosshair"
+                      : "default",
                 }}
                 onMoveEnd={handleMoveEnd}
               ></ReactFlow>
@@ -1182,7 +1400,16 @@ export default function PageBuilderInner() {
         {selectedNodes.length > 0 && (
           <InspectorPanel
             selectedNodes={selectedNodes.map(
-              (sn) => nodes.find((n: any) => n.id === sn.id) || sn
+              (sn) => {
+                const node = nodes.find((n: any) => n.id === sn.id) || sn;
+                if (node.data?.positionMode === "flow") {
+                  return {
+                    ...node,
+                    position: getFlowRenderPosition(node),
+                  };
+                }
+                return node;
+              }
             )}
             allNodes={nodes}
             updateNode={(id: string, updates: any) => {

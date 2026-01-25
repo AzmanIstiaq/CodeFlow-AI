@@ -29,6 +29,239 @@ export function useColumnDropZones(
   const reactFlow = useReactFlow();
   const { screenToFlowPosition } = reactFlow;
 
+  const getNodeHeight = (node: any) => {
+    const h =
+      (node?.style?.height as number | undefined) ??
+      (node?.height as number | undefined) ??
+      (node?.data?.height as number | undefined);
+    return typeof h === "number" ? Math.max(h, 16) : 48;
+  };
+
+  const getNodeSize = (node: any) => {
+    const width =
+      (node?.style?.width as number | undefined) ??
+      (node?.width as number | undefined) ??
+      (node?.data?.width as number | undefined) ??
+      0;
+    const height =
+      (node?.style?.height as number | undefined) ??
+      (node?.height as number | undefined) ??
+      (node?.data?.height as number | undefined) ??
+      0;
+    return { width, height };
+  };
+
+  const getColumnMetrics = (owner: any) => {
+    const gap =
+      (owner?.data?.columns?.gap as number | undefined) !== undefined
+        ? owner?.data?.columns?.gap
+        : 16;
+    const paddingY = owner?.type === "section" ? 40 : 0;
+    return { gap, paddingY };
+  };
+
+  const toFlowPoint = (event?: any) => {
+    const clientX = event?.clientX;
+    const clientY = event?.clientY;
+    if (typeof clientX === "number" && typeof clientY === "number") {
+      return screenToFlowPosition({ x: clientX, y: clientY });
+    }
+    return null;
+  };
+
+  const getNodeAbsolutePosition = (
+    nodeId: string | undefined,
+    nodeList: any[]
+  ) => {
+    if (!nodeId) return { x: 0, y: 0 };
+    let accX = 0;
+    let accY = 0;
+    let current = nodeList.find((n) => n.id === nodeId);
+    const visited = new Set<string>();
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      accX += current.position?.x ?? 0;
+      accY += current.position?.y ?? 0;
+      if (!current.parentNode) break;
+      current = nodeList.find((n) => n.id === current!.parentNode);
+    }
+    return { x: accX, y: accY };
+  };
+
+  const findColumnAtPoint = (point: { x: number; y: number } | null) => {
+    if (!point) return null;
+    for (const [sectionId, columns] of Object.entries(columnRectsRef.current)) {
+      for (const [colIndex, rect] of Object.entries(columns)) {
+        const inside =
+          point.x >= rect.left &&
+          point.x <= rect.right &&
+          point.y >= rect.top &&
+          point.y <= rect.bottom;
+        if (inside) {
+          return { ownerId: sectionId, columnIndex: Number(colIndex), rect };
+        }
+      }
+    }
+    return null;
+  };
+
+  const computeInsertForFlow = (
+    nodeList: any[],
+    ownerId: string,
+    columnIndex: number,
+    nodeId: string,
+    pointY?: number
+  ) => {
+    const ownerNode = nodeList.find((n) => n.id === ownerId);
+    const { gap: columnGap, paddingY: columnPaddingY } =
+      getColumnMetrics(ownerNode);
+    const columnRect = columnRectsRef.current[ownerId]?.[columnIndex];
+
+    const siblings = nodeList
+      .filter(
+        (n) =>
+          n.id !== nodeId &&
+          n.data?._ownedByColumn === ownerId &&
+          n.data?._columnIndex === columnIndex
+      )
+      .sort((a, b) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+
+    const localY =
+      columnRect && typeof pointY === "number"
+        ? Math.max(0, pointY - columnRect.top)
+        : typeof pointY === "number"
+          ? Math.max(0, pointY)
+          : 0;
+
+    let insertIndex = siblings.length;
+    let cursor = columnPaddingY;
+    for (let i = 0; i < siblings.length; i++) {
+      const sib = siblings[i];
+      const h = getNodeHeight(sib);
+      if (localY < cursor + h / 2) {
+        insertIndex = i;
+        break;
+      }
+      cursor += h + columnGap;
+    }
+
+    return { insertIndex, siblings, columnRect, ownerNode };
+  };
+
+  const applyFlowPlacement = (
+    nodeList: any[],
+    ownerId: string,
+    columnIndex: number,
+    nodeId: string,
+    insertIndex: number
+  ) => {
+    const dragged = nodeList.find((n) => n.id === nodeId);
+    if (!dragged) return nodeList;
+
+    const ownerNode = nodeList.find((n) => n.id === ownerId);
+    const isRowOwner = ownerNode?.type === "row";
+
+    const sourceOwner = dragged.data?._ownedByColumn;
+    const sourceCol = dragged.data?._columnIndex;
+
+    const targetSiblings = nodeList
+      .filter(
+        (n) =>
+          n.id !== nodeId &&
+          n.data?._ownedByColumn === ownerId &&
+          n.data?._columnIndex === columnIndex
+      )
+      .sort((a, b) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+
+    const targetList = [...targetSiblings];
+    targetList.splice(insertIndex, 0, dragged);
+
+    const movingAcross =
+      sourceOwner !== undefined &&
+      (sourceOwner !== ownerId || sourceCol !== columnIndex);
+
+    const sourceSiblings = movingAcross
+      ? nodeList
+          .filter(
+            (n) =>
+              n.id !== nodeId &&
+              n.data?._ownedByColumn === sourceOwner &&
+              n.data?._columnIndex === sourceCol
+          )
+          .sort((a, b) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
+      : [];
+
+    const targetOrders = new Map<string, number>();
+    targetList.forEach((n, idx) => targetOrders.set(n.id, idx));
+    const sourceOrders = new Map<string, number>();
+    sourceSiblings.forEach((n, idx) => sourceOrders.set(n.id, idx));
+
+    return nodeList.map((node) => {
+      if (node.id === nodeId) {
+        return {
+          ...node,
+          parentNode: ownerId,
+          position: { x: 0, y: 0 },
+          draggable: true,
+          data: {
+            ...node.data,
+            _ownedByColumn: ownerId,
+            _columnIndex: columnIndex,
+            ...(isRowOwner ? { _rowId: ownerId, columnIndex } : {}),
+            order: insertIndex,
+          },
+        };
+      }
+
+      if (targetOrders.has(node.id)) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            order: targetOrders.get(node.id),
+          },
+        };
+      }
+
+      if (sourceOrders.has(node.id)) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            order: sourceOrders.get(node.id),
+          },
+        };
+      }
+
+      if (
+        (node.type === "section" || node.type === "row") &&
+        node.data?.columns
+      ) {
+        if (node.id === ownerId || node.id === sourceOwner) {
+          const children = { ...(node.data?.children ?? {}) };
+
+          Object.keys(children).forEach((k) => {
+            children[k] = children[k].filter((id: string) => id !== nodeId);
+          });
+
+          if (node.id === ownerId) {
+            children[columnIndex] = [...(children[columnIndex] ?? []), nodeId];
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              children,
+            },
+          };
+        }
+      }
+
+      return node;
+    });
+  };
+
   // ================================
   // State and References
   // ================================
@@ -47,6 +280,13 @@ export function useColumnDropZones(
     columnIndex: number | null;
   }>({ sectionId: null, columnIndex: null });
 
+  const [flowReorderState, setFlowReorderState] = useState<{
+    ownerId: string;
+    columnIndex: number;
+    targetIndex: number;
+    nodeId: string;
+  } | null>(null);
+
   // ================================
   // Drag Stop Handling
   // ================================
@@ -55,42 +295,96 @@ export function useColumnDropZones(
    * Decides whether to snap the node into a column or detach it from one.
    */
   const handleNodeDragStop = (event: any, node: any) => {
-    if (!node || !node.id || !node.type || !node.position) return;
+    if (!node || !node.id || !node.type) return;
+
+    const flowPoint = toFlowPoint(event);
+    if (!flowPoint) {
+      setHoverState({ sectionId: null, columnIndex: null });
+      dragStartPosRef.current = null;
+      return;
+    }
+    const { width, height } = getNodeSize(node);
+    const dropPoint = {
+      x: flowPoint.x - width / 2,
+      y: flowPoint.y - height / 2,
+    };
 
     // Distinguish between a click (no movement) and an actual drag.
     const wasDragged =
       dragStartPosRef.current &&
-      node.position &&
-      (Math.abs(node.position.x - dragStartPosRef.current.x) > 5 ||
-        Math.abs(node.position.y - dragStartPosRef.current.y) > 5);
+      (Math.abs(dropPoint.x - dragStartPosRef.current.x) > 5 ||
+        Math.abs(dropPoint.y - dragStartPosRef.current.y) > 5);
 
-    // If hovering over a column, snap the node to it.
-    if (hoverState.sectionId && hoverState.columnIndex !== null) {
-      // Some node types cannot be placed in columns.
+    const target = findColumnAtPoint(flowPoint);
+
+    if (node.data?.positionMode === "flow") {
+      if (target) {
+        setNodes((nds: any[]) => {
+          const { insertIndex } = computeInsertForFlow(
+            nds,
+            target.ownerId,
+            target.columnIndex,
+            node.id,
+            flowPoint?.y
+          );
+          return applyFlowPlacement(
+            nds,
+            target.ownerId,
+            target.columnIndex,
+            node.id,
+            insertIndex
+          );
+        });
+      } else if (node.data?._ownedByColumn && wasDragged) {
+        removeNodeFromColumn(node.id, dropPoint ?? undefined);
+      }
+
+      setFlowReorderState(null);
+      setHoverState({ sectionId: null, columnIndex: null });
+      dragStartPosRef.current = null;
+      return;
+    }
+
+    // If hovering over a column with an absolute node, snap the node to it.
+    if (target) {
       if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) {
         setHoverState({ sectionId: null, columnIndex: null });
         dragStartPosRef.current = null;
         return;
       }
 
-      // Compute the drop point in flow coordinates.
-      const clientX = event?.clientX;
-      const clientY = event?.clientY;
-      const dropPoint =
-        typeof clientX === "number" && typeof clientY === "number"
-          ? screenToFlowPosition({ x: clientX, y: clientY })
-          : node.positionAbsolute
-          ? { x: node.positionAbsolute.x, y: node.positionAbsolute.y }
-          : node.position;
       addNodeToColumn(
-        hoverState.sectionId,
+        target.ownerId,
         node.id,
-        hoverState.columnIndex,
-        dropPoint
+        target.columnIndex,
+        dropPoint ?? undefined,
+        target.rect
       );
     } else if (node.data?._ownedByColumn && wasDragged) {
       // Node was dragged away from its column owner (don't move on click).
-      removeNodeFromColumn(node.id);
+      removeNodeFromColumn(node.id, dropPoint ?? undefined);
+    } else {
+      // Absolute free placement: set position relative to parent (if any).
+      setNodes((nds: any[]) => {
+        const parentAbs = getNodeAbsolutePosition(node.parentNode, nds);
+        return nds.map((n) => {
+          if (n.id !== node.id) return n;
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              _ownedByColumn: undefined,
+              _columnIndex: undefined,
+              _rowId: undefined,
+            },
+            position: {
+              x: dropPoint.x - parentAbs.x,
+              y: dropPoint.y - parentAbs.y,
+            },
+            draggable: true,
+          };
+        });
+      });
     }
 
     // Clean up drag state.
@@ -149,58 +443,84 @@ export function useColumnDropZones(
     columnsSectionId: string,
     nodeId: string,
     columnIndex: number,
-    dropPoint?: { x: number; y: number }
+    position?: { x: number; y: number },
+    rectOverride?: { left: number; top: number; right?: number; bottom?: number }
   ) => {
-    const columnRect = columnRectsRef.current[columnsSectionId]?.[columnIndex];
-
     setNodes((nds: any[]) => {
+      const dragged = nds.find((n) => n.id === nodeId);
+      if (!dragged) return nds;
+
       const ownerNode = nds.find((n) => n.id === columnsSectionId);
-      const isRowOwner = ownerNode?.type === "row";
-      const columnWidth = columnRect ? columnRect.right - columnRect.left : 0;
-      const rowTop = columnRect ? columnRect.top : 0;
+      const columnRect =
+        rectOverride ??
+        columnRectsRef.current[columnsSectionId]?.[columnIndex];
+      if (!columnRect) return nds;
+
+      const isFlow = dragged.data?.positionMode === "flow";
+
+      if (isFlow) {
+        const { insertIndex } = computeInsertForFlow(
+          nds,
+          columnsSectionId,
+          columnIndex,
+          nodeId,
+          position?.y
+        );
+        return applyFlowPlacement(
+          nds,
+          columnsSectionId,
+          columnIndex,
+          nodeId,
+          insertIndex
+        );
+      }
+
+      const parentAbs = getNodeAbsolutePosition(columnsSectionId, nds);
+      const absDrop =
+        position ??
+        (dragged.positionAbsolute
+          ? { x: dragged.positionAbsolute.x, y: dragged.positionAbsolute.y }
+          : dragged.positionAbsolute ?? dragged.position);
+      if (!absDrop) return nds;
+      const newPosition = {
+        x: absDrop.x - parentAbs.x,
+        y: absDrop.y - columnRect.top,
+      };
 
       return nds.map((node) => {
-        // Handle the dropped node.
         if (node.id === nodeId) {
-          // Verify node can be placed in columns.
-          if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return node;
-
-          // Keep the node's current relative position.
-          let newPosition = node.position;
-
           return {
             ...node,
+            parentNode: columnsSectionId,
+            extent: "parent",
+            draggable: node.draggable !== false,
             position: newPosition,
-            draggable: true,
-            // Set parent if the owner is a row.
-            ...(isRowOwner ? { parentNode: columnsSectionId } : {}),
             data: {
               ...node.data,
               _ownedByColumn: columnsSectionId,
               _columnIndex: columnIndex,
-              // Metadata for row-owned nodes.
-              ...(isRowOwner ? { _rowId: columnsSectionId } : {}),
-              ...(isRowOwner && columnRect ? { _localY: newPosition.y } : {}),
-              ...(isRowOwner ? { columnIndex } : {}),
+              ...(ownerNode?.type === "row"
+                ? { _rowId: columnsSectionId, columnIndex }
+                : { columnIndex }),
             },
           };
         }
 
-        // Update the column owner's children registry.
-        if (
-          (node.type === "section" || node.type === "row") &&
-          node.data?.columns &&
-          node.id === columnsSectionId
-        ) {
+        if (node.type === "section" || node.type === "row") {
+          if (!node.data?.columns) return node;
           const children = { ...(node.data?.children ?? {}) };
-
-          // Remove the node from all columns (prevents duplicates).
           Object.keys(children).forEach((k) => {
             children[k] = children[k].filter((id: string) => id !== nodeId);
           });
 
-          // Add the node to the target column.
-          children[columnIndex] = [...(children[columnIndex] ?? []), nodeId];
+          if (node.id === columnsSectionId) {
+            const numKey = Number.isInteger(columnIndex)
+              ? columnIndex
+              : parseInt(String(columnIndex), 10);
+            const strKey = String(numKey);
+            children[numKey] = [...(children[numKey] ?? []), nodeId];
+            children[strKey] = [...(children[strKey] ?? []), nodeId];
+          }
 
           return {
             ...node,
@@ -222,48 +542,72 @@ export function useColumnDropZones(
   /**
    * Detaches a node from its column owner and converts position to absolute.
    */
-  const removeNodeFromColumn = (nodeId: string) => {
+  const removeNodeFromColumn = (
+    nodeId: string,
+    absoluteHint?: { x?: number; y?: number }
+  ) => {
     setNodes((nds: any[]) => {
       return nds.map((node) => {
         // Handle the detached node.
         if (node.id === nodeId) {
           const ownedBy = node.data?._ownedByColumn;
+          const ownedColumnIndex = node.data?._columnIndex;
+          const ownerNode = ownedBy
+            ? nds.find((n) => n.id === ownedBy)
+            : null;
+          const { gap: columnGap, paddingY: columnPaddingY } =
+            getColumnMetrics(ownerNode);
+          const columnRect =
+            ownedBy !== undefined && ownedColumnIndex !== undefined
+              ? columnRectsRef.current[ownedBy]?.[ownedColumnIndex]
+              : undefined;
+
+          const siblings =
+            ownedBy !== undefined && ownedColumnIndex !== undefined
+              ? nds
+                  .filter(
+                    (n) =>
+                      n.data?._ownedByColumn === ownedBy &&
+                      n.data?._columnIndex === ownedColumnIndex
+                  )
+                  .sort((a, b) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
+              : [];
 
           // Remove all column-related metadata.
           const {
             _ownedByColumn,
             _columnIndex,
-            columnIndex,
+            columnIndex: _removedColumnIndex,
             _rowId,
             _localY,
             ...restData
           } = node.data || {};
 
-          // Find the parent row and its parent section to compute absolute position.
-          const parent = nds.find((n) => n.id === ownedBy);
-          const section = parent?.parentNode
-            ? nds.find((n) => n.id === parent.parentNode)
-            : null;
+          let absolutePosition: { x: number; y: number } | undefined;
 
-          // Get positions for coordinate transformation
-          const parentPosition = parent?.position ?? { x: 0, y: 0 };
-          const sectionPosition = section?.position ?? { x: 0, y: 0 };
-
-          // Calculate absolute position by accumulating parent transforms.
-          const absolutePosition =
-            node.parentNode === ownedBy
-              ? {
-                  // Sum relative position + all parent offsets
-                  x:
-                    (node.position?.x ?? 0) +
-                    parentPosition.x +
-                    sectionPosition.x,
-                  y:
-                    (node.position?.y ?? 0) +
-                    parentPosition.y +
-                    sectionPosition.y,
-                }
-              : node.position;
+          if (
+            absoluteHint &&
+            typeof absoluteHint.x === "number" &&
+            typeof absoluteHint.y === "number"
+          ) {
+            absolutePosition = { x: absoluteHint.x, y: absoluteHint.y };
+          } else if (node.positionAbsolute) {
+            absolutePosition = {
+              x: node.positionAbsolute.x,
+              y: node.positionAbsolute.y,
+            };
+          } else if (columnRect) {
+            let cursorY = columnRect.top + columnPaddingY;
+            for (let i = 0; i < siblings.length; i++) {
+              const sib = siblings[i];
+              if (sib.id === node.id) break;
+              cursorY += getNodeHeight(sib) + columnGap;
+            }
+            absolutePosition = {
+              x: columnRect.left + (node.position?.x ?? 0),
+              y: cursorY,
+            };
+          }
 
           return {
             ...node,
@@ -272,7 +616,7 @@ export function useColumnDropZones(
             parentNode:
               node.parentNode === ownedBy ? undefined : node.parentNode,
             // Use absolute position so node stays visually in the same place
-            position: absolutePosition,
+            position: absolutePosition ?? node.position ?? { x: 0, y: 0 },
             data: restData,
           };
         }
@@ -312,57 +656,73 @@ export function useColumnDropZones(
   /**
    * Called continuously during node drag to update hover state.
    */
-  const handleNodeDrag = (node: any) => {
-    // Record initial position on first drag event.
-    if (!dragStartPosRef.current) {
-      dragStartPosRef.current = { x: node.position.x, y: node.position.y };
-    }
-
-    // Validate node has required properties for overlap detection.
+  const handleNodeDrag = (event: any, node: any) => {
     if (!node || !node.id || !node.type) return;
     if (INVALID_COLUMN_CHILD_TYPES.has(node.type)) return;
-    if (!node.positionAbsolute || !node.width || !node.height) return;
 
-    // Build the node's bounding box in absolute coordinates.
-    const nodeRect = {
-      left: node.positionAbsolute.x,
-      right: node.positionAbsolute.x + node.width,
-      top: node.positionAbsolute.y,
-      bottom: node.positionAbsolute.y + node.height,
-    };
-
-    // Search for the column that overlaps with the node.
-    let targetSection: string | null = null;
-    let targetColIndex: number | null = null;
-
-    // Iterate through registered columns to find overlap
-    for (const [sectionId, columns] of Object.entries(columnRectsRef.current)) {
-      for (const [colIndex, rect] of Object.entries(columns)) {
-        // Check for AABB overlap.
-        const overlaps =
-          nodeRect.right > rect.left &&
-          nodeRect.left < rect.right &&
-          nodeRect.bottom > rect.top &&
-          nodeRect.top < rect.bottom;
-
-        if (overlaps) {
-          targetSection = sectionId;
-          targetColIndex = Number(colIndex);
-          break;
-        }
-      }
-      if (targetSection) break;
+    const flowPoint = toFlowPoint(event);
+    if (!dragStartPosRef.current && flowPoint) {
+      dragStartPosRef.current = { x: flowPoint.x, y: flowPoint.y };
     }
 
-    // Update hover state only if target changed.
+    const target = findColumnAtPoint(flowPoint);
+
+    if (node.data?.positionMode === "flow") {
+      if (target) {
+        const { insertIndex } = computeInsertForFlow(
+          nodes,
+          target.ownerId,
+          target.columnIndex,
+          node.id,
+          flowPoint?.y
+        );
+        const movingAcross =
+          node.data?._ownedByColumn !== target.ownerId ||
+          node.data?._columnIndex !== target.columnIndex;
+        const currentOrder = node.data?.order ?? insertIndex;
+
+        if (movingAcross || currentOrder !== insertIndex) {
+          setNodes((nds: any[]) =>
+            applyFlowPlacement(
+              nds,
+              target.ownerId,
+              target.columnIndex,
+              node.id,
+              insertIndex
+            )
+          );
+        }
+
+        setFlowReorderState({
+          ownerId: target.ownerId,
+          columnIndex: target.columnIndex,
+          targetIndex: insertIndex,
+          nodeId: node.id,
+        });
+        setHoverState({
+          sectionId: target.ownerId,
+          columnIndex: target.columnIndex,
+        });
+      } else {
+        if (flowReorderState) {
+          setFlowReorderState(null);
+        }
+        if (hoverState.sectionId || hoverState.columnIndex !== null) {
+          setHoverState({ sectionId: null, columnIndex: null });
+        }
+      }
+      return;
+    }
+
     if (
-      targetSection !== hoverState.sectionId ||
-      targetColIndex !== hoverState.columnIndex
+      target?.ownerId !== hoverState.sectionId ||
+      target?.columnIndex !== hoverState.columnIndex
     ) {
-      setHoverState({
-        sectionId: targetSection,
-        columnIndex: targetColIndex,
-      });
+      setHoverState(
+        target
+          ? { sectionId: target.ownerId, columnIndex: target.columnIndex }
+          : { sectionId: null, columnIndex: null }
+      );
     }
   };
 
@@ -373,27 +733,10 @@ export function useColumnDropZones(
    * Given a point in flow coordinates, finds which column contains it.
    * Used during node placement (e.g., when clicking to place from toolbar).
    */
-  const findDropTarget = useCallback((point: { x: number; y: number }) => {
-    for (const [sectionId, columns] of Object.entries(columnRectsRef.current)) {
-      for (const [colIndex, rect] of Object.entries(columns)) {
-        // Point-in-rectangle test.
-        const inside =
-          point.x >= rect.left &&
-          point.x <= rect.right &&
-          point.y >= rect.top &&
-          point.y <= rect.bottom;
-
-        if (inside) {
-          return {
-            ownerId: sectionId,
-            columnIndex: Number(colIndex),
-            rect,
-          };
-        }
-      }
-    }
-    return null;
-  }, []);
+  const findDropTarget = useCallback(
+    (point: { x: number; y: number }) => findColumnAtPoint(point),
+    []
+  );
 
   // ================================
   // Viewport / Column Rect Updates
