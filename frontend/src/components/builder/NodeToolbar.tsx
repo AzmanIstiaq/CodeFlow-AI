@@ -68,6 +68,42 @@ export default function NodeToolbar({
         <>
           <button
             className="toolbar-button"
+            onClick={() => addNode("header", "Header")}
+            title="Header"
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 6,
+              padding: "8px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#374151",
+              transition: "all 0.1s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#f9fafb";
+              e.currentTarget.style.borderColor = "#3b82f6";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#ffffff";
+              e.currentTarget.style.borderColor = "#e5e7eb";
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="3" y="4" width="18" height="5" rx="2" />
+            </svg>
+          </button>
+          <button
+            className="toolbar-button"
             onClick={() => addNode("text", "Text Node")}
             title="Text (T)"
             style={{
@@ -445,6 +481,42 @@ export default function NodeToolbar({
               <rect x="3" y="6" width="18" height="12" rx="2" />
               <line x1="3" y1="12" x2="21" y2="12" />
               <polyline points="15 10 18 13 15 16" />
+            </svg>
+          </button>
+          <button
+            className="toolbar-button"
+            onClick={() => addNode("footer", "Footer")}
+            title="Footer"
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 6,
+              padding: "8px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#374151",
+              transition: "all 0.1s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#f9fafb";
+              e.currentTarget.style.borderColor = "#3b82f6";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#ffffff";
+              e.currentTarget.style.borderColor = "#e5e7eb";
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="3" y="15" width="18" height="5" rx="2" />
             </svg>
           </button>
         </>

@@ -32,6 +32,7 @@ export default function Style({
   selectedNodes,
   updateNode,
   updateNodes,
+  allNodes = [],
 }: SectionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const isMultiSelect = selectedNodes.length > 1;
@@ -70,8 +71,28 @@ export default function Style({
         selectedNodes.map((n) => n.id),
         { [field]: value }
       );
-    } else {
-      updateNode(node.id, { [field]: value });
+      return;
+    }
+
+    // Single selection
+    updateNode(node.id, { [field]: value });
+
+    // Propagate frame fill to header/footer when enabled.
+    if (
+      node.type === "section" &&
+      field === "backgroundColor" &&
+      node.data?.syncHeaderFooterStyle !== false
+    ) {
+      const linkedIds = allNodes
+        .filter(
+          (n) =>
+            (n.type === "header" || n.type === "footer") &&
+            (n as any).parentNode === node.id
+        )
+        .map((n) => n.id);
+      if (linkedIds.length) {
+        updateNodes(linkedIds, { backgroundColor: value });
+      }
     }
   };
 
@@ -80,6 +101,10 @@ export default function Style({
   const borderWidth = getValue("borderWidth", 0);
   const borderRadius = getValue("borderRadius", 0);
   const opacity = getValue("opacity", 100);
+  const syncHeaderFooterStyle =
+    node.type === "section"
+      ? node.data?.syncHeaderFooterStyle !== false
+      : undefined;
 
   // Determine if we're in per-corner mode based on current value.
   const perCorner = typeof borderRadius === "object" && borderRadius !== null;
@@ -150,18 +175,31 @@ export default function Style({
 
       {isOpen && (
         <div className="inspector-section-content">
+          {node.type === "section" && !isMultiSelect && (
+            <div className="inspector-field">
+              <label>Sync header/footer fill</label>
+              <Toggle
+                checked={syncHeaderFooterStyle}
+                onChange={(checked) =>
+                  updateNode(node.id, { syncHeaderFooterStyle: checked })
+                }
+                label={syncHeaderFooterStyle ? "Linked" : "Independent"}
+              />
+            </div>
+          )}
+
           <ColorInputRow
             label="Fill"
             value={backgroundColor}
             onChange={(v) => handleChange("backgroundColor", v)}
-            disabled={isMultiSelect && backgroundColor === "mixed"}
+            disabled={false}
           />
 
           <ColorInputRow
             label="Stroke"
             value={borderColor}
             onChange={(v) => handleChange("borderColor", v)}
-            disabled={isMultiSelect && borderColor === "mixed"}
+            disabled={false}
           />
 
           <NumberInput

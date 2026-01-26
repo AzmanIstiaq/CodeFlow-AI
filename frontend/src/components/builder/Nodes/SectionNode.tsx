@@ -91,6 +91,7 @@ export default function SectionNode({
   const hasRows = (data._allNodes ?? []).some(
     (n) => n.type === "row" && n.parentNode === id
   );
+  const computedHeightOverride = (data as any)._computedHeight;
 
   // =====================================
   // DIMENSIONS
@@ -131,8 +132,31 @@ export default function SectionNode({
    * Memoized to avoid recomputation on every render
    */
   const calculatedHeight = useMemo(() => {
+    if (typeof computedHeightOverride === "number") {
+      return Math.max(computedHeightOverride, pageHeight);
+    }
     const minHeight = pageHeight;
-    if (rowNodes.length === 0) return minHeight;
+    if (rowNodes.length === 0) {
+      const layoutChildren =
+        (data._allNodes ?? []).filter(
+          (n: any) =>
+            n.parentNode === id &&
+            (n.type === "header" || n.type === "footer" || n.type === "row")
+        ) || [];
+      if (layoutChildren.length > 0) {
+        const total = layoutChildren.reduce((acc: number, child: any) => {
+          const h =
+            (child.style?.height as number | undefined) ??
+            (child.data?.height as number | undefined) ??
+            (child.data?.rowHeight as number | undefined) ??
+            (child.height as number | undefined) ??
+            0;
+          return acc + Math.max(h, 40);
+        }, 0);
+        return Math.max(minHeight, total);
+      }
+      return minHeight;
+    }
 
     const rowsHeight = rowNodes.reduce((sum: number, row: any) => {
       const isOnlyRow = rowNodes.length === 1;
@@ -163,7 +187,7 @@ export default function SectionNode({
     const contentHeight = rowsHeight + gapsHeight + sectionPadding * 2;
 
     return Math.max(minHeight, contentHeight);
-  }, [rowNodes, data._allNodes, pageHeight, sectionPadding, sectionGap]);
+  }, [rowNodes, data._allNodes, pageHeight, sectionPadding, sectionGap, computedHeightOverride]);
 
   return (
     <div
@@ -186,7 +210,7 @@ export default function SectionNode({
           ? "0 0 0 3px #3b82f6"
           : "0 4px 20px rgba(0,0,0,0.1)",
         transition: "box-shadow 0.2s ease, height 0.3s ease",
-        overflow: "hidden",
+        overflow: "visible",
 
         display: "flex",
         flexDirection: "column",

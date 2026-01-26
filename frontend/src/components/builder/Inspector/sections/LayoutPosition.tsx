@@ -38,6 +38,7 @@ export default function LayoutPosition({
   const node = selectedNodes[0];
   const positionMode = node?.data?.positionMode || "absolute";
   const isFlow = positionMode === "flow";
+  const isPinnedLayout = node.type === "header" || node.type === "footer";
 
   if (node.type === "section" || node.type === "row") return null;
 
@@ -179,13 +180,13 @@ export default function LayoutPosition({
             label="X"
             value={x}
             onChange={(v) => handleChange("x", v)}
-            disabled={isFlow || (isMultiSelect && x === "mixed")}
+            disabled={isFlow || isPinnedLayout || (isMultiSelect && x === "mixed")}
           />
           <InlineNumberInput
             label="Y"
             value={y}
             onChange={(v) => handleChange("y", v)}
-            disabled={isFlow || (isMultiSelect && y === "mixed")}
+            disabled={isFlow || isPinnedLayout || (isMultiSelect && y === "mixed")}
           />
         </div>
 
@@ -195,7 +196,7 @@ export default function LayoutPosition({
             value={w}
             onChange={(v) => handleChange("width", v)}
             min={1}
-            disabled={isMultiSelect && w === "mixed"}
+            disabled={isMultiSelect && w === "mixed" || isPinnedLayout}
           />
           <InlineNumberInput
             label="H"

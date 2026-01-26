@@ -56,7 +56,12 @@ export function useColumnDropZones(
       (owner?.data?.columns?.gap as number | undefined) !== undefined
         ? owner?.data?.columns?.gap
         : 16;
-    const paddingY = owner?.type === "section" ? 40 : 0;
+    const paddingY =
+      typeof owner?.data?.padding === "number"
+        ? owner.data.padding
+        : owner?.type === "section"
+          ? 40
+          : 0;
     return { gap, paddingY };
   };
 
@@ -234,7 +239,10 @@ export function useColumnDropZones(
       }
 
       if (
-        (node.type === "section" || node.type === "row") &&
+        (node.type === "section" ||
+          node.type === "row" ||
+          node.type === "header" ||
+          node.type === "footer") &&
         node.data?.columns
       ) {
         if (node.id === ownerId || node.id === sourceOwner) {
@@ -623,7 +631,10 @@ export function useColumnDropZones(
 
         // Update the owner's children registry to remove the detached node.
         if (
-          (node.type === "section" || node.type === "row") &&
+          (node.type === "section" ||
+            node.type === "row" ||
+            node.type === "header" ||
+            node.type === "footer") &&
           node.data?.columns
         ) {
           const children = { ...(node.data?.children ?? {}) };
@@ -646,8 +657,13 @@ export function useColumnDropZones(
       });
     });
 
-    // Force ReactFlow to recalculate internal node state after parent changes.
-    requestAnimationFrame(() => (reactFlow as any).updateNodeInternals(nodeId));
+    // Force ReactFlow to recalc internal node state after parent changes (guard older versions).
+    requestAnimationFrame(() => {
+      const updater = (reactFlow as any).updateNodeInternals;
+      if (typeof updater === "function") {
+        updater(nodeId);
+      }
+    });
   };
 
   // ================================
@@ -754,9 +770,12 @@ export function useColumnDropZones(
    */
   useEffect(() => {
     nodes.forEach((node: any) => {
-      // Only section and row nodes have columns.
+      // Only layout containers with columns register drop zones.
       if (
-        (node.type === "section" || node.type === "row") &&
+        (node.type === "section" ||
+          node.type === "row" ||
+          node.type === "header" ||
+          node.type === "footer") &&
         node.data?.columns
       ) {
         const columnCount = node.data.columns.count || node.data.columns;

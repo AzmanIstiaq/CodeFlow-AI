@@ -220,6 +220,45 @@ export function useNodeOperations(
     }
 
     // =====================================
+    // HEADER / FOOTER NODES
+    // =====================================
+    if (type === "header" || type === "footer") {
+      const existing = nodes.some(
+        (n: any) => n.type === type && n.parentNode === section.id
+      );
+      if (existing) {
+        alert(`Only one ${type} is allowed per page.`);
+        return;
+      }
+
+      const sectionWidth = section.data?.pageWidth || section.data?.maxWidth || 1200;
+      const newNode = {
+        id,
+        type,
+        parentNode: section.id,
+        position: { x: 0, y: 0 },
+        draggable: false,
+        style: {
+          width: sectionWidth,
+          height: type === "header" ? 120 : 140,
+        },
+        data: {
+          label: type === "header" ? "Header" : "Footer",
+          height: type === "header" ? 120 : 140,
+          padding: 24,
+          backgroundColor: type === "header" ? "#ffffff" : "#f9fafb",
+          border: "1px solid #e5e7eb",
+          columns: { count: 3, gap: 16 },
+          order: type === "header" ? -1000 : Number.MAX_SAFE_INTEGER,
+          positionMode: "absolute",
+        },
+      };
+
+      setNodes((nds: any) => [...nds, newNode]);
+      return;
+    }
+
+    // =====================================
     // TEXT NODE
     // =====================================
     // Display text content with styling

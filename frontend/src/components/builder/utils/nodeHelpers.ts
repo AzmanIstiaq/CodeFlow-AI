@@ -20,6 +20,8 @@ export const INVALID_COLUMN_CHILD_TYPES = new Set<string>([
   "section",
   "row",
   "columnsSection",
+  "header",
+  "footer",
   "start",
   "ai",
   "output",

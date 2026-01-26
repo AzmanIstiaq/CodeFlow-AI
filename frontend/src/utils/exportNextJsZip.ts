@@ -124,6 +124,15 @@ const applyCornerRadius = (target: Record<string, any>, radius: any) => {
 };
 
 const sortNodes = (a: any, b: any) => {
+  const priority = (node: any) => {
+    if (node.type === "header") return -1;
+    if (node.type === "footer") return 1;
+    return 0;
+  };
+  const pa = priority(a);
+  const pb = priority(b);
+  if (pa !== pb) return pa - pb;
+
   const oa = a.data?.order ?? a.data?._order ?? 0;
   const ob = b.data?.order ?? b.data?._order ?? 0;
   if (oa !== ob) return oa - ob;
@@ -735,8 +744,13 @@ const nodeToJSX = (
 
   delete baseStyle.zIndex;
   delete baseStyle.transform;
-  // Only delete width/height if not absolutely positioned
-  if (baseStyle.position !== "absolute") {
+  // Only delete width/height if not absolutely positioned, except for layout blocks that rely on fixed heights.
+  if (
+    baseStyle.position !== "absolute" &&
+    node.type !== "header" &&
+    node.type !== "footer" &&
+    node.type !== "row"
+  ) {
     delete baseStyle.width;
     delete baseStyle.height;
     delete baseStyle.left;
@@ -880,6 +894,40 @@ const nodeToJSX = (
       }
       break;
 
+    case "header":
+    case "footer": {
+      tag = node.type;
+      baseStyle.width ??= widthHint ?? "100%";
+      if (heightHint) {
+        baseStyle.height ??= heightHint;
+        baseStyle.minHeight ??= heightHint;
+      }
+      baseStyle.padding ??= data.padding ?? 24;
+      baseStyle.backgroundColor ||= data.backgroundColor ?? "transparent";
+      baseStyle.border ||= data.border;
+      applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
+      if (layoutModeForChildren === "row") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "row";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display ||= "flex";
+        baseStyle.flexDirection ||= "column";
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display ||= "grid";
+        baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
+          data,
+          children
+        )}, 1fr)`;
+        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
+      } else {
+        baseStyle.display ||= "block";
+      }
+      baseStyle.boxSizing = "border-box";
+      break;
+    }
+
     case "row": {
       tag = "div";
 
@@ -911,6 +959,10 @@ const nodeToJSX = (
         baseStyle.width ||= "100%";
 
         if (heightHint) baseStyle.height ||= heightHint;
+      }
+      if (data.rowHeight) {
+        baseStyle.minHeight ??= data.rowHeight;
+        baseStyle.height ??= data.rowHeight;
       }
       break;
     }

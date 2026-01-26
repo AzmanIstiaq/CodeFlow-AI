@@ -63,6 +63,7 @@ import FormCheckboxNode from "../components/builder/Nodes/FormCheckboxNode";
 import FormRadioNode from "../components/builder/Nodes/FormRadioNode";
 import FormSelectNode from "../components/builder/Nodes/FormSelectNode";
 import RowNode from "../components/builder/Nodes/RowNode";
+import HeaderFooterNode from "../components/builder/Nodes/HeaderFooterNode";
 import { InspectorPanel } from "../components/builder/Inspector";
 import SaveWorkflowDialog from "../components/builder/dialogs/SaveWorkflowDialog";
 import LayerPanel from "../components/builder/LayerPanel";
@@ -99,6 +100,8 @@ const nodeTypes: NodeTypes = {
   text: TextNode as any,
   section: SectionNode,
   row: RowNode,
+  header: HeaderFooterNode,
+  footer: HeaderFooterNode,
   button: ButtonNode,
   image: ImageNode,
   container: ContainerNode,
@@ -119,7 +122,12 @@ const nodeTypes: NodeTypes = {
  */
 const normalizeZIndex = (nodeList: any[]) =>
   nodeList.map((node: any) => {
-    const zIndex = node.type === "section" ? 0 : node.type === "row" ? 1 : 10;
+    const zIndex =
+      node.type === "section"
+        ? 0
+        : node.type === "row" || node.type === "header" || node.type === "footer"
+          ? 1
+          : 10;
     return node.zIndex === zIndex ? node : { ...node, zIndex };
   });
 
@@ -228,6 +236,27 @@ const getDefaultNodeData = (type: string, label: string) => {
         maxWidth: 1200,
         backgroundColor: "#000000",
         positionMode: "flow",
+        syncHeaderFooterStyle: true,
+      };
+    case "header":
+      return {
+        label: "Header",
+        height: 120,
+        padding: 24,
+        backgroundColor: "#ffffff",
+        border: "1px solid #e5e7eb",
+        columns: { count: 3, gap: 16 },
+        positionMode: "absolute",
+      };
+    case "footer":
+      return {
+        label: "Footer",
+        height: 140,
+        padding: 24,
+        backgroundColor: "#f9fafb",
+        border: "1px solid #e5e7eb",
+        columns: { count: 3, gap: 16 },
+        positionMode: "absolute",
       };
     default:
       return { label };
@@ -525,6 +554,26 @@ export default function PageBuilderInner() {
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
 
+  const selectSectionWithBars = useCallback(
+    (sectionNode: any) => {
+      const barNodes = nodes.filter(
+        (n: any) =>
+          n.parentNode === sectionNode.id &&
+          (n.type === "header" || n.type === "footer")
+      );
+      setSelectedNode(sectionNode);
+      setSelectedNodes([sectionNode, ...barNodes]);
+    },
+    [nodes]
+  );
+
+  // Inspector should focus on the frame when frame + bars are bundled.
+  const inspectorSelection = useMemo(() => {
+    const section = selectedNodes.find((n: any) => n.type === "section");
+    if (section) return [section];
+    return selectedNodes;
+  }, [selectedNodes]);
+
   // Walk parent chains to convert nested positions into canvas space for drop/extent math.
   // ReactFlow stores positions relative to parents, so this keeps absolute layout deterministic.
   // Must stay read-only to avoid mutating node graphs during drag/drop inspection.
@@ -547,35 +596,96 @@ export default function PageBuilderInner() {
     [nodes]
   );
 
-  // Anchor each row to a deterministic origin inside its owning section for flow rendering.
-  // Flow stacks depend on these offsets remaining stable so column math doesn't reorder nodes.
-  // Section width is captured here to avoid recalculating it per child transform.
-  const rowLayoutById = useMemo(() => {
-    const layout = new Map<string, { x: number; y: number; width: number }>();
+  // Anchor layout nodes (header, rows, footer) to deterministic origins within their section.
+  // Positions derive from computed heights only (no stored offsets) to keep flow stacking pure.
+  const { layoutById, sectionHeightById } = useMemo(() => {
+    const layout = new Map<
+      string,
+      { x: number; y: number; width: number; height: number }
+    >();
+    const sectionHeights = new Map<string, number>();
     const sections = nodes.filter((n: any) => n.type === "section");
 
+    const getLayoutHeight = (node: any, section: any, isOnlyChild: boolean) => {
+      const explicit =
+        (node.style?.height as number | undefined) ??
+        (node.data?.height as number | undefined) ??
+        (node.height as number | undefined);
+      if (typeof explicit === "number") {
+        return Math.max(explicit, 40);
+      }
+
+      const measured = node.data?._measuredHeight;
+      if (typeof measured === "number") {
+        return Math.max(measured, 40);
+      }
+
+      if (node.type === "row") {
+        const fallback = node.data?.rowHeight ?? node.height ?? 0;
+        if (isOnlyChild) {
+          return Math.max(
+            section.data?.pageHeight ?? fallback ?? 0,
+            fallback ?? 0
+          );
+        }
+        return Math.max(fallback, 40);
+      }
+
+      if (node.type === "header") return 120;
+      if (node.type === "footer") return 140;
+      return isOnlyChild
+        ? Math.max(section.data?.pageHeight ?? 0, 40)
+        : 120;
+    };
+
     sections.forEach((section: any) => {
-      const sectionPadding = 0;
-      const sectionGap = 0;
       const sectionWidth =
         section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
 
-      const rows = nodes
-        .filter((n: any) => n.type === "row" && n.parentNode === section.id)
-        .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0));
+      const layoutChildren = nodes
+        .filter(
+          (n: any) =>
+            n.parentNode === section.id &&
+            (n.type === "header" || n.type === "footer" || n.type === "row")
+        )
+        .sort((a: any, b: any) => {
+          if (a.type === "header" && b.type !== "header") return -1;
+          if (b.type === "header" && a.type !== "header") return 1;
+          if (a.type === "footer" && b.type !== "footer") return 1;
+          if (b.type === "footer" && a.type !== "footer") return -1;
+          return (a.data?.order ?? 0) - (b.data?.order ?? 0);
+        });
 
-      let currentY = sectionPadding;
-      rows.forEach((row: any) => {
-        const isOnlyRow = rows.length === 1;
-        layout.set(row.id, { x: 0, y: currentY, width: sectionWidth });
-        const rowHeight = isOnlyRow
-          ? (section.data?.pageHeight ?? row.data?.rowHeight ?? row.height ?? 0)
-          : (row.data?.rowHeight ?? row.height ?? 0);
-        currentY += rowHeight + sectionGap;
+      let currentY = 0;
+      let footerNode: any = null;
+      let footerHeight = 0;
+      const minHeight = section.data?.pageHeight ?? 0;
+
+      layoutChildren.forEach((child) => {
+        const height = getLayoutHeight(child, section, layoutChildren.length === 1);
+        if (child.type === "footer") {
+          footerNode = child;
+          footerHeight = height;
+          return;
+        }
+        layout.set(child.id, { x: 0, y: currentY, width: sectionWidth, height });
+        currentY += height;
       });
+
+      const bodyHeight = Math.max(currentY, minHeight);
+      if (footerNode) {
+        layout.set(footerNode.id, {
+          x: 0,
+          y: bodyHeight,
+          width: sectionWidth,
+          height: footerHeight,
+        });
+      }
+
+      sectionHeights.set(section.id, bodyHeight);
     });
 
-    return layout;
+    return { layoutById: layout, sectionHeightById: sectionHeights };
   }, [nodes]);
 
   // =====================================
@@ -609,7 +719,27 @@ export default function PageBuilderInner() {
 
       let position, parentNode, extraData: any = {};
 
-      if (!target) {
+      const isBar =
+        placementMode.type === "header" || placementMode.type === "footer";
+      const frame = nodes.find((n) => n.type === "section");
+
+      if (isBar) {
+        if (!frame) {
+          alert("Add a Frame first.");
+          return false;
+        }
+        const alreadyExists = nodes.some(
+          (n) => n.type === placementMode.type && n.parentNode === frame.id
+        );
+        if (alreadyExists) {
+          setPlacementMode(null);
+          return false;
+        }
+        parentNode = frame.id;
+        position = { x: 0, y: 0 };
+        extraData.order =
+          placementMode.type === "header" ? -1000 : Number.MAX_SAFE_INTEGER;
+      } else if (!target) {
         position = {
           x: flowPoint.x - width / 2,
           y: flowPoint.y - height / 2,
@@ -668,10 +798,15 @@ export default function PageBuilderInner() {
         type: placementMode.type,
         parentNode: parentNode,
         position: position,
-        draggable: defaultData.positionMode === "absolute",
+        draggable: isBar ? false : defaultData.positionMode === "absolute",
         style: defaultData.width
           ? {
-              width: defaultData.width,
+              width:
+                isBar && frame
+                  ? frame.data?.pageWidth ??
+                    frame.data?.maxWidth ??
+                    defaultData.width
+                  : defaultData.width,
               ...(defaultData.height ? { height: defaultData.height } : {}),
             }
           : undefined,
@@ -701,21 +836,29 @@ export default function PageBuilderInner() {
       });
       const frame = nodes.find((n: any) => n.type === "section");
       if (!frame) return false;
-      const width = frame.width ?? frame.data?.pageWidth ?? 0;
-      const height = frame.height ?? frame.data?.pageHeight ?? 0;
+      const width =
+        frame.width ??
+        frame.data?.pageWidth ??
+        frame.data?.maxWidth ??
+        frame.style?.width ??
+        0;
+      const height =
+        sectionHeightById.get(frame.id) ??
+        frame.height ??
+        frame.data?.pageHeight ??
+        0;
       const within =
         flowPoint.x >= frame.position.x &&
         flowPoint.x <= frame.position.x + width &&
         flowPoint.y >= frame.position.y &&
         flowPoint.y <= frame.position.y + height;
       if (within) {
-        setSelectedNode(frame);
-        setSelectedNodes([frame]);
+        selectSectionWithBars(frame);
         return true;
       }
       return false;
     },
-    [nodes, reactFlowInstance]
+    [nodes, reactFlowInstance, sectionHeightById, selectSectionWithBars]
   );
 
   // Precompute vertical offsets for flow nodes within each column so rendering avoids rescanning siblings.
@@ -750,7 +893,12 @@ export default function PageBuilderInner() {
         (owner?.data?.columns?.gap as number | undefined) !== undefined
           ? owner?.data?.columns?.gap
           : 16;
-      const columnPaddingY = owner?.type === "section" ? 40 : 0;
+      const columnPaddingY =
+        typeof owner?.data?.padding === "number"
+          ? owner.data.padding
+          : owner?.type === "section"
+            ? 40
+            : 0;
 
       list
         .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
@@ -778,7 +926,7 @@ export default function PageBuilderInner() {
         const owner = nodes.find(
           (n: any) => n.id === node.data?._ownedByColumn
         );
-        const ownerLayout = rowLayoutById.get(node.data?._ownedByColumn);
+        const ownerLayout = layoutById.get(node.data?._ownedByColumn);
         const ownerWidth =
           ownerLayout?.width ??
           owner?.style?.width ??
@@ -793,7 +941,7 @@ export default function PageBuilderInner() {
       }
       return { x: flowX, y: flowY };
     },
-    [flowStackOffsets, nodes, rowLayoutById]
+    [flowStackOffsets, nodes, layoutById]
   );
 
   // Project builder nodes into ReactFlow props while preserving flow/absolute intent and layering.
@@ -810,6 +958,7 @@ export default function PageBuilderInner() {
             selectedNode?.id === n.id ||
             selectedNodes.some((sn) => sn.id === n.id);
           if (n.type === "section") {
+            const computedHeight = sectionHeightById.get(n.id);
             return {
               ...n,
               zIndex: 0,
@@ -817,6 +966,7 @@ export default function PageBuilderInner() {
               selected: isSelected,
               data: {
                 ...n.data,
+                _computedHeight: computedHeight,
                 _allNodes: nodes,
                 _registerColumnRect: registerColumnRect,
                 _viewportVersion: viewportVersion,
@@ -825,11 +975,12 @@ export default function PageBuilderInner() {
               style: {
                 ...n.style,
                 zIndex: 0,
+                ...(computedHeight ? { height: computedHeight } : {}),
               },
             };
           }
           if (n.type === "row") {
-            const layout = rowLayoutById.get(n.id);
+            const layout = layoutById.get(n.id);
             return {
               ...n,
               zIndex: 1,
@@ -880,6 +1031,105 @@ export default function PageBuilderInner() {
               },
             };
           }
+          if (n.type === "header" || n.type === "footer") {
+            const layout = layoutById.get(n.id);
+            const layoutWidth =
+              layout?.width ??
+              n.style?.width ??
+              n.data?.width ??
+              (nodes.find((p: any) => p.id === n.parentNode)?.data?.pageWidth ??
+                undefined);
+            const parentSelected = selectedNodes.some(
+              (sn) => sn.type === "section" && sn.id === n.parentNode
+            );
+            const selfSelected =
+              isSelected && selectedNodes.length <= 1 && !parentSelected;
+            return {
+              ...n,
+              zIndex: 1,
+              draggable: false,
+              position: layout ? { x: layout.x, y: layout.y } : n.position,
+              selected: isSelected,
+              data: {
+                ...n.data,
+                _allNodes: nodes,
+                _registerColumnRect: registerColumnRect,
+                _viewportVersion: viewportVersion,
+                _hoverState: hoverState,
+                _onMeasure: (id: string, height: number) => {
+                  setNodesNormalized((nds: any) =>
+                    nds.map((node: any) => {
+                      if (node.id !== id) return node;
+                      if (typeof node.data?.height === "number") return node;
+                      if (node.data?._measuredHeight === height) return node;
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          _measuredHeight: height,
+                        },
+                      };
+                    })
+                  );
+                },
+                _onColumnClick: (event: any) => {
+                  if (placementMode) {
+                    placeNodeAtEvent(event);
+                    return;
+                  }
+                  setSelectedNode(n);
+                  setSelectedNodes([n]);
+                },
+                _onResizeStart: () => setIsResizing(true),
+                _onResizeEnd: () => setIsResizing(false),
+                _onResize: (_event: any, params: any) => {
+                  const nextHeight = Math.round(params.height);
+                  const nextPosition = { x: 0, y: layout?.y ?? 0 };
+                  setNodesNormalized((nds: any) =>
+                    nds.map((node: any) =>
+                      node.id === n.id
+                        ? {
+                            ...node,
+                            position: nextPosition,
+                            style: {
+                              ...node.style,
+                              width: layoutWidth,
+                              height: nextHeight,
+                              zIndex: n.zIndex ?? 10,
+                            },
+                            data: {
+                              ...node.data,
+                              height: nextHeight,
+                            },
+                          }
+                        : node
+                    )
+                  );
+                },
+              },
+              style: {
+                ...n.style,
+                zIndex: 1,
+                width: layoutWidth,
+                minHeight:
+                  n.style?.height ??
+                  n.data?.height ??
+                  (n.type === "header" ? 120 : 140),
+                height: n.style?.height ?? undefined,
+                outline: undefined,
+                outlineOffset: undefined,
+                boxShadow:
+                  parentSelected || selfSelected
+                    ? parentSelected
+                      ? "inset 0 0 0 2px #3b82f6"
+                      : "0 0 0 2px #3b82f6"
+                    : undefined,
+                marginTop: parentSelected ? -2 : 0,
+                marginBottom: parentSelected ? -2 : 0,
+                boxSizing: "border-box",
+              },
+            };
+          }
           const isFlow = n.data?.positionMode === "flow";
           const baseDraggable = n.draggable !== false;
           const flowY = flowStackOffsets.get(n.id);
@@ -892,7 +1142,7 @@ export default function PageBuilderInner() {
             const owner = nodes.find(
               (node: any) => node.id === n.data?._ownedByColumn
             );
-            const ownerLayout = rowLayoutById.get(n.data?._ownedByColumn);
+            const ownerLayout = layoutById.get(n.data?._ownedByColumn);
             const ownerWidth =
               ownerLayout?.width ??
               owner?.style?.width ??
@@ -1028,7 +1278,8 @@ export default function PageBuilderInner() {
     nodes,
     selectedNode,
     selectedNodes,
-    rowLayoutById,
+    sectionHeightById,
+    layoutById,
     registerColumnRect,
     viewportVersion,
     hoverState,
@@ -1110,9 +1361,12 @@ export default function PageBuilderInner() {
                   (n: any) => n.type === "section" && n.id === node.parentNode
                 );
                 if (parentSection) {
-                  setSelectedNode(parentSection);
-                  setSelectedNodes([parentSection]);
+                  selectSectionWithBars(parentSection);
                 }
+                return;
+              }
+              if (node.type === "section") {
+                selectSectionWithBars(node);
                 return;
               }
               setSelectedNode(node);
@@ -1316,9 +1570,13 @@ export default function PageBuilderInner() {
                         n.type === "section" && n.id === node.parentNode
                     );
                     if (parentSection) {
-                      setSelectedNode(parentSection);
-                      setSelectedNodes([parentSection]);
+                      selectSectionWithBars(parentSection);
                     }
+                    return;
+                  }
+                  if (node.type === "section") {
+                    event.stopPropagation();
+                    selectSectionWithBars(node);
                     return;
                   }
                   event.stopPropagation();
@@ -1341,6 +1599,10 @@ export default function PageBuilderInner() {
                 zoomOnScroll={!drawingMode}
                 onNodeDragStart={(_, node) => {
                   if (node.type === "row") return;
+                  if (node.type === "section") {
+                    selectSectionWithBars(node);
+                    return;
+                  }
                   setSelectedNode(node);
                   setSelectedNodes([node]);
                 }}
@@ -1399,9 +1661,25 @@ export default function PageBuilderInner() {
 
         {selectedNodes.length > 0 && (
           <InspectorPanel
-            selectedNodes={selectedNodes.map(
+            selectedNodes={inspectorSelection.map(
               (sn) => {
                 const node = nodes.find((n: any) => n.id === sn.id) || sn;
+                if (node.type === "header" || node.type === "footer") {
+                  const layout = layoutById.get(node.id);
+                  const parentWidth =
+                    nodes.find((p: any) => p.id === node.parentNode)?.data
+                      ?.pageWidth ??
+                    layout?.width ??
+                    node.data?.width;
+                  return {
+                    ...node,
+                    position: { x: 0, y: layout?.y ?? 0 },
+                    style: {
+                      ...node.style,
+                      width: parentWidth,
+                    },
+                  };
+                }
                 if (node.data?.positionMode === "flow") {
                   return {
                     ...node,
