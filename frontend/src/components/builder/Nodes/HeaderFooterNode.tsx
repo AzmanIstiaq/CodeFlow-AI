@@ -90,12 +90,14 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
   useLayoutEffect(() => {
     if (!blockRef.current || !data._onMeasure) return;
     if (typeof data.height === "number") return;
+
     const height = blockRef.current.offsetHeight;
-    if (height && height !== lastHeightRef.current) {
-      lastHeightRef.current = height;
+    if (height) {
       data._onMeasure(id, height);
+      requestAnimationFrame(() => data._onMeasure!(id, height));
     }
-  });
+  }, [columns, gap, padding]);
+
 
   return (
     <div
@@ -106,10 +108,10 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
         gridTemplateColumns: `repeat(${columns}, 1fr)`,
         gap: gap ?? 0,
         width: "100%",
-        height: "100%",
+        height: typeof data.height === "number" ? data.height : "auto",
+        minHeight: 50,
         padding,
         backgroundColor: data.backgroundColor ?? "#ffffff",
-        border: data.border ?? "1px solid #e5e7eb",
         borderRadius: typeof data.borderRadius === 'object' 
           ? `${data.borderRadius.topLeft ?? 0}px ${data.borderRadius.topRight ?? 0}px ${data.borderRadius.bottomRight ?? 0}px ${data.borderRadius.bottomLeft ?? 0}px`
           : `${data.borderRadius ?? 0}px`,
@@ -120,11 +122,17 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
       <NodeResizer
         isVisible={!!selected}
         minWidth={200}
-        minHeight={40}
+        minHeight={50}
         keepAspectRatio={false}
+        color="#3b82f6"
         onResizeStart={data._onResizeStart}
         onResizeEnd={data._onResizeEnd}
-        onResize={data._onResize}
+        onResize={(event, params) => {
+          // Call the custom resize handler if available
+          if (data._onResize) {
+            data._onResize(event, params);
+          }
+        }}
       />
       {Array.from({ length: columns }).map((_, colIndex) => {
         const isHovered =

@@ -60,12 +60,105 @@ export default function Style({
   };
 
   // ================================
+  // Sync helpers
+  // ================================
+  /**
+   * Extract the section ID from a node, handling both section and header/footer types.
+   */
+  const getSectionId = (n: any) =>
+    n.type === "section" ? n.id : n.parentNode;
+
+  /**
+   * Check if header/footer sync is enabled for a given section.
+   */
+  const isSyncEnabled = (sectionId?: string | null) => {
+    if (!sectionId) return false;
+    const sectionNode = allNodes.find(
+      (n) => n.id === sectionId && n.type === "section"
+    );
+    return sectionNode?.data?.syncHeaderFooterStyle !== false;
+  };
+
+  const getFrameGroupIds = (sectionId: string | undefined | null) =>
+    sectionId
+      ? (
+          allNodes
+            ?.filter(
+              (n) =>
+                n.id === sectionId ||
+                ((n.type === "header" || n.type === "footer") &&
+                  (n as any).parentNode === sectionId)
+            )
+            .map((n) => n.id) ?? []
+        )
+      : [];
+
+  /**
+   * Push a fill color to section + header + footer.
+   * force=true bypasses the sync flag (used when turning the toggle on).
+   */
+  const syncFamilyFill = (
+    sectionId: string | undefined | null,
+    color: string,
+    { force = false }: { force?: boolean } = {}
+  ) => {
+    if (!sectionId) return;
+    if (!force && !isSyncEnabled(sectionId)) return;
+    const ids = getFrameGroupIds(sectionId);
+    if (ids.length) {
+      updateNodes(ids, { backgroundColor: color });
+    }
+  };
+
+  // ================================
   // Handlers
   // ================================
   /**
    * Apply a style update to one or many nodes.
    */
   const handleChange = (field: string, value: any) => {
+    // Keep header + section + footer in lockstep for fill when linked
+    if (field === "backgroundColor") {
+      if (isMultiSelect) {
+        const sectionInSelection = selectedNodes.find(
+          (n) => n.type === "section"
+        );
+        const targetSectionId =
+          sectionInSelection?.id ?? getSectionId(selectedNodes[0]);
+
+        if (isSyncEnabled(targetSectionId)) {
+          syncFamilyFill(targetSectionId, value);
+        } else {
+          updateNodes(
+            selectedNodes.map((n) => n.id),
+            { [field]: value }
+          );
+        }
+        return;
+      }
+
+      // Derive the parent section even if parentNode is missing on the transformed selection.
+      const parentSection =
+        node.type === "section"
+          ? node
+          : allNodes.find(
+              (n) => n.type === "section" && n.id === (node as any).parentNode
+            );
+      const sectionId = parentSection?.id;
+
+      // Force sync to section + sibling bar when a bar is edited; honor toggle when editing the frame.
+      if (node.type === "header" || node.type === "footer") {
+        syncFamilyFill(sectionId, value, { force: true });
+        return;
+      }
+
+      if (isSyncEnabled(sectionId)) {
+        syncFamilyFill(sectionId, value);
+        return;
+      }
+    }
+
+    // Default handling
     if (isMultiSelect) {
       updateNodes(
         selectedNodes.map((n) => n.id),
@@ -74,26 +167,7 @@ export default function Style({
       return;
     }
 
-    // Single selection
     updateNode(node.id, { [field]: value });
-
-    // Propagate frame fill to header/footer when enabled.
-    if (
-      node.type === "section" &&
-      field === "backgroundColor" &&
-      node.data?.syncHeaderFooterStyle !== false
-    ) {
-      const linkedIds = allNodes
-        .filter(
-          (n) =>
-            (n.type === "header" || n.type === "footer") &&
-            (n as any).parentNode === node.id
-        )
-        .map((n) => n.id);
-      if (linkedIds.length) {
-        updateNodes(linkedIds, { backgroundColor: value });
-      }
-    }
   };
 
   const backgroundColor = getValue("backgroundColor", "#ffffff");
@@ -179,10 +253,17 @@ export default function Style({
             <div className="inspector-field">
               <label>Sync header/footer fill</label>
               <Toggle
-                checked={syncHeaderFooterStyle}
-                onChange={(checked) =>
-                  updateNode(node.id, { syncHeaderFooterStyle: checked })
-                }
+                checked={syncHeaderFooterStyle || false}
+                onChange={(checked) => {
+                  updateNode(node.id, { syncHeaderFooterStyle: checked });
+                  if (checked) {
+                    syncFamilyFill(
+                      node.id,
+                      backgroundColor as string,
+                      { force: true }
+                    );
+                  }
+                }}
                 label={syncHeaderFooterStyle ? "Linked" : "Independent"}
               />
             </div>

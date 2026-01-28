@@ -241,8 +241,8 @@ const getDefaultNodeData = (type: string, label: string) => {
     case "header":
       return {
         label: "Header",
-        height: 120,
-        padding: 24,
+        height: 80,
+        padding: 0,
         backgroundColor: "#ffffff",
         border: "1px solid #e5e7eb",
         columns: { count: 3, gap: 16 },
@@ -251,8 +251,8 @@ const getDefaultNodeData = (type: string, label: string) => {
     case "footer":
       return {
         label: "Footer",
-        height: 140,
-        padding: 24,
+        height: 80,
+        padding: 0,
         backgroundColor: "#f9fafb",
         border: "1px solid #e5e7eb",
         columns: { count: 3, gap: 16 },
@@ -606,37 +606,47 @@ export default function PageBuilderInner() {
     const sectionHeights = new Map<string, number>();
     const sections = nodes.filter((n: any) => n.type === "section");
 
-    const getLayoutHeight = (node: any, section: any, isOnlyChild: boolean) => {
-      const explicit =
-        (node.style?.height as number | undefined) ??
-        (node.data?.height as number | undefined) ??
-        (node.height as number | undefined);
-      if (typeof explicit === "number") {
-        return Math.max(explicit, 40);
-      }
+    const getLayoutHeight = (node: any, currentNodes: any[]) => {
+  // HEADER / FOOTER
+  if (node.type === "header" || node.type === "footer") {
+    // Find the current version of this node
+    const currentNode = currentNodes.find((n: any) => n.id === node.id);
+    
+    // User-resized height always wins
+    if (typeof currentNode?.data?.height === "number") {
+      console.log("getLayoutHeight - using node.data.height:", currentNode.data.height, "for node:", node.id);
+      return currentNode.data.height;
+    }
+    // Fall back to style/explicit height if data.height not set
+    const styleHeight =
+      (currentNode?.style?.height as number | undefined) ??
+      (currentNode?.height as number | undefined);
+    if (typeof styleHeight === "number") {
+      console.log("getLayoutHeight - using style/height:", styleHeight, "for node:", node.id);
+      return styleHeight;
+    }
 
-      const measured = node.data?._measuredHeight;
-      if (typeof measured === "number") {
-        return Math.max(measured, 40);
-      }
+    // Otherwise use DOM-measured height
+    if (typeof currentNode?.data?._measuredHeight === "number") {
+      return currentNode.data._measuredHeight;
+    }
 
-      if (node.type === "row") {
-        const fallback = node.data?.rowHeight ?? node.height ?? 0;
-        if (isOnlyChild) {
-          return Math.max(
-            section.data?.pageHeight ?? fallback ?? 0,
-            fallback ?? 0
-          );
-        }
-        return Math.max(fallback, 40);
-      }
+    // Until measured, contribute NOTHING
+    return 0;
+  }
 
-      if (node.type === "header") return 120;
-      if (node.type === "footer") return 140;
-      return isOnlyChild
-        ? Math.max(section.data?.pageHeight ?? 0, 40)
-        : 120;
-    };
+  // ROWS
+  if (node.type === "row") {
+    const h =
+      node.data?.rowHeight ??
+      (node.style?.height as number | undefined) ??
+      (node.height as number | undefined);
+    return typeof h === "number" ? Math.max(h, 40) : 40;
+  }
+
+  return 0;
+};
+
 
     sections.forEach((section: any) => {
       const sectionWidth =
@@ -662,7 +672,7 @@ export default function PageBuilderInner() {
       const minHeight = section.data?.pageHeight ?? 0;
 
       layoutChildren.forEach((child) => {
-        const height = getLayoutHeight(child, section, layoutChildren.length === 1);
+        const height = getLayoutHeight(child, nodes);
         if (child.type === "footer") {
           footerNode = child;
           footerHeight = height;
@@ -687,6 +697,19 @@ export default function PageBuilderInner() {
 
     return { layoutById: layout, sectionHeightById: sectionHeights };
   }, [nodes]);
+
+  // Force ReactFlow to recalc node dimensions when we update size programmatically
+  const refreshNodeInternals = useCallback(
+    (ids: string | string[]) => {
+      const updateInternals = (reactFlowInstance as any)?.updateNodeInternals;
+      if (typeof updateInternals !== "function") return;
+      const list = Array.isArray(ids) ? ids : [ids];
+      list.forEach((nodeId) =>
+        requestAnimationFrame(() => updateInternals(nodeId))
+      );
+    },
+    [reactFlowInstance]
+  );
 
   // =====================================
   // NODE PLACEMENT & INTERACTION HANDLERS
@@ -894,11 +917,9 @@ export default function PageBuilderInner() {
           ? owner?.data?.columns?.gap
           : 16;
       const columnPaddingY =
-        typeof owner?.data?.padding === "number"
-          ? owner.data.padding
-          : owner?.type === "section"
-            ? 40
-            : 0;
+        owner?.type === "row"
+          ? owner.data?.padding ?? 0
+          : 0;
 
       list
         .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
@@ -959,6 +980,12 @@ export default function PageBuilderInner() {
             selectedNodes.some((sn) => sn.id === n.id);
           if (n.type === "section") {
             const computedHeight = sectionHeightById.get(n.id);
+            // Prioritize manual height settings over computed height
+            const manualHeight = 
+              (n.style?.height as number | undefined) ?? 
+              (n.height as number | undefined) ??
+              (n.data?.pageHeight as number | undefined);
+            
             return {
               ...n,
               zIndex: 0,
@@ -975,7 +1002,7 @@ export default function PageBuilderInner() {
               style: {
                 ...n.style,
                 zIndex: 0,
-                ...(computedHeight ? { height: computedHeight } : {}),
+                ...(manualHeight ? { height: manualHeight } : (computedHeight ? { height: computedHeight } : {})),
               },
             };
           }
@@ -1039,6 +1066,15 @@ export default function PageBuilderInner() {
               n.data?.width ??
               (nodes.find((p: any) => p.id === n.parentNode)?.data?.pageWidth ??
                 undefined);
+            const renderHeight =
+              (typeof n.data?.height === "number" && n.data.height > 0
+                ? n.data.height
+                : undefined) ??
+              (typeof n.style?.height === "number" && n.style.height > 0
+                ? n.style.height
+                : undefined) ??
+              layout?.height ??
+              (n.type === "header" ? 120 : 140);
             const parentSelected = selectedNodes.some(
               (sn) => sn.type === "section" && sn.id === n.parentNode
             );
@@ -1047,7 +1083,7 @@ export default function PageBuilderInner() {
             return {
               ...n,
               zIndex: 1,
-              draggable: false,
+              draggable: !!isSelected,
               position: layout ? { x: layout.x, y: layout.y } : n.position,
               selected: isSelected,
               data: {
@@ -1084,38 +1120,77 @@ export default function PageBuilderInner() {
                 _onResizeEnd: () => setIsResizing(false),
                 _onResize: (_event: any, params: any) => {
                   const nextHeight = Math.round(params.height);
+                  const nextWidth = Math.round(
+                    (params.width as number | undefined) ??
+                      layoutWidth ??
+                      (n.style?.width as number | undefined) ??
+                      (n.data?.width as number | undefined) ??
+                      0
+                  );
                   const nextPosition = { x: 0, y: layout?.y ?? 0 };
+
+                  // Persist size into both style and data so layout + inspector stay in sync.
                   setNodesNormalized((nds: any) =>
                     nds.map((node: any) =>
                       node.id === n.id
                         ? {
                             ...node,
+                            width: nextWidth,
+                            height: nextHeight,
                             position: nextPosition,
                             style: {
                               ...node.style,
-                              width: layoutWidth,
+                              width: nextWidth,
                               height: nextHeight,
                               zIndex: n.zIndex ?? 10,
                             },
                             data: {
                               ...node.data,
+                              width: nextWidth,
                               height: nextHeight,
+                              _lastResize: Date.now(),
                             },
                           }
                         : node
                     )
                   );
+
+                  // Keep the inspector's selected node snapshot fresh.
+                  setSelectedNodes((prev) =>
+                    prev.map((sn) =>
+                      sn.id === n.id
+                        ? {
+                            ...sn,
+                            width: nextWidth,
+                            height: nextHeight,
+                            style: {
+                              ...sn.style,
+                              width: nextWidth,
+                              height: nextHeight,
+                            },
+                            data: {
+                              ...sn.data,
+                              width: nextWidth,
+                              height: nextHeight,
+                            },
+                          }
+                        : sn
+                    )
+                  );
+
+                  // Force ReactFlow to recalc internals so the new size is applied on canvas.
+                  const updateInternals = (reactFlowInstance as any)?.updateNodeInternals;
+                  if (typeof updateInternals === "function") {
+                    requestAnimationFrame(() => updateInternals(n.id));
+                  }
                 },
               },
               style: {
                 ...n.style,
                 zIndex: 1,
                 width: layoutWidth,
-                minHeight:
-                  n.style?.height ??
-                  n.data?.height ??
-                  (n.type === "header" ? 120 : 140),
-                height: n.style?.height ?? undefined,
+                minHeight: undefined,
+                height: renderHeight,
                 outline: undefined,
                 outlineOffset: undefined,
                 boxShadow:
@@ -1174,11 +1249,11 @@ export default function PageBuilderInner() {
               _onResizeEnd: () => setIsResizing(false),
               _onRadiusStart: () => setIsEditingRadius(true),
               _onRadiusEnd: () => setIsEditingRadius(false),
-              _onResize: (_event: any, params: any) => {
-                setNodesNormalized((nds: any) =>
-                  nds.map((node: any) =>
-                    node.id === n.id
-                      ? {
+                _onResize: (_event: any, params: any) => {
+                  setNodesNormalized((nds: any) =>
+                    nds.map((node: any) =>
+                      node.id === n.id
+                        ? {
                           ...node,
                           ...(node.data?.positionMode === "absolute"
                             ? { position: { x: params.x, y: params.y } }
@@ -1198,6 +1273,12 @@ export default function PageBuilderInner() {
                       : node
                   )
                 );
+
+                // Ensure ReactFlow refreshes measured bounds after resize.
+                const updateInternals = (reactFlowInstance as any)?.updateNodeInternals;
+                if (typeof updateInternals === "function") {
+                  requestAnimationFrame(() => updateInternals(n.id));
+                }
               },
               onUpdateText: (newText: string) => {
                 setNodes((nds: any) =>
@@ -1691,12 +1772,20 @@ export default function PageBuilderInner() {
             )}
             allNodes={nodes}
             updateNode={(id: string, updates: any) => {
+              const shouldRefreshSize =
+                updates?.width !== undefined || updates?.height !== undefined;
               setNodesNormalized((nds: any) => {
                 const updatedNodes = nds.map((n: any) => {
                   if (n.id === id) {
+                    // Clear data.height when updating height to let style.height take precedence
+                    const { height, ...otherUpdates } = updates;
                     return {
                       ...n,
-                      data: { ...n.data, ...updates },
+                      data: { 
+                        ...n.data, 
+                        ...otherUpdates,
+                        ...(height !== undefined ? { height: undefined } : {})
+                      },
                       position:
                         updates.position !== undefined
                           ? updates.position
@@ -1715,7 +1804,6 @@ export default function PageBuilderInner() {
                   return n;
                 });
 
-                // Update selectedNodes with fresh data from the new nodes array
                 setSelectedNodes((prev) =>
                   prev.map((sn) => {
                     const updated = updatedNodes.find(
@@ -1727,6 +1815,10 @@ export default function PageBuilderInner() {
 
                 return updatedNodes;
               });
+
+              if (shouldRefreshSize) {
+                refreshNodeInternals(id);
+              }
             }}
             updateNodes={(ids: string[], updates: any) => {
               setNodesNormalized((nds: any) => {
@@ -1735,11 +1827,18 @@ export default function PageBuilderInner() {
                   return [...nds, __addNode];
                 }
 
+                // Clear data.height when updating height to let style.height take precedence
+                const { height, ...otherUpdates } = restUpdates;
+
                 const updatedNodes = nds.map((n: any) => {
                   if (ids.includes(n.id)) {
                     return {
                       ...n,
-                      data: { ...n.data, ...restUpdates },
+                      data: { 
+                        ...n.data, 
+                        ...otherUpdates,
+                        ...(height !== undefined ? { height: undefined } : {})
+                      },
                       position:
                         restUpdates.position !== undefined
                           ? restUpdates.position
@@ -1758,7 +1857,6 @@ export default function PageBuilderInner() {
                   return n;
                 });
 
-                // Update selectedNodes with fresh data from the new nodes array
                 setSelectedNodes((prev) =>
                   prev.map((sn) => {
                     const updated = updatedNodes.find(
@@ -1767,6 +1865,13 @@ export default function PageBuilderInner() {
                     return updated || sn;
                   })
                 );
+
+                if (
+                  restUpdates?.width !== undefined ||
+                  restUpdates?.height !== undefined
+                ) {
+                  refreshNodeInternals(ids);
+                }
 
                 return updatedNodes;
               });
