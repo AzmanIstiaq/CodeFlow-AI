@@ -1,4 +1,13 @@
 /**
+ * RULE BOUNDARY
+ *
+ * This file must not define layout, spacing, drag, resize,
+ * selection, or z-index rules.
+ *
+ * All such logic MUST come from frontendRules/*.
+ * Ownership quick map: spacing/height → layout/*; flow/columns → flow/*; drag/guides → interaction/*; resize → resize/*; selection → selection/*; z-index → layering/*; inspector → inspector/*; export/layout safety → export/*.
+ */
+/**
  * PageBuilderInner Component
  *
  * The core canvas editor for the visual page builder.
@@ -84,6 +93,33 @@ import { useNodeOperations } from "../components/builder/hooks/useNodeOperations
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
 import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOperations";
 import { exportNextJSZip } from "../utils/exportNextJsZip";
+import { normalizeZIndex } from "../frontendRules/layering/layeringResolvers";
+import {
+  computeAbsolutePosition,
+  computeLayoutMaps,
+  computeFlowStackOffsets,
+  getFlowRenderPosition as resolveFlowRenderPosition,
+} from "../frontendRules/layout/layoutResolvers";
+import { isBarNode } from "../frontendRules/layout/layoutPolicy";
+import {
+  isNodeDraggable,
+  shouldUseSmartGuides,
+} from "../frontendRules/interaction/interactionPolicy";
+import {
+  allowCanvasDrag,
+  getMultiSelectKey,
+} from "../frontendRules/interaction/interactionResolvers";
+import {
+  bundleSectionSelection,
+  deriveInspectorSelection,
+  isPointInsideFrame,
+} from "../frontendRules/selection/selectionResolvers";
+import { shouldRedirectRowSelection } from "../frontendRules/selection/selectionPolicy";
+import {
+  resolveBarResizeState,
+  resolveContentResizeState,
+} from "../frontendRules/resize/resizeResolvers";
+import { canExportSite } from "../frontendRules/export/exportPolicy";
 
 // ===== APPLICATION MODE =====
 // "workflow" enables AI execution; "builder" is page design only
@@ -114,22 +150,6 @@ const nodeTypes: NodeTypes = {
 };
 
 // ===== UTILITY FUNCTIONS =====
-
-/**
- * Enforce consistent z-index layering across all nodes
- * Sections stay behind (0), rows middle (1), content on top (10)
- * Prevents visual hierarchy issues after node operations
- */
-const normalizeZIndex = (nodeList: any[]) =>
-  nodeList.map((node: any) => {
-    const zIndex =
-      node.type === "section"
-        ? 0
-        : node.type === "row" || node.type === "header" || node.type === "footer"
-          ? 1
-          : 10;
-    return node.zIndex === zIndex ? node : { ...node, zIndex };
-  });
 
 /**
  * Get default data for each node type
@@ -371,7 +391,9 @@ export default function PageBuilderInner() {
   const handleExportNextJSZip = () => {
     // Export uses the static Next.js scaffold so layout math stays precomputed at build time.
     // Keep this call thin to avoid touching canvas state while the archive is generated.
-    exportNextJSZip(site as any);
+    if (canExportSite(site)) {
+      exportNextJSZip(site as any);
+    }
   };
 
   // Smart guides for alignment
@@ -556,145 +578,33 @@ export default function PageBuilderInner() {
 
   const selectSectionWithBars = useCallback(
     (sectionNode: any) => {
-      const barNodes = nodes.filter(
-        (n: any) =>
-          n.parentNode === sectionNode.id &&
-          (n.type === "header" || n.type === "footer")
-      );
+      const bundled = bundleSectionSelection(nodes, sectionNode);
       setSelectedNode(sectionNode);
-      setSelectedNodes([sectionNode, ...barNodes]);
+      setSelectedNodes(bundled);
     },
     [nodes]
   );
 
   // Inspector should focus on the frame when frame + bars are bundled.
   const inspectorSelection = useMemo(() => {
-    const section = selectedNodes.find((n: any) => n.type === "section");
-    if (section) return [section];
-    return selectedNodes;
+    return deriveInspectorSelection(selectedNodes);
   }, [selectedNodes]);
 
-  // Walk parent chains to convert nested positions into canvas space for drop/extent math.
-  // ReactFlow stores positions relative to parents, so this keeps absolute layout deterministic.
-  // Must stay read-only to avoid mutating node graphs during drag/drop inspection.
+  // IMPORTANT:
+  // Layout rules are centralized in frontendRules/layout.
+  // Do NOT modify spacing or coordinate logic here.
   const getAbsolutePosition = useCallback(
-    (nodeId: string | undefined | null) => {
-      if (!nodeId) return { x: 0, y: 0 };
-      let accX = 0;
-      let accY = 0;
-      let current = nodes.find((n: any) => n.id === nodeId);
-      const visited = new Set<string>();
-      while (current && !visited.has(current.id)) {
-        visited.add(current.id);
-        accX += current.position?.x ?? 0;
-        accY += current.position?.y ?? 0;
-        if (!current.parentNode) break;
-        current = nodes.find((n: any) => n.id === current!.parentNode);
-      }
-      return { x: accX, y: accY };
-    },
+    (nodeId: string | undefined | null) => computeAbsolutePosition(nodeId, nodes),
     [nodes]
   );
 
-  // Anchor layout nodes (header, rows, footer) to deterministic origins within their section.
-  // Positions derive from computed heights only (no stored offsets) to keep flow stacking pure.
-  const { layoutById, sectionHeightById } = useMemo(() => {
-    const layout = new Map<
-      string,
-      { x: number; y: number; width: number; height: number }
-    >();
-    const sectionHeights = new Map<string, number>();
-    const sections = nodes.filter((n: any) => n.type === "section");
-
-    const getLayoutHeight = (node: any, currentNodes: any[]) => {
-  // HEADER / FOOTER
-  if (node.type === "header" || node.type === "footer") {
-    // Find the current version of this node
-    const currentNode = currentNodes.find((n: any) => n.id === node.id);
-    
-    // User-resized height always wins
-    if (typeof currentNode?.data?.height === "number") {
-      return currentNode.data.height;
-    }
-    // Fall back to style/explicit height if data.height not set
-    const styleHeight =
-      (currentNode?.style?.height as number | undefined) ??
-      (currentNode?.height as number | undefined);
-    if (typeof styleHeight === "number") {
-      return styleHeight;
-    }
-
-    // Otherwise use DOM-measured height
-    if (typeof currentNode?.data?._measuredHeight === "number") {
-      return currentNode.data._measuredHeight;
-    }
-
-    // Until measured, contribute NOTHING
-    return 0;
-  }
-
-  // ROWS
-  if (node.type === "row") {
-    const h =
-      node.data?.rowHeight ??
-      (node.style?.height as number | undefined) ??
-      (node.height as number | undefined);
-    return typeof h === "number" ? Math.max(h, 40) : 40;
-  }
-
-  return 0;
-};
-
-
-    sections.forEach((section: any) => {
-      const sectionWidth =
-        section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
-
-      const layoutChildren = nodes
-        .filter(
-          (n: any) =>
-            n.parentNode === section.id &&
-            (n.type === "header" || n.type === "footer" || n.type === "row")
-        )
-        .sort((a: any, b: any) => {
-          if (a.type === "header" && b.type !== "header") return -1;
-          if (b.type === "header" && a.type !== "header") return 1;
-          if (a.type === "footer" && b.type !== "footer") return 1;
-          if (b.type === "footer" && a.type !== "footer") return -1;
-          return (a.data?.order ?? 0) - (b.data?.order ?? 0);
-        });
-
-      let currentY = 0;
-      let footerNode: any = null;
-      let footerHeight = 0;
-      const minHeight = section.data?.pageHeight ?? 0;
-
-      layoutChildren.forEach((child) => {
-        const height = getLayoutHeight(child, nodes);
-        if (child.type === "footer") {
-          footerNode = child;
-          footerHeight = height;
-          return;
-        }
-        layout.set(child.id, { x: 0, y: currentY, width: sectionWidth, height });
-        currentY += height;
-      });
-
-      const bodyHeight = Math.max(currentY, minHeight);
-      if (footerNode) {
-        layout.set(footerNode.id, {
-          x: 0,
-          y: bodyHeight,
-          width: sectionWidth,
-          height: footerHeight,
-        });
-      }
-
-      sectionHeights.set(section.id, bodyHeight);
-    });
-
-    return { layoutById: layout, sectionHeightById: sectionHeights };
-  }, [nodes]);
+  // IMPORTANT:
+  // Layout rules are centralized in frontendRules/layout.
+  // Do NOT modify spacing or stacking logic here.
+  const { layoutById, sectionHeightById } = useMemo(
+    () => computeLayoutMaps(nodes),
+    [nodes]
+  );
 
   // Force ReactFlow to recalc node dimensions when we update size programmatically
   const refreshNodeInternals = useCallback(
@@ -740,8 +650,7 @@ export default function PageBuilderInner() {
 
       let position, parentNode, extraData: any = {};
 
-      const isBar =
-        placementMode.type === "header" || placementMode.type === "footer";
+      const isBar = isBarNode(placementMode.type);
       const frame = nodes.find((n) => n.type === "section");
 
       if (isBar) {
@@ -857,23 +766,12 @@ export default function PageBuilderInner() {
       });
       const frame = nodes.find((n: any) => n.type === "section");
       if (!frame) return false;
-      const width =
-        frame.width ??
-        frame.data?.pageWidth ??
-        frame.data?.maxWidth ??
-        frame.style?.width ??
-        0;
       const height =
         sectionHeightById.get(frame.id) ??
         frame.height ??
         frame.data?.pageHeight ??
         0;
-      const within =
-        flowPoint.x >= frame.position.x &&
-        flowPoint.x <= frame.position.x + width &&
-        flowPoint.y >= frame.position.y &&
-        flowPoint.y <= frame.position.y + height;
-      if (within) {
+      if (isPointInsideFrame(flowPoint, frame, height)) {
         selectSectionWithBars(frame);
         return true;
       }
@@ -882,90 +780,26 @@ export default function PageBuilderInner() {
     [nodes, reactFlowInstance, sectionHeightById, selectSectionWithBars]
   );
 
-  // Precompute vertical offsets for flow nodes within each column so rendering avoids rescanning siblings.
-  // Offsets rely only on saved order metadata, keeping absolute and flow coordinate systems decoupled.
-  // This keeps ReactFlow painting deterministic even while drag/drop mutates selection state.
-  const flowStackOffsets = useMemo(() => {
-    const offsets = new Map<string, number>();
-    const groups = new Map<string, any[]>();
-
-    const getNodeHeight = (node: any) => {
-      const h =
-        (node.style?.height as number | undefined) ??
-        (node.height as number | undefined) ??
-        (node.data?.height as number | undefined);
-      return typeof h === "number" ? Math.max(h, 16) : 48;
-    };
-
-    nodes.forEach((n: any) => {
-      if (n.data?.positionMode !== "flow") return;
-      if (n.data?._ownedByColumn === undefined || n.data?._columnIndex === undefined)
-        return;
-      const key = `${n.data._ownedByColumn}:${n.data._columnIndex}`;
-      const list = groups.get(key) ?? [];
-      list.push(n);
-      groups.set(key, list);
-    });
-
-    groups.forEach((list, key) => {
-      const [ownerId, colIndex] = key.split(":");
-      const owner = nodes.find((n: any) => n.id === ownerId);
-      const columnGap =
-        (owner?.data?.columns?.gap as number | undefined) !== undefined
-          ? owner?.data?.columns?.gap
-          : 16;
-      const columnPaddingY =
-        owner?.type === "row"
-          ? owner.data?.padding ?? 0
-          : 0;
-
-      list
-        .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
-        .forEach((n: any, idx: number) => {
-          const prevHeight = idx === 0 ? 0 : getNodeHeight(list[idx - 1]);
-          const prevOffset = idx === 0 ? columnPaddingY : offsets.get(list[idx - 1].id) ?? columnPaddingY;
-          const nextOffset =
-            idx === 0 ? columnPaddingY : prevOffset + prevHeight + (columnGap ?? 0);
-          offsets.set(n.id, nextOffset);
-        });
-    });
-
-    return offsets;
-  }, [nodes]);
+  // IMPORTANT:
+  // Flow stacking rules are centralized in frontendRules/layout.
+  // Do NOT modify flow offset logic here.
+  const flowStackOffsets = useMemo(
+    () => computeFlowStackOffsets(nodes),
+    [nodes]
+  );
 
   const getFlowRenderPosition = useCallback(
-    (node: any) => {
-      if (node?.data?.positionMode !== "flow") return node?.position;
-      const flowY = flowStackOffsets.get(node.id) ?? 0;
-      let flowX = 0;
-      if (
-        node.data?._columnIndex !== undefined &&
-        node.data?._ownedByColumn
-      ) {
-        const owner = nodes.find(
-          (n: any) => n.id === node.data?._ownedByColumn
-        );
-        const ownerLayout = layoutById.get(node.data?._ownedByColumn);
-        const ownerWidth =
-          ownerLayout?.width ??
-          owner?.style?.width ??
-          owner?.width ??
-          owner?.data?.width ??
-          0;
-        const columnCount =
-          owner?.data?.columns?.count ?? owner?.data?.columns ?? 1;
-        if (ownerWidth && columnCount > 0) {
-          flowX = (ownerWidth / columnCount) * node.data._columnIndex;
-        }
-      }
-      return { x: flowX, y: flowY };
-    },
+    (node: any) =>
+      resolveFlowRenderPosition(node, flowStackOffsets, nodes, layoutById),
     [flowStackOffsets, nodes, layoutById]
   );
 
   // Project builder nodes into ReactFlow props while preserving flow/absolute intent and layering.
   // Ordering and z-index normalization here must stay stable or selection/extent math drifts.
   // Keep this pure so downstream hooks can trust node data remains untouched during render.
+  // IMPORTANT:
+  // Drag, resize, and layering rules are centralized in frontendRules/interaction, frontendRules/resize, and frontendRules/layering.
+  // Do NOT modify rule logic here.
   const transformedNodes = useMemo(() => {
     return (
       nodes
@@ -1081,7 +915,12 @@ export default function PageBuilderInner() {
             return {
               ...n,
               zIndex: 1,
-              draggable: !!isSelected,
+              draggable: isNodeDraggable({
+                node: n,
+                isFlow: false,
+                baseDraggable: n.draggable !== false,
+                isSelected,
+              }),
               position: layout ? { x: layout.x, y: layout.y } : n.position,
               selected: isSelected,
               data: {
@@ -1090,6 +929,7 @@ export default function PageBuilderInner() {
                 _registerColumnRect: registerColumnRect,
                 _viewportVersion: viewportVersion,
                 _hoverState: hoverState,
+                // SOURCE OF TRUTH: _measuredHeight is written only via layoutResolvers measurement callback.
                 _onMeasure: (id: string, height: number) => {
                   setNodesNormalized((nds: any) =>
                     nds.map((node: any) => {
@@ -1117,15 +957,8 @@ export default function PageBuilderInner() {
                 _onResizeStart: () => setIsResizing(true),
                 _onResizeEnd: () => setIsResizing(false),
                 _onResize: (_event: any, params: any) => {
-                  const nextHeight = Math.round(params.height);
-                  const nextWidth = Math.round(
-                    (params.width as number | undefined) ??
-                      layoutWidth ??
-                      (n.style?.width as number | undefined) ??
-                      (n.data?.width as number | undefined) ??
-                      0
-                  );
-                  const nextPosition = { x: 0, y: layout?.y ?? 0 };
+                  const { nextWidth, nextHeight, nextPosition } =
+                    resolveBarResizeState(n, params, layoutWidth, layout?.y);
 
                   // Persist size into both style and data so layout + inspector stay in sync.
                   setNodesNormalized((nds: any) =>
@@ -1234,7 +1067,12 @@ export default function PageBuilderInner() {
           return {
             ...n,
             selected: isSelected,
-            draggable: !n.data?.locked && (isFlow ? true : baseDraggable),
+            draggable: isNodeDraggable({
+              node: n,
+              isFlow,
+              baseDraggable,
+              isSelected,
+            }),
             position: isFlow
               ? {
                   x: flowX,
@@ -1247,25 +1085,25 @@ export default function PageBuilderInner() {
               _onResizeEnd: () => setIsResizing(false),
               _onRadiusStart: () => setIsEditingRadius(true),
               _onRadiusEnd: () => setIsEditingRadius(false),
-                _onResize: (_event: any, params: any) => {
-                  setNodesNormalized((nds: any) =>
-                    nds.map((node: any) =>
-                      node.id === n.id
-                        ? {
+              _onResize: (_event: any, params: any) => {
+                const { nextWidth, nextHeight, nextPosition } =
+                  resolveContentResizeState(n, params);
+                setNodesNormalized((nds: any) =>
+                  nds.map((node: any) =>
+                    node.id === n.id
+                      ? {
                           ...node,
-                          ...(node.data?.positionMode === "absolute"
-                            ? { position: { x: params.x, y: params.y } }
-                            : {}),
+                          ...(nextPosition ? { position: nextPosition } : {}),
                           style: {
                             ...node.style,
-                            width: params.width,
-                            height: params.height,
+                            width: nextWidth,
+                            height: nextHeight,
                             zIndex: n.zIndex ?? 10,
                           },
                           data: {
                             ...node.data,
-                            width: Math.round(params.width),
-                            height: Math.round(params.height),
+                            width: Math.round(nextWidth),
+                            height: Math.round(nextHeight),
                           },
                         }
                       : node
@@ -1435,7 +1273,7 @@ export default function PageBuilderInner() {
             nodes={normalizeZIndex(nodes)}
             selectedNode={selectedNode}
             onNodeSelect={(node) => {
-              if (node.type === "row") {
+              if (shouldRedirectRowSelection(node.type as string)) {
                 const parentSection = nodes.find(
                   (n: any) => n.type === "section" && n.id === node.parentNode
                 );
@@ -1643,7 +1481,7 @@ export default function PageBuilderInner() {
                 nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onNodeClick={(event, node) => {
-                  if (node.type === "row") {
+                  if (shouldRedirectRowSelection(node.type as string)) {
                     const parentSection = nodes.find(
                       (n: any) =>
                         n.type === "section" && n.id === node.parentNode
@@ -1670,14 +1508,18 @@ export default function PageBuilderInner() {
                 onConnect={MODE === "builder" ? () => {} : onConnect}
                 isValidConnection={() => MODE === "workflow"}
                 nodesConnectable={MODE === "workflow"}
-                nodesDraggable={!drawingMode && !isResizing && !isEditingRadius}
+                nodesDraggable={allowCanvasDrag({
+                  drawingMode,
+                  isResizing,
+                  isEditingRadius,
+                })}
                 elementsSelectable={!drawingMode}
                 selectNodesOnDrag={true}
                 elevateNodesOnSelect={false}
                 panOnDrag={drawingMode ? false : true}
                 zoomOnScroll={!drawingMode}
                 onNodeDragStart={(_, node) => {
-                  if (node.type === "row") return;
+                  if (shouldRedirectRowSelection(node.type as string)) return;
                   if (node.type === "section") {
                     selectSectionWithBars(node);
                     return;
@@ -1689,7 +1531,7 @@ export default function PageBuilderInner() {
                   if (!node) return;
 
                   handleNodeDrag(event, node);
-                  if (node.data?.positionMode !== "flow") {
+                  if (shouldUseSmartGuides(node)) {
                     handleGuideDrag(node);
                   }
                 }}
@@ -1717,7 +1559,7 @@ export default function PageBuilderInner() {
                     setSelectedNodes([]);
                   }
                 }}
-                multiSelectionKeyCode="Shift"
+                multiSelectionKeyCode={getMultiSelectKey()}
                 defaultEdgeOptions={{
                   style: { stroke: "transparent" },
                   animated: false,

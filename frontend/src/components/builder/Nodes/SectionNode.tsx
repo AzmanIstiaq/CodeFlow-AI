@@ -1,4 +1,12 @@
 /**
+ * RULE BOUNDARY
+ *
+ * This file must not define layout, spacing, drag, resize,
+ * selection, or z-index rules.
+ *
+ * All such logic MUST come from frontendRules/*.
+ */
+/**
  * SectionNode Component
  *
  * Renders a top-level container (frame/section) that holds all page content.
@@ -37,6 +45,12 @@
 import { type NodeProps } from "reactflow";
 import { useMemo } from "react";
 import ColumnsSectionNode from "./ColumnsSectionNode";
+import {
+  DEFAULT_PAGE_WIDTH,
+  DEFAULT_PAGE_HEIGHT,
+  DEFAULT_COLUMN_GAP,
+} from "../../../frontendRules/layout/layoutMetrics";
+import { computeSectionRenderHeight } from "../../../frontendRules/layout/layoutResolvers";
 
 export type SectionNodeData = {
   label?: string;
@@ -91,15 +105,15 @@ export default function SectionNode({
   const hasRows = (data._allNodes ?? []).some(
     (n) => n.type === "row" && n.parentNode === id
   );
-  const computedHeightOverride = (data as any)._computedHeight;
+  const computedHeightOverride = (data as any)._computedHeight; // INTERNAL: only PageBuilderInner/layoutResolvers set _computedHeight.
 
   // =====================================
   // DIMENSIONS
   // =====================================
   // Fixed width (typical responsive design breakpoint)
   // Height auto-grows based on content
-  const pageWidth = data.pageWidth ?? 1280;
-  const pageHeight = data.pageHeight ?? 800;
+  const pageWidth = data.pageWidth ?? DEFAULT_PAGE_WIDTH;
+  const pageHeight = data.pageHeight ?? DEFAULT_PAGE_HEIGHT;
   const sectionPadding = 0;
   const sectionGap = 0;
 
@@ -131,63 +145,20 @@ export default function SectionNode({
    * Grows with: row heights and child node positions
    * Memoized to avoid recomputation on every render
    */
-  const calculatedHeight = useMemo(() => {
-    if (typeof computedHeightOverride === "number") {
-      return Math.max(computedHeightOverride, pageHeight);
-    }
-    const minHeight = pageHeight;
-    if (rowNodes.length === 0) {
-      const layoutChildren =
-        (data._allNodes ?? []).filter(
-          (n: any) =>
-            n.parentNode === id &&
-            (n.type === "header" || n.type === "footer" || n.type === "row")
-        ) || [];
-      if (layoutChildren.length > 0) {
-        const total = layoutChildren.reduce((acc: number, child: any) => {
-          const h =
-            (child.style?.height as number | undefined) ??
-            (child.data?.height as number | undefined) ??
-            (child.data?.rowHeight as number | undefined) ??
-            (child.height as number | undefined) ??
-            0;
-          return acc + Math.max(h, 40);
-        }, 0);
-        return Math.max(minHeight, total);
-      }
-      return minHeight;
-    }
-
-    const rowsHeight = rowNodes.reduce((sum: number, row: any) => {
-      const isOnlyRow = rowNodes.length === 1;
-      if (isOnlyRow && typeof pageHeight === "number") {
-        return sum + Math.max(0, pageHeight);
-      }
-      if (typeof row.data?.rowHeight === "number") {
-        return sum + Math.max(0, row.data.rowHeight);
-      }
-
-      const rowChildren = (data._allNodes ?? []).filter(
-        (n) => n.data?._rowId === row.id
-      );
-      const rowHeight =
-        rowChildren.length > 0
-          ? Math.max(
-              ...rowChildren.map((child: any) => {
-                const height = child.height ?? child.data?.height ?? 0;
-                return (child.position?.y ?? 0) + height;
-              })
-            ) -
-            Math.min(...rowChildren.map((child: any) => child.position?.y ?? 0))
-          : row.height ?? 0;
-      return sum + Math.max(0, rowHeight);
-    }, 0);
-
-    const gapsHeight = Math.max(0, rowNodes.length - 1) * sectionGap;
-    const contentHeight = rowsHeight + gapsHeight + sectionPadding * 2;
-
-    return Math.max(minHeight, contentHeight);
-  }, [rowNodes, data._allNodes, pageHeight, sectionPadding, sectionGap, computedHeightOverride]);
+  // Delegated to layout rules (single source of truth)
+  const calculatedHeight = useMemo(
+    () =>
+      computeSectionRenderHeight({
+        sectionId: id,
+        pageHeight,
+        computedHeightOverride,
+        rowNodes,
+        allNodes: data._allNodes ?? [],
+        sectionGap,
+        sectionPadding,
+      }),
+    [id, pageHeight, computedHeightOverride, rowNodes, data._allNodes, sectionGap, sectionPadding]
+  );
 
   return (
     <div
@@ -220,7 +191,7 @@ export default function SectionNode({
         <ColumnsSectionNode
           id={id}
           columns={columnCount}
-          gap={data.columns?.gap ?? 16}
+          gap={data.columns?.gap ?? DEFAULT_COLUMN_GAP}
           childrenByColumn={childrenByColumn}
           backgroundColor={data.backgroundColor}
           backgroundImage={data.backgroundImage}

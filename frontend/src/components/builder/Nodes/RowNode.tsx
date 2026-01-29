@@ -1,4 +1,12 @@
 /**
+ * RULE BOUNDARY
+ *
+ * This file must not define layout, spacing, drag, resize,
+ * selection, or z-index rules.
+ *
+ * All such logic MUST come from frontendRules/*.
+ */
+/**
  * Row Node
  *
  * Purpose:
@@ -21,6 +29,7 @@
 import { useRef, useLayoutEffect } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { type NodeProps } from "reactflow";
+import { DEFAULT_COLUMN_GAP } from "../../../frontendRules/layout/layoutMetrics";
 
 // ================================
 // Types
@@ -63,7 +72,7 @@ export type RowNodeData = {
  */
 export default function RowNode({ id, data }: NodeProps<RowNodeData>) {
   const columns = data.columns?.count ?? 1;
-  const gap = data.columns?.gap ?? 16;
+  const gap = data.columns?.gap ?? DEFAULT_COLUMN_GAP;
   const rowHeight =
     typeof data.rowHeight === "number" ? data.rowHeight : undefined;
 
@@ -71,6 +80,7 @@ export default function RowNode({ id, data }: NodeProps<RowNodeData>) {
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const lastHeightRef = useRef<number>(0);
 
+  // READ-ONLY: _rowId/_ownedByColumn/_columnIndex are assigned by flow rules; this renderer only reads them.
   const childrenByColumn = Array.from({ length: columns }, (_, colIndex) =>
     (data._allNodes ?? []).filter(
       (n) =>
@@ -85,6 +95,7 @@ export default function RowNode({ id, data }: NodeProps<RowNodeData>) {
   useLayoutEffect(() => {
     if (!data._registerColumnRect) return;
 
+    // Delegated to layout rules (single source of truth)
     requestAnimationFrame(() => {
       Object.entries(columnRefs.current).forEach(([colIndex, el]) => {
         if (!el) return;
