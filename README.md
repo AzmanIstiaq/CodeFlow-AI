@@ -82,6 +82,14 @@ Open http://localhost:5173
 - Inspector behavior         → inspector/*
 - Export safety & layout     → export/*
 
+Common failure triage:
+- Unexpected gaps/stacking → check layoutMetrics.ts (numbers) then layoutResolvers.ts (stack math).
+- Column drops/order off   → flowResolvers.ts (insert/order), flowPolicy.ts (allowed types).
+- Drag feels sticky/loose  → interactionMetrics.ts (thresholds), interactionPolicy.ts (draggable rules).
+- Bar resize clamps wrong  → resizePolicy.ts (mins), resizeResolvers.ts (state writeback).
+- Selection bundles wrong  → selectionPolicy.ts (bundle/redirect), selectionResolvers.ts (hit/bundle logic).
+- Export mismatch/layout   → exportPolicy.ts (gate), layoutResolvers.ts (invariants before export).
+
 
 ## 📖 Usage
 
