@@ -245,7 +245,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         padding: 0,
         backgroundColor: "#ffffff",
         border: "1px solid #e5e7eb",
-        columns: { count: 3, gap: 16 },
+        columns: { count: 3, gap: 0 },
         positionMode: "absolute",
       };
     case "footer":
@@ -255,7 +255,7 @@ const getDefaultNodeData = (type: string, label: string) => {
         padding: 0,
         backgroundColor: "#f9fafb",
         border: "1px solid #e5e7eb",
-        columns: { count: 3, gap: 16 },
+        columns: { count: 3, gap: 0 },
         positionMode: "absolute",
       };
     default:
@@ -614,7 +614,6 @@ export default function PageBuilderInner() {
     
     // User-resized height always wins
     if (typeof currentNode?.data?.height === "number") {
-      console.log("getLayoutHeight - using node.data.height:", currentNode.data.height, "for node:", node.id);
       return currentNode.data.height;
     }
     // Fall back to style/explicit height if data.height not set
@@ -622,7 +621,6 @@ export default function PageBuilderInner() {
       (currentNode?.style?.height as number | undefined) ??
       (currentNode?.height as number | undefined);
     if (typeof styleHeight === "number") {
-      console.log("getLayoutHeight - using style/height:", styleHeight, "for node:", node.id);
       return styleHeight;
     }
 

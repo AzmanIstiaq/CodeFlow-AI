@@ -19,6 +19,7 @@
 
 import type { SectionProps } from "../types";
 import { NumberInput } from "../inputs";
+import ColumnButtons from "./ColumnButtons";
 
 // ================================
 // Component
@@ -118,32 +119,17 @@ export default function RowControl({
                         })
                       }
                     />
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {[1, 2, 3, 4, 6].map((count) => (
-                        <button
-                          key={count}
-                          className="inspector-button"
-                          onClick={() =>
-                            updateNode(row.id, {
-                              columns: {
-                                count,
-                                gap: rowGap,
-                              },
-                            })
-                          }
-                          style={{
-                            flex: "1 1 40px",
-                            background:
-                              rowColumns === count ? "#eff6ff" : "#ffffff",
-                            borderColor:
-                              rowColumns === count ? "#3b82f6" : "#e5e7eb",
-                            color: rowColumns === count ? "#3b82f6" : "#374151",
-                          }}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
+                    <ColumnButtons
+                      value={rowColumns}
+                      onChange={(count) =>
+                        updateNode(row.id, {
+                          columns: {
+                            count,
+                            gap: rowGap,
+                          },
+                        })
+                      }
+                    />
                   </div>
                 );
               })}

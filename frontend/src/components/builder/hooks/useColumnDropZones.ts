@@ -53,9 +53,11 @@ export function useColumnDropZones(
 
   const getColumnMetrics = (owner: any) => {
     const gap =
-      (owner?.data?.columns?.gap as number | undefined) !== undefined
-        ? owner?.data?.columns?.gap
-        : 16;
+      owner?.type === "header" || owner?.type === "footer"
+        ? 0
+        : (owner?.data?.columns?.gap as number | undefined) !== undefined
+          ? owner?.data?.columns?.gap
+          : 16;
     const paddingY =
       typeof owner?.data?.padding === "number"
         ? owner.data.padding

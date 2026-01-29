@@ -67,8 +67,9 @@ type Props = {
 
 export default function HeaderFooterNode({ id, data, selected }: Props) {
   const columns = data.columns?.count ?? 1;
-  const gap = data.columns?.gap ?? 16;
-  const padding = data.padding ?? 24;
+  // Header/footer should have no column gap visually.
+  const gap = 0;
+  const padding = data.padding ?? 0;
 
   const blockRef = useRef<HTMLDivElement | null>(null);
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});

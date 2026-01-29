@@ -248,7 +248,7 @@ export function useNodeOperations(
           padding: 24,
           backgroundColor: type === "header" ? "#ffffff" : "#f9fafb",
           border: "1px solid #e5e7eb",
-          columns: { count: 3, gap: 16 },
+          columns: { count: 3, gap: 0 },
           order: type === "header" ? -1000 : Number.MAX_SAFE_INTEGER,
           positionMode: "absolute",
         },

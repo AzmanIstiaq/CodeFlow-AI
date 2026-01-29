@@ -20,6 +20,7 @@ import SelectionHeader from "./SelectionHeader";
 import {
   LayoutPosition,
   RowControl,
+  ColumnControl,
   Style,
   Text,
   Effects,
@@ -63,6 +64,13 @@ export default function InspectorPanel({
         />
 
         <RowControl
+          selectedNodes={selectedNodes}
+          updateNode={updateNode}
+          updateNodes={updateNodes}
+          allNodes={allNodes}
+        />
+
+        <ColumnControl
           selectedNodes={selectedNodes}
           updateNode={updateNode}
           updateNodes={updateNodes}
