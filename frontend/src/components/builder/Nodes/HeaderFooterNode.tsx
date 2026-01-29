@@ -1,4 +1,12 @@
 /**
+ * RULE BOUNDARY
+ *
+ * This file must not define layout, spacing, drag, resize,
+ * selection, or z-index rules.
+ *
+ * All such logic MUST come from frontendRules/*.
+ */
+/**
  * HeaderFooterNode
  *
  * Purpose:
@@ -22,6 +30,11 @@
 import { useLayoutEffect, useRef } from "react";
 import type { MouseEvent } from "react";
 import { NodeResizer } from "reactflow";
+import {
+  BAR_COLUMN_GAP,
+  COLUMN_PLACEHOLDER_MIN_HEIGHT,
+} from "../../../frontendRules/layout/layoutMetrics";
+import { getBarResizeConstraints } from "../../../frontendRules/resize/resizePolicy";
 
 type HeaderFooterNodeData = {
   columns?: {
@@ -68,8 +81,9 @@ type Props = {
 export default function HeaderFooterNode({ id, data, selected }: Props) {
   const columns = data.columns?.count ?? 1;
   // Header/footer should have no column gap visually.
-  const gap = 0;
+  const gap = BAR_COLUMN_GAP;
   const padding = data.padding ?? 0;
+  const { minWidth: barMinWidth, minHeight: barMinHeight } = getBarResizeConstraints();
 
   const blockRef = useRef<HTMLDivElement | null>(null);
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -92,6 +106,7 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
     if (!blockRef.current || !data._onMeasure) return;
     if (typeof data.height === "number") return;
 
+    // DO NOT write _measuredHeight here; delegate to layout measurement callback.
     const height = blockRef.current.offsetHeight;
     if (height) {
       data._onMeasure(id, height);
@@ -120,10 +135,11 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
         pointerEvents: "auto",
       }}
     >
+      {/* Delegated to resize rules (single source of truth) */}
       <NodeResizer
         isVisible={!!selected}
-        minWidth={200}
-        minHeight={50}
+        minWidth={barMinWidth}
+        minHeight={barMinHeight}
         keepAspectRatio={false}
         color="#3b82f6"
         onResizeStart={data._onResizeStart}
@@ -150,7 +166,7 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
             onClick={(event) => data._onColumnClick?.(event, id, colIndex)}
             style={{
               position: "relative",
-              minHeight: 32,
+              minHeight: COLUMN_PLACEHOLDER_MIN_HEIGHT,
               pointerEvents: "auto",
               backgroundColor: isHovered ? "rgba(59,130,246,0.08)" : "transparent",
               border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : "1px dashed transparent",

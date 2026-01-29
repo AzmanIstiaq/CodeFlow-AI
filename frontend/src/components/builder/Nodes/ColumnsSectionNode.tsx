@@ -1,4 +1,12 @@
 /**
+ * RULE BOUNDARY
+ *
+ * This file must not define layout, spacing, drag, resize,
+ * selection, or z-index rules.
+ *
+ * All such logic MUST come from frontendRules/*.
+ */
+/**
  * Columns Section Node
  *
  * Purpose:
@@ -18,6 +26,11 @@
  */
 
 import { useRef, useLayoutEffect } from "react";
+import {
+  COLUMN_DROPZONE_PADDING_Y,
+  COLUMN_DROPZONE_PADDING_X,
+  COLUMN_PLACEHOLDER_MARGIN_TOP,
+} from "../../../frontendRules/layout/layoutMetrics";
 
 // ================================
 // Types
@@ -68,6 +81,7 @@ export default function ColumnsSectionNode({
   // Column Rect Registration
   // ================================
   useLayoutEffect(() => {
+    // Delegated to layout rules (single source of truth)
     requestAnimationFrame(() => {
       Object.entries(columnRefs.current).forEach(([colIndex, el]) => {
         if (!el) return;
@@ -108,7 +122,8 @@ export default function ColumnsSectionNode({
               position: "relative",
               zIndex: 10,
               pointerEvents: "auto",
-              padding: "40px 32px",
+              // DO NOT edit padding here; adjust column drop padding in layoutMetrics.ts.
+              padding: `${COLUMN_DROPZONE_PADDING_Y}px ${COLUMN_DROPZONE_PADDING_X}px`,
               backgroundColor: isHovered ? "rgba(59,130,246,0.15)" : "transparent",
               border: isHovered ? "2px dashed rgba(59,130,246,0.8)" : undefined,
               transition: "all 0.2s ease",
@@ -117,7 +132,7 @@ export default function ColumnsSectionNode({
             {!childrenByColumn[colIndex]?.length && (
               <div
                 style={{
-                  marginTop: 40,
+                  marginTop: COLUMN_PLACEHOLDER_MARGIN_TOP,
                   textAlign: "center",
                   color: "#3b82f6",
                   opacity: 0.6,
