@@ -71,6 +71,18 @@ Open http://localhost:5173
 
 ---
 
+## Rule Ownership Map
+
+- Spacing / height bugs      → layout/*
+- Flow & column math         → flow/*
+- Drag / guides / canvas     → interaction/*
+- Resize constraints         → resize/*
+- Selection & bundling       → selection/*
+- Z-index & overlap          → layering/*
+- Inspector behavior         → inspector/*
+- Export safety & layout     → export/*
+
+
 ## 📖 Usage
 
 1. **Create Workflow**: Click "New Workflow" → Enter name
