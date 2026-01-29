@@ -135,7 +135,8 @@ export function computeLayoutMaps(nodes: any[]) {
       });
     }
 
-    sectionHeights.set(section.id, bodyHeight);
+    const totalHeight = footerNode ? bodyHeight + footerHeight : bodyHeight;
+    sectionHeights.set(section.id, totalHeight);
   });
 
   return { layoutById: layout, sectionHeightById: sectionHeights };
@@ -315,8 +316,24 @@ export function computeSectionRenderHeight({
     return sum + Math.max(0, rowHeight);
   }, 0);
 
+  // Include header/footer heights alongside row content so section bounds wrap all children.
+  const barHeight = allNodes
+    ?.filter(
+      (n: any) =>
+        n.parentNode === sectionId &&
+        (n.type === "header" || n.type === "footer")
+    )
+    .reduce((sum: number, bar: any) => {
+      const h =
+        (bar.style?.height as number | undefined) ??
+        (bar.data?.height as number | undefined) ??
+        (bar.height as number | undefined) ??
+        0;
+      return sum + Math.max(h, ROW_MIN_HEIGHT);
+    }, 0) ?? 0;
+
   const gapsHeight = Math.max(0, rowNodes.length - 1) * sectionGap;
-  const contentHeight = rowsHeight + gapsHeight + sectionPadding * 2;
+  const contentHeight = rowsHeight + gapsHeight + sectionPadding * 2 + barHeight;
 
   return Math.max(minHeight, contentHeight);
 }
