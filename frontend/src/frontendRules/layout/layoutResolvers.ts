@@ -155,6 +155,17 @@ export function computeFlowStackOffsets(nodes: any[]) {
   const offsets = new Map<string, number>();
   const groups = new Map<string, any[]>();
 
+  const resolveOwnerHeight = (owner: any) => {
+    const explicit =
+      (owner?.style?.height as number | undefined) ??
+      (owner?.height as number | undefined) ??
+      (owner?.data?.rowHeight as number | undefined) ??
+      (owner?.data?.height as number | undefined);
+    if (typeof explicit === "number") return explicit;
+    if (typeof owner?.data?.pageHeight === "number") return owner.data.pageHeight;
+    return undefined;
+  };
+
   const getNodeHeight = (node: any) => {
     const h =
       (node.style?.height as number | undefined) ??
@@ -165,6 +176,8 @@ export function computeFlowStackOffsets(nodes: any[]) {
   };
 
   nodes.forEach((n: any) => {
+    // Column metadata nodes should not participate in flow stacking; they only carry spacing overrides.
+    if (n.type === "column") return;
     if (n.data?.positionMode !== "flow") return;
     if (n.data?._ownedByColumn === undefined || n.data?._columnIndex === undefined)
       return;
@@ -177,24 +190,75 @@ export function computeFlowStackOffsets(nodes: any[]) {
   groups.forEach((list, key) => {
     const [ownerId] = key.split(":");
     const owner = nodes.find((n: any) => n.id === ownerId);
+    const columnIndex = parseInt(key.split(":")[1]);
+    
+    // Check for column-specific spacing first, then fall back to parent container
+    const columnNode = nodes.find((n: any) => 
+      n.data?._ownedByColumn === ownerId && 
+      n.data?._columnIndex === columnIndex &&
+      n.type === "column"
+    );
+    
     const columnGap =
-      (owner?.data?.columns?.gap as number | undefined) !== undefined
-        ? owner?.data?.columns?.gap
-        : DEFAULT_COLUMN_GAP;
-    const columnPaddingY = owner?.type === "row" ? owner.data?.padding ?? 0 : 0;
+      (columnNode?.data?.gap as number | undefined) ??
+      (owner?.data?.columns?.gap as number | undefined) ??
+      (owner?.data?.gap as number | undefined) ??
+      DEFAULT_COLUMN_GAP;
+    const columnPaddingY =
+      typeof columnNode?.data?.padding === "number" 
+        ? columnNode.data.padding 
+        : typeof owner?.data?.padding === "number" 
+          ? owner.data.padding 
+          : 0;
+    const justifyContent =
+      columnNode?.data?.justifyContent ??
+      owner?.data?.justifyContent ??
+      (owner?.data?.align === "center" ? "center" : "flex-start");
 
-    list
-      .sort((a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0))
-      .forEach((n: any, idx: number) => {
-        const prevHeight = idx === 0 ? 0 : getNodeHeight(list[idx - 1]);
-        const prevOffset =
-          idx === 0
-            ? columnPaddingY
-            : offsets.get(list[idx - 1].id) ?? columnPaddingY;
-        const nextOffset =
-          idx === 0 ? columnPaddingY : prevOffset + prevHeight + (columnGap ?? 0);
-        offsets.set(n.id, nextOffset);
-      });
+    const sorted = [...list].sort(
+      (a: any, b: any) => (a.data?.order ?? 0) - (b.data?.order ?? 0)
+    );
+
+    const heights = sorted.map((n) => getNodeHeight(n));
+    const sumHeights = heights.reduce((sum, h) => sum + h, 0);
+    const defaultContentHeight =
+      sumHeights + columnGap * Math.max(0, heights.length - 1);
+
+    const ownerHeight = resolveOwnerHeight(owner);
+    const availableHeight =
+      typeof ownerHeight === "number"
+        ? Math.max(0, ownerHeight - columnPaddingY * 2)
+        : null;
+
+    let startOffset = columnPaddingY;
+    let gapBetween = columnGap;
+
+    if (availableHeight !== null && heights.length > 0) {
+      const extraSpace = availableHeight - defaultContentHeight;
+
+      if (justifyContent === "center" && extraSpace > 0) {
+        startOffset = columnPaddingY + extraSpace / 2;
+      } else if (justifyContent === "flex-end" && extraSpace > 0) {
+        startOffset = columnPaddingY + extraSpace;
+      } else if (
+        justifyContent === "space-between" &&
+        heights.length > 1 &&
+        availableHeight > sumHeights
+      ) {
+        gapBetween = Math.max(
+          0,
+          (availableHeight - sumHeights) / Math.max(1, heights.length - 1)
+        );
+        startOffset = columnPaddingY;
+      }
+    }
+
+    let cursor = startOffset;
+    sorted.forEach((n: any, idx: number) => {
+      offsets.set(n.id, cursor);
+      const h = heights[idx];
+      cursor += h + gapBetween;
+    });
   });
 
   return offsets;
@@ -218,6 +282,8 @@ export function getFlowRenderPosition(
   if (node?.data?.positionMode !== "flow") return node?.position;
   const flowY = flowStackOffsets.get(node.id) ?? 0;
   let flowX = 0;
+  let columnWidth = 0;
+  let ownerAlignItems: string | undefined;
   if (
     node.data?._columnIndex !== undefined &&
     node.data?._ownedByColumn
@@ -233,10 +299,36 @@ export function getFlowRenderPosition(
     const columnCount =
       owner?.data?.columns?.count ?? owner?.data?.columns ?? 1;
     if (ownerWidth && columnCount > 0) {
-      flowX = (ownerWidth / columnCount) * node.data._columnIndex;
+      columnWidth = ownerWidth / columnCount;
+      flowX = columnWidth * node.data._columnIndex;
+
+      const nodeWidth =
+        (node.style?.width as number | undefined) ??
+        (node.width as number | undefined) ??
+        (node.data?.width as number | undefined) ??
+        0;
+      
+      // Check for column-specific alignItems first, then fall back to owner
+      const columnIndex = node.data._columnIndex;
+      const columnNode = nodes.find((n: any) => 
+        n.data?._ownedByColumn === node.data?._ownedByColumn && 
+        n.data?._columnIndex === columnIndex &&
+        n.type === "column"
+      );
+      
+      ownerAlignItems = 
+        columnNode?.data?.alignItems ??
+        owner?.data?.alignItems ??
+        "flex-start";
+
+      if (ownerAlignItems === "center") {
+        flowX += Math.max(0, (columnWidth - nodeWidth) / 2);
+      } else if (ownerAlignItems === "flex-end") {
+        flowX += Math.max(0, columnWidth - nodeWidth);
+      }
     }
   }
-  return { x: flowX, y: flowY };
+  return { x: flowX, y: flowY, _columnWidth: columnWidth, _alignItems: ownerAlignItems };
 }
 
 /**

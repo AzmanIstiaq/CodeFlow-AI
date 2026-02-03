@@ -93,6 +93,7 @@ import { useNodeOperations } from "../components/builder/hooks/useNodeOperations
 import { useColumnDropZones } from "../components/builder/hooks/useColumnDropZones";
 import { useWorkflowOperations } from "../components/builder/hooks/useWorkflowOperations";
 import { exportNextJSZip } from "../utils/exportNextJsZip";
+import { generateColumnNodes, removeExcessColumns } from "../utils/columnNodes";
 import { normalizeZIndex } from "../frontendRules/layering/layeringResolvers";
 import {
   computeAbsolutePosition,
@@ -288,6 +289,7 @@ export default function PageBuilderInner() {
   // URL PARAMETERS
   // =====================================
   // Get workflow ID from URL query string for persistence
+  const nodeTypesMemo = useMemo(() => nodeTypes, []);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const id = searchParams.get("id");
@@ -495,6 +497,76 @@ export default function PageBuilderInner() {
     reactFlowInstance,
   });
 
+  // Column-specific alignment: map toolbar align actions to flex alignment properties.
+  const handleColumnAlign = useCallback(
+    (type: string) => {
+      const column = selectedNodes.find((n: any) => n.type === "column");
+      if (!column) return;
+
+      // Align only the selected column by mapping toolbar intents to flex props.
+      const applyAlign = (updates: any) => {
+        setNodesNormalized((nds: any[]) =>
+          nds.map((n: any) => {
+            if (n.id !== column.id) return n;
+            const next = {
+              ...n,
+              data: {
+                ...n.data,
+                ...updates,
+              },
+            };
+            return next;
+          })
+        );
+
+        // Keep selectedNodes snapshot in sync for inspector UI.
+        setSelectedNodes((prev) =>
+          prev.map((sn) =>
+            sn.id === column.id
+              ? {
+                  ...sn,
+                  data: {
+                    ...sn.data,
+                    ...updates,
+                  },
+                }
+              : sn
+          )
+        );
+      };
+
+      switch (type) {
+        case "left":
+          applyAlign({ alignItems: "flex-start" });
+          break;
+        case "center-h":
+          applyAlign({ alignItems: "center" });
+          break;
+        case "right":
+          applyAlign({ alignItems: "flex-end" });
+          break;
+        case "stretch":
+          applyAlign({ alignItems: "stretch" });
+          break;
+        case "top":
+          applyAlign({ justifyContent: "flex-start" });
+          break;
+        case "center-v":
+          applyAlign({ justifyContent: "center" });
+          break;
+        case "bottom":
+          applyAlign({ justifyContent: "flex-end" });
+          break;
+        case "space-between":
+          applyAlign({ justifyContent: "space-between" });
+          break;
+        default:
+          break;
+      }
+    },
+    [selectedNodes, setNodesNormalized]
+  );
+
   // Reconcile mode transitions between absolute and flow layouts.
   useEffect(() => {
     const prev = prevPositionModeRef.current;
@@ -557,6 +629,227 @@ export default function PageBuilderInner() {
       prev.set(n.id, currentMode);
     });
   }, [nodes, addNodeToColumn, removeNodeFromColumn, findDropTarget]);
+
+  // Ensure column metadata nodes exist for every column owner and stay in sync with column counts.
+  useEffect(() => {
+    const sectionHasRows = (sectionId: string) =>
+      nodes.some((n) => n.type === "row" && n.parentNode === sectionId);
+
+    // Migrate any section-owned column content into the first row when rows exist.
+    const sectionsWithRows = nodes.filter(
+      (n: any) => n.type === "section" && sectionHasRows(n.id)
+    );
+
+    const needsMigration = sectionsWithRows.some((section: any) => {
+      const hasSectionColumns =
+        typeof section.data?.columns?.count === "number" ||
+        typeof section.data?.columns === "number";
+      const hasSectionColumnNodes = nodes.some(
+        (n: any) => n.type === "column" && n.data?._ownedByColumn === section.id
+      );
+      const hasSectionOwnedChildren = nodes.some(
+        (n: any) =>
+          n.type !== "column" &&
+          n.data?._ownedByColumn === section.id &&
+          n.data?.positionMode === "flow"
+      );
+      return hasSectionColumns || hasSectionColumnNodes || hasSectionOwnedChildren;
+    });
+
+    if (needsMigration) {
+      setNodesNormalized((nds: any[]) => {
+        let next = [...nds];
+
+        sectionsWithRows.forEach((section: any) => {
+          const rows = next.filter(
+            (n: any) => n.type === "row" && n.parentNode === section.id
+          );
+          if (rows.length === 0) return;
+
+          const targetRow = rows[0];
+          const rowColCount =
+            typeof targetRow.data?.columns?.count === "number"
+              ? targetRow.data.columns.count
+              : typeof targetRow.data?.columns === "number"
+                ? targetRow.data.columns
+                : 1;
+
+          // Remove section-owned column metadata nodes.
+          next = next.filter(
+            (n: any) =>
+              !(
+                n.type === "column" && n.data?._ownedByColumn === section.id
+              )
+          );
+
+          // Re-home flow nodes owned by the section into the target row.
+          next = next.map((n: any) => {
+            if (
+              n.type === "column" ||
+              n.data?._ownedByColumn !== section.id ||
+              n.data?.positionMode !== "flow"
+            ) {
+              return n;
+            }
+
+            const newIndex = Math.min(
+              Math.max(n.data?._columnIndex ?? n.data?.columnIndex ?? 0, 0),
+              Math.max(0, rowColCount - 1)
+            );
+
+            return {
+              ...n,
+              parentNode: targetRow.id,
+              data: {
+                ...n.data,
+                _ownedByColumn: targetRow.id,
+                _rowId: targetRow.id,
+                _columnIndex: newIndex,
+                columnIndex: newIndex,
+              },
+              position: { x: 0, y: 0 },
+            };
+          });
+
+          // Reorder flow nodes within each column after migration.
+          const flowSiblings = next
+            .filter(
+              (n: any) =>
+                n.data?._ownedByColumn === targetRow.id &&
+                n.data?.positionMode === "flow" &&
+                typeof n.data?._columnIndex === "number"
+            )
+            .sort(
+              (a: any, b: any) =>
+                (a.data?.order ?? 0) - (b.data?.order ?? 0)
+            );
+
+          const orderCursor = new Map<string, number>();
+          flowSiblings.forEach((n: any) => {
+            const idx = n.data?._columnIndex ?? 0;
+            const key = `${targetRow.id}:${idx}`;
+            const current = orderCursor.get(key) ?? 0;
+            orderCursor.set(key, current + 1);
+            n.data.order = current;
+          });
+
+          // Clear section-level columns so future sync doesn't recreate them.
+          next = next.map((n: any) =>
+            n.id === section.id
+              ? { ...n, data: { ...n.data, columns: undefined } }
+              : n
+          );
+        });
+
+        return next;
+      });
+    }
+
+    // Identify owners that actively expose columns
+    const owners = nodes.filter((n: any) => {
+      const count =
+        typeof n.data?.columns?.count === "number"
+          ? n.data.columns.count
+          : typeof n.data?.columns === "number"
+            ? n.data.columns
+            : 0;
+      if (!count || count < 1) return false;
+
+      if (n.type === "section") {
+        // Sections with rows delegate columns to the rows; do not create section-level column nodes.
+        if (sectionHasRows(n.id)) return false;
+        return true;
+      }
+
+      return n.type === "row" || n.type === "header" || n.type === "footer";
+    });
+
+    let needsSync = false;
+
+    // Detect orphan or out-of-range column nodes
+    nodes.forEach((n: any) => {
+      if (n.type !== "column") return;
+      const owner = owners.find((o: any) => o.id === n.data?._ownedByColumn);
+      if (!owner) {
+        needsSync = true;
+        return;
+      }
+      const count =
+        typeof owner.data?.columns?.count === "number"
+          ? owner.data.columns.count
+          : typeof owner.data?.columns === "number"
+            ? owner.data.columns
+            : 0;
+      if (
+        typeof n.data?._columnIndex !== "number" ||
+        n.data._columnIndex < 0 ||
+        n.data._columnIndex >= count
+      ) {
+        needsSync = true;
+      }
+    });
+
+    // Detect missing column nodes per owner/index
+    owners.forEach((owner: any) => {
+      const count =
+        typeof owner.data?.columns?.count === "number"
+          ? owner.data.columns.count
+          : typeof owner.data?.columns === "number"
+            ? owner.data.columns
+            : 0;
+      for (let idx = 0; idx < count; idx++) {
+        const exists = nodes.some(
+          (n: any) =>
+            n.type === "column" &&
+            n.data?._ownedByColumn === owner.id &&
+            n.data?._columnIndex === idx
+        );
+        if (!exists) {
+          needsSync = true;
+        }
+      }
+    });
+
+    if (!needsSync) return;
+
+    const ownerIds = new Set(owners.map((o: any) => o.id));
+
+    setNodesNormalized((nds: any[]) => {
+      let next = [...nds];
+
+      // Drop column nodes whose owners are no longer valid (including sections with rows).
+      next = next.filter(
+        (n: any) =>
+          !(n.type === "column" && !ownerIds.has(n.data?._ownedByColumn))
+      );
+
+      owners.forEach((owner: any) => {
+        const count =
+          typeof owner.data?.columns?.count === "number"
+            ? owner.data.columns.count
+            : typeof owner.data?.columns === "number"
+              ? owner.data.columns
+              : 0;
+
+        // Trim any excess columns for this owner.
+        next = removeExcessColumns(next, owner.id, count);
+
+        const existing = next.filter(
+          (n: any) => n.type === "column" && n.data?._ownedByColumn === owner.id
+        );
+        const regenerated = generateColumnNodes(owner.id, count, existing);
+
+        // Replace owner's column set with regenerated list to ensure coverage.
+        next = next.filter(
+          (n: any) =>
+            !(n.type === "column" && n.data?._ownedByColumn === owner.id)
+        );
+        next = [...next, ...regenerated];
+      });
+
+      return next;
+    });
+  }, [nodes, setNodesNormalized]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -804,7 +1097,7 @@ export default function PageBuilderInner() {
     return (
       nodes
         // Render order must respect zIndex to keep rows below content nodes.
-        .filter((n: any) => !n.data?.hidden)
+        .filter((n: any) => n.type !== "column" && !n.data?.hidden)
         .sort((a: any, b: any) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
         .map((n: any) => {
           const isSelected =
@@ -1038,31 +1331,9 @@ export default function PageBuilderInner() {
           }
           const isFlow = n.data?.positionMode === "flow";
           const baseDraggable = n.draggable !== false;
-          const flowY = flowStackOffsets.get(n.id);
-          let flowX = 0;
-          if (
-            isFlow &&
-            n.data?._columnIndex !== undefined &&
-            n.data?._ownedByColumn
-          ) {
-            const owner = nodes.find(
-              (node: any) => node.id === n.data?._ownedByColumn
-            );
-            const ownerLayout = layoutById.get(n.data?._ownedByColumn);
-            const ownerWidth =
-              ownerLayout?.width ??
-              owner?.style?.width ??
-              owner?.width ??
-              owner?.data?.width ??
-              0;
-            const columnCount =
-              owner?.data?.columns?.count ??
-              owner?.data?.columns ??
-              1;
-            if (ownerWidth && columnCount > 0) {
-              flowX = (ownerWidth / columnCount) * n.data._columnIndex;
-            }
-          }
+          const flowPosition = isFlow
+            ? resolveFlowRenderPosition(n, flowStackOffsets, nodes, layoutById)
+            : null;
 
           return {
             ...n,
@@ -1075,8 +1346,15 @@ export default function PageBuilderInner() {
             }),
             position: isFlow
               ? {
-                  x: flowX,
-                  y: flowY ?? n.position.y ?? 0,
+                  x:
+                    (flowPosition as any)?.x ??
+                    n.position.x ??
+                    0,
+                  y:
+                    (flowPosition as any)?.y ??
+                    flowStackOffsets.get(n.id) ??
+                    n.position.y ??
+                    0,
                 }
               : n.position,
             data: {
@@ -1186,6 +1464,11 @@ export default function PageBuilderInner() {
             },
             style: {
               ...n.style,
+              ...(isFlow &&
+              (flowPosition as any)?._alignItems === "stretch" &&
+              (flowPosition as any)?._columnWidth
+                ? { width: (flowPosition as any)._columnWidth }
+                : {}),
               zIndex: n.zIndex ?? 10,
             },
           };
@@ -1256,18 +1539,30 @@ export default function PageBuilderInner() {
       />
 
       <div className={`visualbuilder-root ${selectedNode ? "panel-open" : ""}`}>
-        <AlignmentToolbar
-          selectedNodes={selectedNodes}
-          onAlign={handleAlign}
-          onDistribute={handleDistribute}
-          onDuplicate={handleDuplicate}
-          onCopy={handleCopy}
-          onPaste={handlePaste}
-          onSetColumns={handleSetColumns}
-          visible={
-            hasFrame && (selectedNodes.length > 0 || selectedNode !== null)
-          }
-        />
+        {hasFrame &&
+          selectedNodes.length > 0 && (
+            // Hide toolbar when selection is just the frame (and its bundled header/footer).
+            (() => {
+              const isSectionBundle =
+                selectedNodes.some((n) => n.type === "section") &&
+                selectedNodes.every((n) =>
+                  ["section", "header", "footer"].includes(n.type as string)
+                );
+              return !isSectionBundle ? (
+                <AlignmentToolbar
+                  selectedNodes={selectedNodes}
+                  onAlign={handleAlign}
+                  onDistribute={handleDistribute}
+                  onDuplicate={handleDuplicate}
+                  onCopy={handleCopy}
+                  onPaste={handlePaste}
+                  onSetColumns={handleSetColumns}
+                  onColumnAlign={handleColumnAlign}
+                  visible={true}
+                />
+              ) : null;
+            })()
+          )}
         {hasFrame && (
           <LayerPanel
             nodes={normalizeZIndex(nodes)}
@@ -1478,7 +1773,7 @@ export default function PageBuilderInner() {
               <ReactFlow
                 nodes={transformedNodes}
                 edges={MODE === "builder" ? [] : edges}
-                nodeTypes={nodeTypes}
+                nodeTypes={nodeTypesMemo}
                 onNodesChange={onNodesChange}
                 onNodeClick={(event, node) => {
                   if (shouldRedirectRowSelection(node.type as string)) {
@@ -1602,9 +1897,13 @@ export default function PageBuilderInner() {
                   };
                 }
                 if (node.data?.positionMode === "flow") {
+                  const flowPos = getFlowRenderPosition(node) as any;
                   return {
                     ...node,
-                    position: getFlowRenderPosition(node),
+                    position: {
+                      x: flowPos?.x ?? node.position?.x ?? 0,
+                      y: flowPos?.y ?? node.position?.y ?? 0,
+                    },
                   };
                 }
                 return node;

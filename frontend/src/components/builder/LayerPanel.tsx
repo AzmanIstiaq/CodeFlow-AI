@@ -20,6 +20,7 @@
 
 import { useMemo } from "react";
 import type { Node } from "reactflow";
+import "./LayerPanel.css";
 
 // ================================
 // Types
@@ -35,19 +36,11 @@ interface LayerPanelProps {
   onUpdateNode: (nodeId: string, updates: any) => void;
 }
 
-type LayerTreeItem =
-  | {
-      kind: "node";
-      node: Node;
-      children: LayerTreeItem[];
-    }
-  | {
-      kind: "column";
-      label: string;
-      ownerId: string;
-      columnIndex: number;
-      children: LayerTreeItem[];
-    };
+type LayerTreeItem = {
+  kind: "node";
+  node: Node;
+  children: LayerTreeItem[];
+};
 
 // ================================
 // Component
@@ -173,8 +166,6 @@ export default function LayerPanel({
     if (typeof explicitParent === "string" && explicitParent.length) return explicitParent;
     const ownedByColumn = (node.data as any)?._ownedByColumn;
     if (typeof ownedByColumn === "string" && ownedByColumn.length) return ownedByColumn;
-    const rowOwner = (node.data as any)?._rowId;
-    if (typeof rowOwner === "string" && rowOwner.length) return rowOwner;
     return null;
   };
 
@@ -245,21 +236,49 @@ export default function LayerPanel({
     const buildColumns = (owner: Node, children: Node[]): LayerTreeItem[] => {
       const count = Math.max(1, getColumnCount(owner));
       const grouped = new Map<number, Node[]>();
-      children.forEach((child) => {
+      // Only place non-column children inside columns; column nodes themselves act as the containers.
+      children
+        .filter((child) => child.type !== "column")
+        .forEach((child) => {
         const col = Math.min(Math.max(getColumnIndex(child), 0), count - 1);
         if (!grouped.has(col)) grouped.set(col, []);
         grouped.get(col)!.push(child);
       });
 
+      // Find actual column nodes for this owner
+      const columnNodes = nodes.filter(
+        (n) => n.type === "column" && n.data?._ownedByColumn === owner.id
+      );
+
       return Array.from({ length: count }, (_v, idx) => {
+        const columnNode = columnNodes.find((n) => n.data?._columnIndex === idx);
         const columnChildren = (grouped.get(idx) ?? []).sort(siblingComparator);
-        return {
-          kind: "column" as const,
-          label: `Column ${idx + 1}`,
-          ownerId: owner.id,
-          columnIndex: idx,
-          children: columnChildren.map(buildNodeItem),
-        };
+        
+        if (columnNode) {
+          // Return actual column node with its children
+          return {
+            kind: "node",
+            node: columnNode,
+            children: columnChildren.map(buildNodeItem),
+          };
+        } else {
+          // Fallback: create a virtual column item (shouldn't happen with new system)
+          const virtualColumnNode: Node = {
+            id: `${owner.id}-column-${idx}`,
+            type: "column",
+            position: { x: 0, y: 0 },
+            data: {
+              _ownedByColumn: owner.id,
+              _columnIndex: idx,
+              label: `Column ${idx + 1}`,
+            },
+          };
+          return {
+            kind: "node",
+            node: virtualColumnNode,
+            children: columnChildren.map(buildNodeItem),
+          };
+        }
       });
     };
 
@@ -269,21 +288,22 @@ export default function LayerPanel({
           (child) => !STRUCTURAL_TYPES.has(child.type || "")
         ) ?? [];
 
+      // Separate row children from other children
       const rows = direct.filter((n) => n.type === "row");
-      const nonRows = direct.filter((n) => n.type !== "row");
+      const nonRowChildren = direct.filter((n) => n.type !== "row");
 
       // Sections with rows keep row order; columns are owned by rows themselves.
       if (rows.length > 0) {
-        return [...rows, ...nonRows].sort(siblingComparator).map(buildNodeItem);
+        return [...rows, ...nonRowChildren].sort(siblingComparator).map(buildNodeItem);
       }
 
       // Column owners (section/header/footer/row without rows) render per-column grouping.
       if (getColumnCount(owner) > 0) {
-        return buildColumns(owner, nonRows);
+        return buildColumns(owner, nonRowChildren);
       }
 
       // Default: plain children list.
-      return nonRows.sort(siblingComparator).map(buildNodeItem);
+      return nonRowChildren.sort(siblingComparator).map(buildNodeItem);
     };
 
     function buildNodeItem(node: Node): LayerTreeItem {
@@ -319,11 +339,16 @@ export default function LayerPanel({
   // ================================
   const renderLayerItem = (item: LayerTreeItem, depth = 0) => {
     const paddingLeft = 8 + depth * 12;
+    const node = item.node;
+    const isSelected = selectedNode?.id === node.id;
 
-    if (item.kind === "column") {
+    // Special rendering for column nodes
+    if (node.type === "column") {
       return (
-        <div key={`${item.ownerId}-col-${item.columnIndex}`}>
+        <div key={node.id}>
           <div
+            onClick={() => onNodeSelect(node)}
+            className="layer-row"
             style={{
               padding: "4px 8px",
               paddingLeft,
@@ -332,28 +357,40 @@ export default function LayerPanel({
               display: "flex",
               alignItems: "center",
               gap: 8,
-              color: "#6b7280",
+              color: isSelected ? "#3b82f6" : "#6b7280",
               fontSize: 12,
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.3px",
-              background: "transparent",
+              backgroundColor: isSelected ? "#eff6ff" : "transparent",
+              borderLeft: isSelected ? "2px solid #3b82f6" : "2px solid transparent",
+              cursor: "pointer",
+              transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = "#f9fafb";
+                e.currentTarget.style.color = "#374151";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "#6b7280";
+              }
             }}
           >
-            <span style={{ color: "#d1d5db", display: "flex" }}>
+            <span style={{ display: "flex" }}>
               {getNodeIcon("column")}
             </span>
             <span style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-              {item.label}
+              {getNodeLabel(node)}
             </span>
           </div>
           {item.children.map((child) => renderLayerItem(child, depth + 1))}
         </div>
       );
     }
-
-    const node = item.node;
-    const isSelected = selectedNode?.id === node.id;
 
     return (
       <div key={node.id}>
@@ -646,6 +683,7 @@ export default function LayerPanel({
         Layers
       </div>
       <div
+        className="layer-panel-content"
         style={{
           flex: 1,
           overflowY: "auto",

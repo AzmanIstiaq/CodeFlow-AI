@@ -36,7 +36,9 @@ export default function LayoutPosition({
   const [aspectLocked, setAspectLocked] = useState(false);
   const isMultiSelect = selectedNodes.length > 1;
   const node = selectedNodes[0];
-  const positionMode = node?.data?.positionMode || "absolute";
+  const positionMode =
+    node?.data?.positionMode ||
+    (node?.type === "column" ? "flow" : "absolute");
   const isFlow = positionMode === "flow";
   const isPinnedLayout = node.type === "header" || node.type === "footer";
 
@@ -141,12 +143,12 @@ export default function LayoutPosition({
                 borderColor: isFlow ? "#3b82f6" : "#e5e7eb",
                 color: isFlow ? "#3b82f6" : "#374151",
               }}
-              onClick={() =>
+              onClick={() => {
                 updateNode(node.id, {
                   positionMode: "flow",
                   position: { x: 0, y: 0 }, // ignored later
-                })
-              }
+                });
+              }}
             >
               Flow
             </button>
@@ -158,19 +160,63 @@ export default function LayoutPosition({
                 borderColor: !isFlow ? "#3b82f6" : "#e5e7eb",
                 color: !isFlow ? "#3b82f6" : "#374151",
               }}
-              onClick={() =>
+              onClick={() => {
                 updateNode(node.id, {
                   positionMode: "absolute",
-                })
-              }
+                });
+              }}
             >
               Absolute
             </button>
           </div>
 
-          {isFlow && (
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-              This element follows row & column layout
+          {node.type === "column" && positionMode !== "flow" && (
+            <div style={{ 
+              fontSize: 12, 
+              color: "#ef4444", 
+              marginTop: 8,
+              padding: 8,
+              backgroundColor: "#fef2f2",
+              borderRadius: 4,
+              border: "1px solid #fecaca"
+            }}>
+              <button
+                style={{
+                  marginTop: 4,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer"
+                }}
+                onClick={() => {
+                  updateNode(node.id, {
+                    positionMode: "flow",
+                    position: { x: 0, y: 0 },
+                    data: {
+                      ...node.data,
+                      positionMode: "flow"
+                    }
+                  });
+                  
+                  // Also try updating just the data property
+                  setTimeout(() => {
+                    updateNode(node.id, {
+                      data: {
+                        ...node.data,
+                        positionMode: "flow"
+                      }
+                    });
+                  }, 100);
+                }}
+              >
+                Fix Column
+              </button>
+              <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
+                If this doesn't work, try: window.fixColumn("{node.id}")
+              </div>
             </div>
           )}
         </div>
