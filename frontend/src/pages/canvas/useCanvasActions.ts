@@ -49,6 +49,8 @@ export function useCanvasActions({
   setClipboard,
   nodes,
 }: UseCanvasActionsProps) {
+  // Hook contract: returns stable action handlers used by toolbar + keyboard shortcuts.
+  // Behavioral rules (protected node types, offsets, selection semantics) are enforced here.
   // =====================================
   // ALIGNMENT & DISTRIBUTION
   // =====================================

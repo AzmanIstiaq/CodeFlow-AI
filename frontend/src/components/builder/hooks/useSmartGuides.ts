@@ -75,6 +75,8 @@ export function useSmartGuides(
   nodes: Node[],
   reactFlowInstance?: ReactFlowInstance
 ) {
+  // Hook contract: computes visual guide lines and optional snap positions during drag.
+  // Keep guide detection + snapping behavior centralized here for editor consistency.
   const [activeGuides, setActiveGuides] = useState<GuideWithBounds>({
     vertical: [],
     horizontal: [],

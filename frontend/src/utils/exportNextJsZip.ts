@@ -12,7 +12,7 @@
  * - frontend/src/utils/exportNextJsZip.templates.ts
  * - frontend/src/pages/PageBuilderInner.tsx
  */
-// ✅ Refactor-only modularization.
+// Refactor-only modularization.
 // Types and templates extracted without altering runtime logic or output.
 
 import JSZip from "jszip";
@@ -30,8 +30,8 @@ import type {
 
 export type { LayoutMode, LayoutDecision, NormalizationResult };
 
-// 🔧 To change export template components, edit: `frontend/src/utils/exportNextJsZip.templates.ts`.
-// 🔧 To change export data contracts, edit: `frontend/src/utils/exportNextJsZip.types.ts`.
+// To change export template components, edit: `frontend/src/utils/exportNextJsZip.templates.ts`.
+// To change export data contracts, edit: `frontend/src/utils/exportNextJsZip.types.ts`.
 const EPS = 4;
 const GAP_STD_THRESHOLD = 6;
 const STRUCTURE_CONFIDENCE = 0.75;
@@ -91,7 +91,10 @@ const attrsToPropString = (attrs: Record<string, any>) => {
   return entries.join("");
 };
 
-// Map a style object to Tailwind utility classes when possible; fallback to inline style for the rest.
+/**
+ * Converts a style object into Tailwind classes plus inline fallback style.
+ * Keep unmapped keys in `rest` so export fidelity is not lost.
+ */
 const styleToTailwind = (style: Record<string, any>) => {
   const classes: string[] = [];
   const rest: Record<string, any> = {};
@@ -293,6 +296,10 @@ const sortNodes = (a: any, b: any) => {
    Tree Builder
 ========================= */
 
+/**
+ * Builds a deterministic parent/child tree from flat builder nodes.
+ * Includes export-specific parent remapping for column ownership metadata.
+ */
 const buildTree = (nodes: any[]): TreeNode[] => {
   const byParent: Record<string, any[]> = {};
   const roots: any[] = [];
@@ -444,7 +451,10 @@ const computeGapStats = (
   return { gaps, mean, std: sd };
 };
 
-// Decide whether a parent can safely adopt a structured layout for its children.
+/**
+ * Chooses safe child layout mode (`row`/`column`/`grid`/`free`) from geometry.
+ * This is conservative by design: low confidence always falls back to `free`.
+ */
 const analyzeChildrenLayout = (
   _parent: any,
   children: TreeNode[]
@@ -596,8 +606,10 @@ const hashString = (input: string) => {
   return hash.toString(16);
 };
 
-// Deduplicate styles across nodes into stable tokens (s_0001, s_0002, ...).
-
+/**
+ * Deduplicates node styles into stable tokens (s_0001, s_0002, ...).
+ * Layout props are intentionally excluded so token reuse does not alter structure.
+ */
 const createStyleTokens = (nodes: any[]) => {
   const tokens: StyleToken[] = [];
   const nodeStyleRef: Record<string, string> = {};
@@ -648,9 +660,12 @@ const flattenTree = (roots: TreeNode[]) => {
   return collected;
 };
 
-// Stage 2 normalization: attach layout decisions + shared style tokens ahead of export.
-// Baking these choices here keeps the generated Next.js page free of layout heuristics at runtime.
-// Diagnostics capture the confidence trail so downstream tooling can surface potential drift.
+/**
+ * Stage 2 normalization entry:
+ * - annotates layout decisions per node,
+ * - builds shared style tokens,
+ * - emits diagnostics for confidence/reason tracing.
+ */
 const normalizeTree = (roots: TreeNode[]): NormalizationResult => {
   const diagnostics: NormalizationResult["diagnostics"] = [];
   const annotate = (tree: TreeNode, parentId?: string) => {
@@ -667,7 +682,9 @@ const normalizeTree = (roots: TreeNode[]): NormalizationResult => {
   return { normalizedNodes: roots, styleTokens, nodeStyleRef, diagnostics };
 };
 
-// Public entry: normalize a flat node list (page) into all Stage 2 outputs.
+/**
+ * Public wrapper for normalizing a flat node list into Stage 2 outputs.
+ */
 export const normalizePageNodes = (nodes: any[]): NormalizationResult => {
   const tree = buildTree(nodes || []);
   return normalizeTree(tree);
@@ -710,6 +727,10 @@ const inferGapFromChildren = (mode: LayoutMode, children: TreeNode[]) => {
    Core JSX Generator
 ========================= */
 
+/**
+ * Applies left/right anchoring for absolute export nodes.
+ * Explicit right/left values take priority over inferred positioning.
+ */
 const applyHorizontalPositioning = (
   baseStyle: any,
   relativeX: number | undefined,
@@ -759,6 +780,10 @@ const applyHorizontalPositioning = (
   }
 };
 
+/**
+ * Applies top/bottom anchoring for absolute export nodes.
+ * Explicit bottom/top values take priority over inferred positioning.
+ */
 const applyVerticalPositioning = (
   baseStyle: any,
   relativeY: number | undefined,
@@ -806,9 +831,8 @@ const normalizeAxisToken = (value: any) =>
     .trim()
     .toLowerCase();
 
-  // Render a normalized tree node into static JSX while respecting flow vs absolute layout intent.
-  // LayoutMode steers flex/grid wrapping so the exported page avoids recomputing structure at runtime.
-  // Assumes upstream normalization baked in positions/styles; this layer only formats safe markup.
+// Core renderer: converts normalized tree nodes into deterministic static JSX.
+// Keep branch ordering stable; output parity depends on this function.
 const nodeToJSX = (
   tree: NormalizedTreeNode,
 
@@ -1057,7 +1081,7 @@ const nodeToJSX = (
       } else {
         baseStyle.display = "block";
 
-        // 🔒 Hard stop: free-layout containers must not carry layout props
+        //  Hard stop: free-layout containers must not carry layout props
 
         delete baseStyle.gridTemplateColumns;
 
@@ -1607,9 +1631,10 @@ ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
    Page Generator
 ========================= */
 
-// Compose a Next.js page using normalized layout choices and deduped style tokens.
-// All positioning is baked into markup/CSS to keep the exported app deterministic at runtime.
-// Main/shell wrappers mirror the builder canvas bounds without re-running layout math in the client.
+/**
+ * Composes `app/page.tsx` source from normalized nodes and style tokens.
+ * Runtime layout heuristics are intentionally avoided; output is fully precomputed.
+ */
 const generatePageTSX = (
   normalized: NormalizationResult,
   options: ExportOptions = {}
@@ -1714,9 +1739,11 @@ ${body}
    ZIP EXPORT
 ========================= */
 
-// Export pipeline: copy the scaffold, normalize the active page, emit static page.tsx, then download.
-// Keeps builder-only state out of the bundle so the exported app never reruns layout heuristics.
-// Relies on the normalization stage for deterministic HTML/CSS across repeated exports.
+/**
+ * End-to-end export pipeline:
+ * scaffold -> normalize -> generate components/page -> zip -> browser download.
+ * Keep file paths and output shape stable; external consumers depend on this structure.
+ */
 export async function exportNextJSZip(
   site: SiteSchema,
   diagnosticsOverride?: NormalizationResult["diagnostics"],
