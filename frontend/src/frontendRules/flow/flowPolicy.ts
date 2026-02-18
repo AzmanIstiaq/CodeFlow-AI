@@ -1,3 +1,17 @@
+/**
+ * File: flowPolicy.ts
+ *
+ * Purpose:
+ * - Define canonical flow/column policy decisions used across builder logic.
+ *
+ * Controls:
+ * - Drop eligibility and column ownership metadata keys.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/flow/flowResolvers.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import { INVALID_COLUMN_CHILD_TYPES } from "../../components/builder/utils/nodeHelpers";
 
 /**

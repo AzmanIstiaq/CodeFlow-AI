@@ -1,3 +1,17 @@
+/**
+ * File: inspectorPolicy.ts
+ *
+ * Purpose:
+ * - Define inspector policy rules for editable column controls.
+ *
+ * Controls:
+ * - Column control eligibility, column presets, and ownership normalization behavior.
+ *
+ * Directly related files:
+ * - frontend/src/components/builder/Inspector/sections/ColumnControl.tsx
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 const SUPPORTED_COLUMN_CONTROL_TYPES = new Set(["header", "footer", "section"]);
 const COLUMN_OPTIONS = [1, 2, 3, 4, 6];
 

@@ -1,3 +1,17 @@
+/**
+ * File: ExecuteWorkflowRequest.cs
+ *
+ * Purpose:
+ * - Define request/response payload contracts for workflow execution.
+ *
+ * Controls:
+ * - Prompt/model/temperature input and output/error response fields.
+ *
+ * Directly related files:
+ * - backend/Routes/ExecutionEndpoints.cs
+ * - frontend/src/api/api.ts
+ */
+
 namespace CodeFlowBackend.Models
 {
     public class ExecuteWorkflowRequest

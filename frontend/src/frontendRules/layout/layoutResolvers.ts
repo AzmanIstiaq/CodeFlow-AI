@@ -1,3 +1,17 @@
+/**
+ * File: layoutResolvers.ts
+ *
+ * Purpose:
+ * - Resolve computed layout maps, flow stack offsets, and section render dimensions.
+ *
+ * Controls:
+ * - Runtime coordinate and size calculations used during canvas rendering.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/layout/layoutPolicy.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import {
   DEFAULT_COLUMN_GAP,
   FLOW_DEFAULT_HEIGHT,

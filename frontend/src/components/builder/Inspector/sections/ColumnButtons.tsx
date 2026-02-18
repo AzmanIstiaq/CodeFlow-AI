@@ -1,3 +1,17 @@
+/**
+ * File: ColumnButtons.tsx
+ *
+ * Purpose:
+ * - Render a reusable column-count button group for inspector controls.
+ *
+ * Controls:
+ * - Available column count choices displayed to the user.
+ *
+ * Directly related files:
+ * - frontend/src/components/builder/Inspector/sections/ColumnControl.tsx
+ * - frontend/src/frontendRules/inspector/inspectorPolicy.ts
+ */
+
 type ColumnButtonsProps = {
   value: number;
   onChange: (count: number) => void;

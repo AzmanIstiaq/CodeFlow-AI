@@ -345,7 +345,6 @@ export default function PageBuilderInner() {
   // Clean hook-based architecture for domain logic separation
   const {
     site,
-    setSite,
     activePage,
     nodes,
     edges,
@@ -399,10 +398,7 @@ export default function PageBuilderInner() {
     activeGuides,
     handleDrag: handleGuideDrag,
     clearGuides,
-    snapToGuides,
     setOverrideKey,
-    setSnapThreshold,
-    setGridSnap,
   } = useSmartGuides(nodes, reactFlowInstance);
 
   const prevPositionModeRef = useRef(new Map<string, string>());

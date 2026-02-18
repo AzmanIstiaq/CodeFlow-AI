@@ -1,3 +1,17 @@
+/**
+ * File: layeringResolvers.ts
+ *
+ * Purpose:
+ * - Resolve z-index normalization for builder nodes.
+ *
+ * Controls:
+ * - Canonical z-index assignment by node type.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/layering/layeringPolicy.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import { getLayerZIndex } from "./layeringPolicy";
 
 /**
