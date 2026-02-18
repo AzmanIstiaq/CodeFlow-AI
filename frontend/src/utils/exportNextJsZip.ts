@@ -20,10 +20,10 @@ type TreeNode = {
 };
 
 // Layout modes describe whether siblings can be auto-structured (row/column/grid) or must stay free/absolute.
-type LayoutMode = "free" | "row" | "column" | "grid";
+export type LayoutMode = "free" | "row" | "column" | "grid";
 
 // Recorded decision per node about how its children should be laid out.
-type LayoutDecision = {
+export type LayoutDecision = {
   mode: LayoutMode;
   confidence: number;
   reasons: string[];
@@ -36,8 +36,12 @@ type StyleToken = {
   usageCount: number;
 };
 
+type ExportOptions = {
+  pixelPerfect?: boolean;
+};
+
 // Aggregate output of the normalization pass.
-type NormalizationResult = {
+export type NormalizationResult = {
   normalizedNodes: TreeNode[];
   styleTokens: StyleToken[];
   nodeStyleRef: Record<string, string>;
@@ -83,6 +87,142 @@ const styleToPropString = (style: Record<string, any>) => {
     []
   );
   return entries.length ? ` style={{ ${entries.join(", ")} }}` : "";
+};
+
+// Map a style object to Tailwind utility classes when possible; fallback to inline style for the rest.
+const styleToTailwind = (style: Record<string, any>) => {
+  const classes: string[] = [];
+  const rest: Record<string, any> = {};
+
+  const toPx = (v: any) =>
+    typeof v === "number" ? `${v}px` : typeof v === "string" ? v : undefined;
+  const isZeroSpace = (v: any) => {
+    if (typeof v === "number") return v === 0;
+    if (typeof v !== "string") return false;
+    const normalized = v.trim().toLowerCase();
+    return normalized === "0" || normalized === "0px";
+  };
+  const canUseArbitraryValue = (v: any) =>
+    typeof v === "number" || (typeof v === "string" && !/\s/.test(v));
+
+  const consume = (key: string) => {
+    const v = style[key];
+    if (v === undefined) return undefined;
+    delete rest[key];
+    return v;
+  };
+
+  // start with full copy
+  Object.assign(rest, style || {});
+
+  const display = consume("display");
+  if (display === "flex" || display === "grid" || display === "block") {
+    classes.push(display);
+  } else if (display === "inline-block") classes.push("inline-block");
+
+  const fd = consume("flexDirection");
+  if (fd === "row") classes.push("flex-row");
+  else if (fd === "column") classes.push("flex-col");
+
+  const jc = consume("justifyContent");
+  if (jc === "center") classes.push("justify-center");
+  else if (jc === "flex-start") classes.push("justify-start");
+  else if (jc === "flex-end") classes.push("justify-end");
+  else if (jc === "space-between") classes.push("justify-between");
+  else if (jc === "space-around") classes.push("justify-around");
+  else if (jc === "space-evenly") classes.push("justify-evenly");
+
+  const ai = consume("alignItems");
+  if (ai === "center") classes.push("items-center");
+  else if (ai === "flex-start") classes.push("items-start");
+  else if (ai === "flex-end") classes.push("items-end");
+  else if (ai === "stretch") classes.push("items-stretch");
+
+  const gap = consume("gap");
+  if (gap !== undefined && !isZeroSpace(gap)) classes.push(`gap-[${toPx(gap)}]`);
+  const rowGap = consume("rowGap");
+  if (rowGap !== undefined && !isZeroSpace(rowGap))
+    classes.push(`gap-y-[${toPx(rowGap)}]`);
+  const colGap = consume("columnGap");
+  if (colGap !== undefined && !isZeroSpace(colGap))
+    classes.push(`gap-x-[${toPx(colGap)}]`);
+
+  const width = consume("width");
+  if (width !== undefined) classes.push(`w-[${toPx(width)}]`);
+  const minWidth = consume("minWidth");
+  if (minWidth !== undefined) classes.push(`min-w-[${toPx(minWidth)}]`);
+  const maxWidth = consume("maxWidth");
+  if (maxWidth !== undefined) classes.push(`max-w-[${toPx(maxWidth)}]`);
+
+  const height = consume("height");
+  if (height !== undefined) classes.push(`h-[${toPx(height)}]`);
+  const minHeight = consume("minHeight");
+  if (minHeight !== undefined) classes.push(`min-h-[${toPx(minHeight)}]`);
+  const maxHeight = consume("maxHeight");
+  if (maxHeight !== undefined) classes.push(`max-h-[${toPx(maxHeight)}]`);
+
+  const padding = consume("padding");
+  if (padding !== undefined) {
+    if (canUseArbitraryValue(padding)) classes.push(`p-[${toPx(padding)}]`);
+    else rest.padding = padding;
+  }
+  const paddingTop = consume("paddingTop");
+  if (paddingTop !== undefined) classes.push(`pt-[${toPx(paddingTop)}]`);
+  const paddingBottom = consume("paddingBottom");
+  if (paddingBottom !== undefined) classes.push(`pb-[${toPx(paddingBottom)}]`);
+  const paddingLeft = consume("paddingLeft");
+  if (paddingLeft !== undefined) classes.push(`pl-[${toPx(paddingLeft)}]`);
+  const paddingRight = consume("paddingRight");
+  if (paddingRight !== undefined) classes.push(`pr-[${toPx(paddingRight)}]`);
+
+  const margin = consume("margin");
+  if (margin !== undefined) {
+    if (canUseArbitraryValue(margin)) classes.push(`m-[${toPx(margin)}]`);
+    else rest.margin = margin;
+  }
+  const marginTop = consume("marginTop");
+  if (marginTop !== undefined) classes.push(`mt-[${toPx(marginTop)}]`);
+  const marginBottom = consume("marginBottom");
+  if (marginBottom !== undefined) classes.push(`mb-[${toPx(marginBottom)}]`);
+  const marginLeft = consume("marginLeft");
+  if (marginLeft !== undefined) classes.push(`ml-[${toPx(marginLeft)}]`);
+  const marginRight = consume("marginRight");
+  if (marginRight !== undefined) classes.push(`mr-[${toPx(marginRight)}]`);
+
+  const bg = consume("backgroundColor");
+  if (bg) classes.push(`bg-[${bg}]`);
+
+  const color = consume("color");
+  if (color) classes.push(`text-[${color}]`);
+
+  const radius = consume("borderRadius");
+  if (radius !== undefined) classes.push(`rounded-[${toPx(radius)}]`);
+
+  const order = consume("order");
+  if (order !== undefined) classes.push(`order-[${order}]`);
+
+  const pos = consume("position");
+  if (pos === "relative") classes.push("relative");
+  else if (pos === "absolute") classes.push("absolute");
+
+  const top = consume("top");
+  if (top !== undefined) classes.push(`top-[${toPx(top)}]`);
+  const left = consume("left");
+  if (left !== undefined) classes.push(`left-[${toPx(left)}]`);
+  const right = consume("right");
+  if (right !== undefined) classes.push(`right-[${toPx(right)}]`);
+  const bottom = consume("bottom");
+  if (bottom !== undefined) classes.push(`bottom-[${toPx(bottom)}]`);
+
+  // Remove already-consumed keys from rest
+  // (consume removed them via delete rest[key])
+
+  // Clean empty rest entries
+  Object.keys(rest).forEach((k) => {
+    if (rest[k] === undefined) delete rest[k];
+  });
+
+  return { className: classes.filter(Boolean).join(" "), rest };
 };
 
 const applyCornerRadius = (target: Record<string, any>, radius: any) => {
@@ -146,9 +286,43 @@ const sortNodes = (a: any, b: any) => {
 const buildTree = (nodes: any[]): TreeNode[] => {
   const byParent: Record<string, any[]> = {};
   const roots: any[] = [];
+  const nodeById = new Map<string, any>();
+  const columnOwnerIndexToId = new Map<string, string>();
 
   nodes.forEach((n) => {
-    const pid = n.parentNode;
+    nodeById.set(n.id, n);
+    if (
+      n.type === "column" &&
+      n.data?._ownedByColumn &&
+      typeof n.data?._columnIndex === "number"
+    ) {
+      columnOwnerIndexToId.set(
+        `${n.data._ownedByColumn}:${n.data._columnIndex}`,
+        n.id
+      );
+    }
+  });
+
+  const resolveParentForExport = (n: any) => {
+    const ownerId = n.data?._ownedByColumn;
+    const colIndex = n.data?._columnIndex;
+    if (n.type === "column" && ownerId && nodeById.has(ownerId)) {
+      return ownerId;
+    }
+    if (
+      ownerId &&
+      typeof colIndex === "number" &&
+      n.type !== "column" &&
+      n.parentNode !== undefined
+    ) {
+      const colId = columnOwnerIndexToId.get(`${ownerId}:${colIndex}`);
+      if (colId && nodeById.has(colId)) return colId;
+    }
+    return n.parentNode;
+  };
+
+  nodes.forEach((n) => {
+    const pid = resolveParentForExport(n);
     if (pid) {
       byParent[pid] ||= [];
       byParent[pid].push(n);
@@ -609,9 +783,22 @@ const resolveColumnCount = (data: any, children: TreeNode[]) => {
   return typeof colCount === "number" ? colCount : 1;
 };
 
-// Render a normalized tree node into static JSX while respecting flow vs absolute layout intent.
-// LayoutMode steers flex/grid wrapping so the exported page avoids recomputing structure at runtime.
-// Assumes upstream normalization baked in positions/styles; this layer only formats safe markup.
+const resolveColumnsGap = (data: any, fallback: number) => {
+  const explicitGap =
+    data?.columns?.gap ?? data?.columnGap ?? data?.gapBetweenColumns;
+  if (typeof explicitGap === "number") return explicitGap;
+  return fallback;
+};
+
+const normalizeAxisToken = (value: any) =>
+  (value ?? "")
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  // Render a normalized tree node into static JSX while respecting flow vs absolute layout intent.
+  // LayoutMode steers flex/grid wrapping so the exported page avoids recomputing structure at runtime.
+  // Assumes upstream normalization baked in positions/styles; this layer only formats safe markup.
 const nodeToJSX = (
   tree: NormalizedTreeNode,
 
@@ -627,8 +814,12 @@ const nodeToJSX = (
     styleTokenMap: Record<string, StyleToken>;
     nodeStyleRef: Record<string, string>;
   },
-  parentPosition?: { x?: number; y?: number }
+  parentPosition?: { x?: number; y?: number },
+  parentLayoutOffset?: { x?: number; y?: number },
+  parentCrossAxisStretch = false,
+  options: ExportOptions = {}
 ): string => {
+  const pixelPerfect = options.pixelPerfect === true;
   const { node, children } = tree;
   const data = node.data || {};
 
@@ -654,12 +845,16 @@ const nodeToJSX = (
 
         ...(data.style || {}),
       };
+  // Preserve ordering when layout relies on order metadata
+  if (data.order !== undefined || data._order !== undefined) {
+    baseStyle.order = data.order ?? data._order;
+  }
 
   const layoutModeIsFree =
     layoutModeForChildren === "free" || layoutDecision?.mode === "free";
 
   const stripLayoutPropsForFreeMode = () => {
-    if (!layoutModeIsFree) return;
+    if (!layoutModeIsFree || pixelPerfect) return;
     delete baseStyle.display;
     delete baseStyle.flexDirection;
     delete baseStyle.gridTemplateColumns;
@@ -681,8 +876,10 @@ const nodeToJSX = (
   const positionX = node.position?.x;
   const positionY = node.position?.y;
 
-  const parentX = parentHasAbsolutePos ? (parentPosition?.x ?? 0) : 0;
-  const parentY = parentHasAbsolutePos ? (parentPosition?.y ?? 0) : 0;
+  const parentX =
+    (parentHasAbsolutePos ? parentPosition?.x : parentLayoutOffset?.x) ?? 0;
+  const parentY =
+    (parentHasAbsolutePos ? parentPosition?.y : parentLayoutOffset?.y) ?? 0;
 
   const relativeX =
     typeof positionX === "number" ? positionX - parentX : undefined;
@@ -690,30 +887,50 @@ const nodeToJSX = (
     typeof positionY === "number" ? positionY - parentY : undefined;
 
   // Remove canvas positioning only if in structured layouts (row/column/grid)
-  const inStructuredLayout =
-    parentLayoutMode !== "free" && !parentHasAbsolutePos;
+  const inStructuredLayout = parentLayoutMode !== "free";
 
-  //ReactFlow always has position; absolute export only when in free layout or explicitly absolute
-  const isLeafNode =
-    !children.length ||
-    ["button", "text", "image", "shape"].includes(node.type);
+  const hasExplicitAbsolutePosition =
+    data.positionMode === "absolute" ||
+    baseStyle.position === "absolute" ||
+    originalLeft !== undefined ||
+    originalRight !== undefined ||
+    originalTop !== undefined ||
+    originalBottom !== undefined;
 
+  // In free layout, only explicit absolute nodes should be emitted as absolute.
   const shouldExportAsAbsolute =
-    isLeafNode &&
-    parentLayoutMode === "free" &&
+    hasExplicitAbsolutePosition &&
     typeof positionX === "number" &&
     typeof positionY === "number";
 
   // Handle positioning - export coordinates exactly as-is, no offset subtraction
   if (inStructuredLayout) {
-    // In structured layouts (not inside absolute parents), remove position
-    delete baseStyle.position;
-    delete baseStyle.left;
-    delete baseStyle.top;
-    delete baseStyle.right;
-    delete baseStyle.bottom;
-    delete baseStyle.x;
-    delete baseStyle.y;
+    const mode = node.data?.positionMode;
+    const isAbs = mode === "absolute";
+
+    if (isAbs) {
+      // Only true absolute children keep offsets inside structured parents
+      baseStyle.position = "absolute";
+      applyHorizontalPositioning(
+        baseStyle,
+        relativeX,
+        originalLeft,
+        originalRight,
+        widthHint,
+        frameWidth,
+        node
+      );
+      applyVerticalPositioning(baseStyle, relativeY, originalTop, originalBottom);
+    } else {
+      // Flow or unspecified -> let parent layout place them
+      delete baseStyle.position;
+      delete baseStyle.left;
+      delete baseStyle.top;
+      delete baseStyle.right;
+      delete baseStyle.bottom;
+      delete baseStyle.x;
+      delete baseStyle.y;
+    }
   } else if (shouldExportAsAbsolute) {
     // Absolutely positioned - preserve original positioning (left/right/top/bottom)
     baseStyle.position = "absolute";
@@ -732,7 +949,7 @@ const nodeToJSX = (
     // Apply vertical positioning with top/bottom detection
     applyVerticalPositioning(baseStyle, relativeY, originalTop, originalBottom);
   } else {
-    // Default: remove positioning
+    // Default: remove positioning for non-absolute nodes
     delete baseStyle.position;
     delete baseStyle.left;
     delete baseStyle.top;
@@ -742,19 +959,43 @@ const nodeToJSX = (
     delete baseStyle.y;
   }
 
-  delete baseStyle.zIndex;
-  delete baseStyle.transform;
-  // Only delete width/height if not absolutely positioned, except for layout blocks that rely on fixed heights.
+  if (!pixelPerfect) {
+    delete baseStyle.zIndex;
+    delete baseStyle.transform;
+  }
+  const keepNodeDimensions =
+    node.type === "section" ||
+    node.type === "container" ||
+    node.type === "columns" ||
+    node.type === "column" ||
+    node.type === "row" ||
+    node.type === "button" ||
+    node.type === "shape" ||
+    node.type === "header" ||
+    node.type === "footer" ||
+    data.keepSizeInExport === true;
+
+  // In responsive mode, trim fixed geometry for generic nodes but keep container/layout dimensions.
   if (
+    !pixelPerfect &&
     baseStyle.position !== "absolute" &&
-    node.type !== "header" &&
-    node.type !== "footer" &&
-    node.type !== "row"
+    !keepNodeDimensions
   ) {
     delete baseStyle.width;
     delete baseStyle.height;
     delete baseStyle.left;
     delete baseStyle.top;
+  }
+
+  // In stretched columns, flow children should fill column width.
+  if (
+    parentCrossAxisStretch &&
+    parentLayoutMode === "column" &&
+    data.positionMode !== "absolute" &&
+    baseStyle.position !== "absolute"
+  ) {
+    baseStyle.width = "100%";
+    delete baseStyle.maxWidth;
   }
 
   const structuredGap =
@@ -833,6 +1074,7 @@ const nodeToJSX = (
     case "section":
     case "container":
       tag = "section";
+      const hasColumnChildren = children.some((c) => c.node.type === "column");
 
       const hasAbsoluteChildren = children.some((c) => {
         const s = c.node.style || {};
@@ -845,68 +1087,18 @@ const nodeToJSX = (
         );
       });
 
-      if (hasAbsoluteChildren) {
-        baseStyle.position = "relative";
-        baseStyle.display = "block";
-
-        // 🔒 CRITICAL: kill layout systems
-        delete baseStyle.flexDirection;
-        delete baseStyle.gridTemplateColumns;
-        delete baseStyle.gridTemplateRows;
-        delete baseStyle.gap;
-        delete baseStyle.rowGap;
-        delete baseStyle.columnGap;
-      }
-
       baseStyle.backgroundColor ||= data.backgroundColor ?? "transparent";
       applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
-      if (!hasAbsoluteChildren) {
-        if (layoutModeForChildren === "row") {
-          baseStyle.display ||= "flex";
-          baseStyle.flexDirection ||= "row";
-          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-        } else if (layoutModeForChildren === "column") {
-          baseStyle.display ||= "flex";
-          baseStyle.flexDirection ||= "column";
-          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-        } else if (layoutModeForChildren === "grid") {
-          baseStyle.display ||= "grid";
-          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
-            data,
-            children
-          )}, 1fr)`;
-          baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-        } else if (!shouldExportAsAbsolute && !inStructuredLayout) {
-          baseStyle.position ||= "relative";
-        }
-      } else if (!shouldExportAsAbsolute && !inStructuredLayout) {
-        baseStyle.position ||= "relative";
-      }
-      // Only set absolute position on section itself if it's a direct canvas child
-      if (
-        shouldExportAsAbsolute &&
-        !inStructuredLayout &&
-        !parentHasAbsolutePos
-      ) {
-        baseStyle.position = "absolute";
-        if (widthHint) baseStyle.width = widthHint;
-        if (heightHint) baseStyle.height = heightHint;
-      }
-      break;
 
-    case "header":
-    case "footer": {
-      tag = node.type;
-      baseStyle.width ??= widthHint ?? "100%";
-      if (heightHint) {
-        baseStyle.height ??= heightHint;
-        baseStyle.minHeight ??= heightHint;
-      }
-      baseStyle.padding ??= data.padding ?? 24;
-      baseStyle.backgroundColor ||= data.backgroundColor ?? "transparent";
-      baseStyle.border ||= data.border;
-      applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
-      if (layoutModeForChildren === "row") {
+      if (hasColumnChildren) {
+        // If semantic column wrappers exist under this container, preserve equal-width columns.
+        baseStyle.display ||= "grid";
+        baseStyle.gridTemplateColumns ||= `repeat(${Math.max(
+          1,
+          children.filter((c) => c.node.type === "column").length
+        )}, 1fr)`;
+        baseStyle.gap = resolveColumnsGap(data, 0);
+      } else if (layoutModeForChildren === "row") {
         baseStyle.display ||= "flex";
         baseStyle.flexDirection ||= "row";
         baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
@@ -922,7 +1114,63 @@ const nodeToJSX = (
         )}, 1fr)`;
         baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
       } else {
-        baseStyle.display ||= "block";
+        baseStyle.display = "block";
+      }
+      baseStyle.position ||= "relative";
+      if (hasAbsoluteChildren) {
+        baseStyle.position = "relative";
+      }
+
+      // Only set absolute position on section itself if it's a direct canvas child
+      if (
+        shouldExportAsAbsolute &&
+        !inStructuredLayout &&
+        !parentHasAbsolutePos
+      ) {
+        baseStyle.position = "absolute";
+        if (widthHint) baseStyle.width = widthHint;
+        if (heightHint) baseStyle.height = heightHint;
+      }
+      break;
+
+    case "header":
+    case "footer": {
+      tag = node.type;
+      // Force bars to flow in document order; ignore canvas positioning for stacking safety.
+      baseStyle.position = "relative";
+      delete baseStyle.left;
+      delete baseStyle.right;
+      delete baseStyle.top;
+      delete baseStyle.bottom;
+      delete baseStyle.transform;
+      baseStyle.width = "100%";
+      baseStyle.margin = "0 auto";
+      if (heightHint) {
+        baseStyle.height = heightHint;
+        baseStyle.minHeight = heightHint;
+      }
+      baseStyle.padding = data.padding ?? 24;
+      baseStyle.backgroundColor = data.backgroundColor ?? "transparent";
+      baseStyle.border = "none"; // remove canvas border for cleaner export
+      applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
+
+      if (layoutModeForChildren === "row") {
+        baseStyle.display = "flex";
+        baseStyle.flexDirection = "row";
+        baseStyle.gap = data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "column") {
+        baseStyle.display = "flex";
+        baseStyle.flexDirection = "column";
+        baseStyle.gap = data.gap ?? structuredGap ?? 16;
+      } else if (layoutModeForChildren === "grid") {
+        baseStyle.display = "grid";
+        baseStyle.gridTemplateColumns = `repeat(${resolveColumnCount(
+          data,
+          children
+        )}, 1fr)`;
+        baseStyle.gap = data.gap ?? structuredGap ?? 16;
+      } else {
+        baseStyle.display = "block";
       }
       baseStyle.boxSizing = "border-box";
       break;
@@ -930,8 +1178,17 @@ const nodeToJSX = (
 
     case "row": {
       tag = "div";
+      const hasColumnChildren = children.some((c) => c.node.type === "column");
 
-      if (layoutModeForChildren === "row") {
+      if (hasColumnChildren) {
+        // Rows that own column nodes should always export as equal grid columns.
+        baseStyle.display ||= "grid";
+        baseStyle.gridTemplateColumns ||= `repeat(${Math.max(
+          1,
+          children.filter((c) => c.node.type === "column").length
+        )}, 1fr)`;
+        baseStyle.gap = resolveColumnsGap(data, 0);
+      } else if (layoutModeForChildren === "row") {
         baseStyle.display ||= "flex";
 
         baseStyle.flexDirection ||= "row";
@@ -970,35 +1227,13 @@ const nodeToJSX = (
     case "columns": {
       tag = "div";
 
-      if (layoutModeForChildren === "row") {
-        baseStyle.display ||= "flex";
-
-        baseStyle.flexDirection ||= "row";
-
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
-      } else if (layoutModeForChildren === "column") {
-        baseStyle.display ||= "flex";
-
-        baseStyle.flexDirection ||= "column";
-
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
-      } else if (layoutModeForChildren === "grid") {
-        const cols = resolveColumnCount(data, children);
-
-        baseStyle.display ||= "grid";
-
-        if (layoutModeForChildren === "grid") {
-          baseStyle.gridTemplateColumns ||= `repeat(${cols}, 1fr)`;
-        }
-
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 24;
-      } else if (parentHasAbsolutePos) {
-        baseStyle.position = "relative";
-
-        baseStyle.width ||= "100%";
-
-        if (heightHint) baseStyle.height ||= heightHint;
-      }
+      const cols = resolveColumnCount(data, children);
+      baseStyle.display = "grid";
+      baseStyle.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      baseStyle.gap = resolveColumnsGap(data, 0);
+      baseStyle.position ||= parentHasAbsolutePos ? "relative" : baseStyle.position;
+      baseStyle.width ||= "100%";
+      if (heightHint) baseStyle.height ||= heightHint;
 
       break;
     }
@@ -1006,32 +1241,40 @@ const nodeToJSX = (
     case "column":
       tag = "div";
 
-      if (layoutModeForChildren === "row") {
-        baseStyle.display ||= "flex";
-        baseStyle.flexDirection ||= "row";
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (layoutModeForChildren === "column") {
-        baseStyle.display ||= "flex";
-        baseStyle.flexDirection ||= "column";
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (layoutModeForChildren === "grid") {
-        baseStyle.display ||= "grid";
-        if (layoutModeForChildren === "grid") {
-          baseStyle.gridTemplateColumns ||= `repeat(${resolveColumnCount(
-            data,
-            children
-          )}, 1fr)`;
-        }
-        baseStyle.gap ||= data.gap ?? structuredGap ?? 16;
-      } else if (parentHasAbsolutePos) {
-        baseStyle.position = "relative";
-        baseStyle.width ||= "100%";
-      } else {
-        baseStyle.display ||= "flex";
-        baseStyle.flexDirection ||= "column";
-        baseStyle.gap ||= data.gap ?? 16;
-        if (widthHint) baseStyle.maxWidth ||= widthHint;
-      }
+      baseStyle.display = "flex";
+      baseStyle.flexDirection = "column";
+      baseStyle.gap = data.gap ?? structuredGap ?? 16;
+
+      const cross = normalizeAxisToken(
+        data.crossAxis ??
+          data.alignItems ??
+          data.crossAlignment ??
+          data.columnCrossAxis
+      );
+      const main = normalizeAxisToken(
+        data.mainAxis ??
+          data.justifyContent ??
+          data.mainAlignment ??
+          data.columnMainAxis
+      );
+
+      if (cross === "center") baseStyle.alignItems = "center";
+      else if (cross === "end" || cross === "right" || cross === "flex-end")
+        baseStyle.alignItems = "flex-end";
+      else if (cross === "stretch") baseStyle.alignItems = "stretch";
+      else baseStyle.alignItems = "flex-start";
+
+      if (main === "center") baseStyle.justifyContent = "center";
+      else if (main === "end" || main === "right" || main === "flex-end")
+        baseStyle.justifyContent = "flex-end";
+      else if (main === "space-around") baseStyle.justifyContent = "space-around";
+      else if (main === "space-evenly") baseStyle.justifyContent = "space-evenly";
+      else if (main === "space-between") baseStyle.justifyContent = "space-between";
+      else baseStyle.justifyContent = "flex-start";
+
+      baseStyle.position ||= parentHasAbsolutePos ? "relative" : baseStyle.position;
+      baseStyle.width ||= "100%";
+      if (heightHint) baseStyle.height ||= heightHint;
       break;
 
     case "text":
@@ -1119,7 +1362,16 @@ const nodeToJSX = (
       if (shapeRadius !== undefined) {
         applyCornerRadius(baseStyle, shapeRadius);
       }
-      if (widthHint) baseStyle.width = widthHint;
+      if (
+        parentCrossAxisStretch &&
+        parentLayoutMode === "column" &&
+        !shouldExportAsAbsolute
+      ) {
+        // Stretch flow shapes to the column width when cross-axis is stretch.
+        baseStyle.width = "100%";
+      } else if (widthHint) {
+        baseStyle.width = widthHint;
+      }
       if (heightHint) baseStyle.height = heightHint;
       if (shouldExportAsAbsolute) {
         baseStyle.position = "absolute";
@@ -1179,7 +1431,18 @@ const nodeToJSX = (
       );
     });
 
-  if (!isAbsoluteFrame && layoutModeForChildren === "free") {
+  const preserveSemanticLayoutNode =
+    node.type === "row" ||
+    node.type === "columns" ||
+    node.type === "column" ||
+    node.type === "header" ||
+    node.type === "footer";
+
+  if (
+    !isAbsoluteFrame &&
+    layoutModeForChildren === "free" &&
+    !preserveSemanticLayoutNode
+  ) {
     stripLayoutPropsForFreeMode();
   }
 
@@ -1197,26 +1460,71 @@ const nodeToJSX = (
         ? widthHint
         : frameWidth;
 
+  const childParentLayoutMode =
+    node.type === "column"
+      ? "column"
+      : node.type === "columns"
+        ? "grid"
+        : layoutModeForChildren;
+  const childParentCrossStretch =
+    node.type === "column" && baseStyle.alignItems === "stretch";
+
   const childrenJSX = children
     .map((c) =>
       nodeToJSX(
         c as NormalizedTreeNode,
         indent + 2,
-        layoutModeForChildren,
+        childParentLayoutMode,
         baseStyle.position === "absolute",
         effectiveFrameWidth,
         styleCtx,
-        { x: positionX ?? 0, y: positionY ?? 0 }
+        { x: positionX ?? 0, y: positionY ?? 0 },
+        { x: positionX ?? 0, y: positionY ?? 0 },
+        childParentCrossStretch,
+        options
       )
     )
     .filter(Boolean)
     .join("\n");
 
-  const hasVisualStyle = Object.keys(baseStyle).length > 0;
+  // Safety: semantic column wrappers should have no implicit inter-column gap.
+  if (
+    (node.type === "row" ||
+      node.type === "columns" ||
+      node.type === "section" ||
+      node.type === "container") &&
+    children.some((c) => c.node.type === "column")
+  ) {
+    baseStyle.gap = 0;
+    delete baseStyle.columnGap;
+    delete baseStyle.rowGap;
+  }
 
-  if (!childrenJSX && !content && !hasVisualStyle) return "";
+  // Convert style to Tailwind classes + inline fallback
+  const { className, rest: inlineStyle } = styleToTailwind(baseStyle);
+  const hasVisualStyle =
+    Object.keys(inlineStyle).length > 0 ||
+    /\b(bg-|border-|rounded-|shadow|p\[|m\[|w\[|h\[|min-|max-)/.test(className);
+  const preserveEmptyNode =
+    node.type === "section" ||
+    node.type === "container" ||
+    node.type === "row" ||
+    node.type === "columns" ||
+    node.type === "column" ||
+    node.type === "header" ||
+    node.type === "footer" ||
+    data.keepInExport === true;
 
-  return `${indentStr}<${tag}${styleToPropString(baseStyle)}>
+  if (!childrenJSX && !content && !hasVisualStyle && !preserveEmptyNode)
+    return "";
+
+  const classAttr = className ? ` className="${className}"` : "";
+  const styleAttr = styleToPropString(inlineStyle);
+
+  if (!childrenJSX && !content && !hasVisualStyle && !preserveEmptyNode)
+    return "";
+
+  return `${indentStr}<${tag}${classAttr}${styleAttr}>
 ${content ? indentStr + "  " + content : ""}
 ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
 </${tag}>`;
@@ -1229,7 +1537,10 @@ ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
 // Compose a Next.js page using normalized layout choices and deduped style tokens.
 // All positioning is baked into markup/CSS to keep the exported app deterministic at runtime.
 // Main/shell wrappers mirror the builder canvas bounds without re-running layout math in the client.
-const generatePageTSX = (normalized: NormalizationResult) => {
+const generatePageTSX = (
+  normalized: NormalizationResult,
+  options: ExportOptions = {}
+) => {
   const tree = normalized.normalizedNodes as NormalizedTreeNode[];
 
   const styleTokenMap = normalized.styleTokens.reduce<
@@ -1244,9 +1555,11 @@ const generatePageTSX = (normalized: NormalizationResult) => {
     {}
   );
 
-  const globalCss = `
+const globalCss = `
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+main { min-height: 100vh; width: 100%; }
+section { width: 100%; }
 `;
 
   const rootData = tree[0]?.node?.data || {};
@@ -1264,7 +1577,7 @@ body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Se
 
   const shellStyle: Record<string, any> = {
     width: "100%",
-    maxWidth: rootData.width ?? rootData.frameWidth ?? rootStyle.width,
+    maxWidth: "100%",
     position: "relative",
     margin: "0 auto",
     overflow: "visible",
@@ -1285,18 +1598,23 @@ body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Se
               "free",
               false,
               frameWidth,
-              { styleTokenMap, nodeStyleRef: normalized.nodeStyleRef }
+              { styleTokenMap, nodeStyleRef: normalized.nodeStyleRef },
+              undefined,
+              undefined,
+              false,
+              options
             );
           })
           .join("\n");
 
   return `export default function Page() {
   return (
-    <main${styleToPropString(mainStyle)}>
+    <main className="min-h-screen w-full bg-black text-slate-900" ${styleToPropString(mainStyle)}>
+      <script src="https://cdn.tailwindcss.com"></script>
       <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: ${JSON.stringify(
         globalCss
       )} }} />
-      <section${styleToPropString(shellStyle)}>
+      <section className="w-full max-w-full relative mx-auto overflow-visible"${styleToPropString(shellStyle)}>
 ${body}
       </section>
     </main>
@@ -1312,13 +1630,34 @@ ${body}
 // Export pipeline: copy the scaffold, normalize the active page, emit static page.tsx, then download.
 // Keeps builder-only state out of the bundle so the exported app never reruns layout heuristics.
 // Relies on the normalization stage for deterministic HTML/CSS across repeated exports.
-export async function exportNextJSZip(site: SiteSchema) {
+export async function exportNextJSZip(
+  site: SiteSchema,
+  diagnosticsOverride?: NormalizationResult["diagnostics"],
+  options: ExportOptions = {}
+) {
   const zip = new JSZip();
 
   const scaffold = import.meta.glob(
     "../../public/export-nextjs/{package.json,next.config.mjs,tsconfig.json,next-env.d.ts,app/layout.tsx,app/globals.css}",
     { query: "?raw", import: "default", eager: true }
   ) as Record<string, string>;
+
+  const expected = [
+    "package.json",
+    "next.config.mjs",
+    "tsconfig.json",
+    "next-env.d.ts",
+    "app/layout.tsx",
+    "app/globals.css",
+  ];
+
+  const missing = expected.filter(
+    (f) => !Object.keys(scaffold).some((k) => k.endsWith(`export-nextjs/${f}`))
+  );
+
+  if (missing.length) {
+    throw new Error(`Export scaffold missing: ${missing.join(", ")}`);
+  }
 
   Object.entries(scaffold).forEach(([path, content]) => {
     const rel = path.slice(path.indexOf("export-nextjs/"));
@@ -1332,7 +1671,12 @@ export async function exportNextJSZip(site: SiteSchema) {
   const tree = page ? buildTree(page.nodes || []) : [];
   const normalized = normalizeTree(tree);
 
-  zip.file("export-nextjs/app/page.tsx", generatePageTSX(normalized));
+  zip.file(
+    "export-nextjs/export-diagnostics.json",
+    JSON.stringify(diagnosticsOverride ?? normalized.diagnostics, null, 2)
+  );
+
+  zip.file("export-nextjs/app/page.tsx", generatePageTSX(normalized, options));
 
   const blob = await zip.generateAsync({ type: "blob" });
   const a = document.createElement("a");

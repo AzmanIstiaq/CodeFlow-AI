@@ -21,6 +21,7 @@ import {
   LayoutPosition,
   RowControl,
   ColumnControl,
+  FlowSpacing,
   Style,
   Text,
   Effects,
@@ -71,6 +72,13 @@ export default function InspectorPanel({
         />
 
         <ColumnControl
+          selectedNodes={selectedNodes}
+          updateNode={updateNode}
+          updateNodes={updateNodes}
+          allNodes={allNodes}
+        />
+
+        <FlowSpacing
           selectedNodes={selectedNodes}
           updateNode={updateNode}
           updateNodes={updateNodes}

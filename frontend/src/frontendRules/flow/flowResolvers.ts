@@ -124,6 +124,7 @@ export function computeInsertForFlow(
     .filter(
       (n) =>
         n.id !== nodeId &&
+        n.type !== "column" &&
         n.data?._ownedByColumn === ownerId &&
         n.data?._columnIndex === columnIndex
     )
@@ -181,6 +182,7 @@ export function applyFlowPlacement(
     .filter(
       (n) =>
         n.id !== nodeId &&
+        n.type !== "column" &&
         n.data?.[ownerKey] === ownerId &&
         n.data?.[columnIndexKey] === columnIndex
     )
@@ -198,6 +200,7 @@ export function applyFlowPlacement(
         .filter(
           (n) =>
             n.id !== nodeId &&
+            n.type !== "column" &&
             n.data?.[ownerKey] === sourceOwner &&
             n.data?.[columnIndexKey] === sourceCol
         )

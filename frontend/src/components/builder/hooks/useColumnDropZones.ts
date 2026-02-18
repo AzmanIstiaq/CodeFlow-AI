@@ -384,6 +384,7 @@ export function useColumnDropZones(
               ? nds
                   .filter(
                     (n) =>
+                      n.type !== "column" &&
                       n.data?._ownedByColumn === ownedBy &&
                       n.data?._columnIndex === ownedColumnIndex
                   )
@@ -434,7 +435,11 @@ export function useColumnDropZones(
               node.parentNode === ownedBy ? undefined : node.parentNode,
             // Use absolute position so node stays visually in the same place
             position: absolutePosition ?? node.position ?? { x: 0, y: 0 },
-            data: restData,
+            extent: undefined,
+            data: {
+              ...restData,
+              positionMode: "absolute",
+            },
           };
         }
 

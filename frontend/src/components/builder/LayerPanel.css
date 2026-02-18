@@ -1,0 +1,42 @@
+/**
+ * Layer Panel Styles
+ *
+ * Custom scrollbar styling to match the inspector panel design.
+ * Thin, subtle scrollbar with light track and darker thumb.
+ */
+
+/* Layer Panel - Custom Scrollbar */
+.layer-panel-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.layer-panel-content::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.layer-panel-content::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.layer-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Layer row hover states */
+.layer-row {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.layer-row:hover {
+  background-color: #f9fafb;
+}
+
+/* Layer actions visibility */
+.layer-actions {
+  transition: opacity 0.15s ease;
+}
+
+.layer-delete {
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
