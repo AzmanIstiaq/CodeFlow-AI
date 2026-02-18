@@ -1,3 +1,17 @@
+/**
+ * File: layoutPolicy.ts
+ *
+ * Purpose:
+ * - Define shared layout policy rules used by layout resolvers and builder orchestration.
+ *
+ * Controls:
+ * - Header/footer bar typing and default bar height behavior.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/layout/layoutResolvers.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import { HEADER_DEFAULT_HEIGHT, FOOTER_DEFAULT_HEIGHT } from "./layoutMetrics";
 
 /**

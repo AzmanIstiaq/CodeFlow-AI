@@ -1,3 +1,17 @@
+/**
+ * File: resizePolicy.ts
+ *
+ * Purpose:
+ * - Define resize eligibility and minimum constraints for builder nodes.
+ *
+ * Controls:
+ * - Which node types are resizable and bar resize constraint values.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/layout/layoutPolicy.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import { BAR_MIN_HEIGHT, BAR_MIN_WIDTH } from "../layout/layoutMetrics";
 import { isBarNode } from "../layout/layoutPolicy";
 

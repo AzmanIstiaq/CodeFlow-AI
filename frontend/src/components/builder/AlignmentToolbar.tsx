@@ -47,7 +47,6 @@ export default function AlignmentToolbar({
   onDuplicate,
   onCopy,
   onPaste,
-  onSetColumns,
   onColumnAlign,
   visible,
 }: AlignmentToolbarProps) {

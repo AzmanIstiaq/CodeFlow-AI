@@ -46,7 +46,10 @@ export function useColumnDropZones(
   const reactFlow = useReactFlow();
   const { screenToFlowPosition } = reactFlow;
 
-
+  /**
+   * Converts pointer event coordinates into flow-space coordinates.
+   * Returns null when event does not carry client coordinates.
+   */
   const toFlowPoint = (event?: any) => {
     const clientX = event?.clientX;
     const clientY = event?.clientY;
@@ -56,6 +59,10 @@ export function useColumnDropZones(
     return null;
   };
 
+  /**
+   * Computes absolute position by walking parent chain.
+   * Used when detaching nodes from column ownership.
+   */
   const getNodeAbsolutePosition = (
     nodeId: string | undefined,
     nodeList: any[]

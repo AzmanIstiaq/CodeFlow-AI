@@ -1,3 +1,17 @@
+/**
+ * File: layoutResolvers.ts
+ *
+ * Purpose:
+ * - Resolve computed layout maps, flow stack offsets, and section render dimensions.
+ *
+ * Controls:
+ * - Runtime coordinate and size calculations used during canvas rendering.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/layout/layoutPolicy.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import {
   DEFAULT_COLUMN_GAP,
   FLOW_DEFAULT_HEIGHT,
@@ -161,6 +175,8 @@ export function computeFlowStackOffsets(nodes: any[]) {
   const offsets = new Map<string, number>();
   const groups = new Map<string, any[]>();
 
+  // Resolves effective container height used to compute available column space.
+  // Priority is explicit style/size first, then page-level fallback.
   const resolveOwnerHeight = (owner: any) => {
     const explicit =
       (owner?.style?.height as number | undefined) ??
@@ -172,6 +188,8 @@ export function computeFlowStackOffsets(nodes: any[]) {
     return undefined;
   };
 
+  // Normalizes child height contribution for flow stacking.
+  // Ensures missing heights still reserve minimum flow space.
   const getNodeHeight = (node: any) => {
     const h =
       (node.style?.height as number | undefined) ??
@@ -285,6 +303,8 @@ export function getFlowRenderPosition(
   nodes: any[],
   layoutById: Map<string, { x: number; y: number; width: number; height: number }>
 ) {
+  // Contract: X/Y are derived from owner column geometry + flow offset map.
+  // Do not duplicate this math in render layers; call resolver instead.
   if (node?.data?.positionMode !== "flow") return node?.position;
   const flowY = flowStackOffsets.get(node.id) ?? 0;
   let flowX = 0;

@@ -1,3 +1,17 @@
+/**
+ * File: flowResolvers.ts
+ *
+ * Purpose:
+ * - Resolve runtime calculations for flow placement, column hit testing, and ordering.
+ *
+ * Controls:
+ * - Placement coordinates, insert indices, and ownership/order mutations for flow nodes.
+ *
+ * Directly related files:
+ * - frontend/src/frontendRules/flow/flowPolicy.ts
+ * - frontend/src/pages/PageBuilderInner.tsx
+ */
+
 import {
   DEFAULT_COLUMN_GAP,
   DEFAULT_SECTION_PADDING,

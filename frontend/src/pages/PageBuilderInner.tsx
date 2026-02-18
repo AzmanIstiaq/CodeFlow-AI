@@ -1,52 +1,36 @@
 /**
- * RULE BOUNDARY
+ * PageBuilderInner (Main Canvas Shell)
  *
- * This file must not define layout, spacing, drag, resize,
- * selection, or z-index rules.
+ * Responsibility:
+ * - Compose the visual builder experience by wiring state hooks, rule resolvers, and ReactFlow.
+ * - Adapt persisted node/page state into render-ready node props.
+ * - Coordinate user actions (selection, placement, drag/resize, export) via dedicated hooks/modules.
  *
- * All such logic MUST come from frontendRules/*.
- * Ownership quick map: spacing/height → layout/*; flow/columns → flow/*; drag/guides → interaction/*; resize → resize/*; selection → selection/*; z-index → layering/*; inspector → inspector/*; export/layout safety → export/*.
+ * Architectural Boundary:
+ * - This file is an orchestrator, not the source of truth for policy math.
+ * - Core rules should remain in `frontendRules/*` and specialized hooks.
+ * - Local logic here should focus on wiring, delegation, and UI-state synchronization.
+ *
+ * Ownership Map:
+ * - layout sizing/position policy -> `frontendRules/layout/*`
+ * - flow/column ownership math -> `frontendRules/flow/*` + `useColumnDropZones`
+ * - drag/smart guide policy -> `frontendRules/interaction/*` + `useSmartGuides`
+ * - resize policy -> `frontendRules/resize/*`
+ * - selection bundling/policy -> `frontendRules/selection/*`
+ * - z-index/layer ordering -> `frontendRules/layering/*`
+ * - export preflight/safety -> `frontendRules/export/*` + `exportNextJsZip`
+ *
+ * Data Flow (High Level):
+ * 1) `useSiteState` provides active page state (`nodes`, `edges`, page metadata).
+ * 2) Resolver/hook outputs are merged into `transformedNodes` for ReactFlow rendering.
+ * 3) User interactions trigger action handlers that update page state through normalized setters.
+ * 4) Export path snapshots current page nodes, validates with policy, then delegates ZIP generation.
+ *
+ * Editing Guidance:
+ * - Safe edits here: UI wiring, callback composition, panel visibility rules, handler delegation.
+ * - Higher-risk edits: `transformedNodes` mapping, flow/absolute transition sync, export snapshot path.
+ * - Before changing behavior, prefer updating the owning resolver/hook and consuming it here.
  */
-/**
- * PageBuilderInner Component
- *
- * The core canvas editor for the visual page builder.
- * Orchestrates all builder features: nodes, guides, layers, undo/redo, snapping, etc.
- *
- * Architecture:
- * - Uses React hooks for state and side effects
- * - Leverages ReactFlow for canvas rendering and drag handling
- * - Integrates custom hooks for domain logic (site state, node ops, guides, etc.)
- * - Manages multi-page sites with immutable state updates
- *
- * Key Responsibilities:
- * 1. Render ReactFlow canvas with all node types
- * 2. Handle node/edge changes and state synchronization
- * 3. Coordinate between multiple feature hooks (undo, guides, columns, etc.)
- * 4. Manage keyboard shortcuts and interaction states
- * 5. Persist changes to server via API
- * 6. Support drawing mode, resizing, radius editing
- * 7. Maintain visual feedback (guides, layers, inspector)
- *
- * State Management:
- * - useSiteState: Multi-page site + active page
- * - useNodeOperations: Node/edge change handlers
- * - useColumnDropZones: Column-based layout system
- * - useSmartGuides: Alignment and snapping
- * - useHistory: Undo/redo
- * - Local state: Drawing, resizing, selection, etc.
- *
- * Performance Optimizations:
- * - Node types defined outside component (referential equality)
- * - useCallback for expensive handlers
- * - useMemo for transformation pipelines
- * - Ref-based refs for drawing/resizing state
- *
- * Constants:
- * - MODE: "builder" (AI execution disabled)
- * - nodeTypes: Maps node type strings to React components
- */
-
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useReactFlow, useViewport } from "reactflow";
@@ -127,9 +111,7 @@ import { canExportSite } from "../frontendRules/export/exportPolicy";
 const MODE: "workflow" | "builder" = "builder";
 
 // ===== NODE TYPE REGISTRY =====
-// Maps node type strings to React components
-// Defined outside component to preserve referential equality across renders
-// Static nodeTypes - defined ONCE outside component (referential equality preserved)
+// Defined outside the component to preserve referential equality across renders.
 const nodeTypes: NodeTypes = {
   start: StartNode,
   ai: AINode,
@@ -310,7 +292,7 @@ export default function PageBuilderInner() {
     "desktop" | "tablet" | "mobile"
   >("desktop");
 
-  // Node placement mode (toolbar button â click canvas to place)
+  // Node placement mode (toolbar button and click canvas to place)
   const [placementMode, setPlacementMode] = useState<{
     type: string;
     label: string;
@@ -345,7 +327,6 @@ export default function PageBuilderInner() {
   // Clean hook-based architecture for domain logic separation
   const {
     site,
-    setSite,
     activePage,
     nodes,
     edges,
@@ -360,6 +341,7 @@ export default function PageBuilderInner() {
   // Centralized node setter keeps z-index canonical so rows/sections sit beneath content.
   // This wrapper ensures every hook mutation flows through the same layering guardrail.
   // Column extent + flow math expect normalized order, so avoid bypassing this setter.
+  // Contract: route node mutations through this wrapper unless bypass is intentional.
   const setNodesNormalized = (updater: any) => {
     setNodes((nds: any) => {
       const next = typeof updater === "function" ? updater(nds) : updater;
@@ -399,10 +381,7 @@ export default function PageBuilderInner() {
     activeGuides,
     handleDrag: handleGuideDrag,
     clearGuides,
-    snapToGuides,
     setOverrideKey,
-    setSnapThreshold,
-    setGridSnap,
   } = useSmartGuides(nodes, reactFlowInstance);
 
   const prevPositionModeRef = useRef(new Map<string, string>());
@@ -491,6 +470,7 @@ export default function PageBuilderInner() {
   });
 
   // Column-specific alignment: map toolbar align actions to flex alignment properties.
+  // Updates selected column alignment and mirrors state into selected node snapshot.
   const handleColumnAlign = useCallback(
     (type: string) => {
       const column = selectedNodes.find((n: any) => n.type === "column");
@@ -862,6 +842,7 @@ export default function PageBuilderInner() {
 
   const hasSelection = selectedNodes.length > 0 || selectedNode !== null;
 
+  // Select section plus header/footer bundle for consistent frame-level editing behavior.
   const selectSectionWithBars = useCallback(
     (sectionNode: any) => {
       const bundled = bundleSectionSelection(nodes, sectionNode);
@@ -876,36 +857,32 @@ export default function PageBuilderInner() {
     return deriveInspectorSelection(selectedNodes);
   }, [selectedNodes]);
 
-  // IMPORTANT:
-  // Layout rules are centralized in frontendRules/layout.
-  // Do NOT modify spacing or coordinate logic here.
+  // Delegates absolute-position resolution to layout resolvers.
   const getAbsolutePosition = useCallback(
     (nodeId: string | undefined | null) => computeAbsolutePosition(nodeId, nodes),
     [nodes]
   );
 
-  // IMPORTANT:
-  // Flow stacking rules are centralized in frontendRules/layout.
-  // Do NOT modify flow offset logic here.
+  // Consumes resolver-owned flow stack offsets.
   const flowStackOffsets = useMemo(
     () => computeFlowStackOffsets(nodes),
     [nodes]
   );
 
-  // IMPORTANT:
-  // Layout rules are centralized in frontendRules/layout.
-  // Do NOT modify spacing or stacking logic here.
+  // Consumes resolver-owned layout maps used for row/header/footer placement.
   const { layoutById, sectionHeightById } = useMemo(
     () => computeLayoutMaps(nodes),
     [nodes]
   );
 
   // Capture the rendered layout (positions + dimensions) so export matches the on-canvas view.
+  // Intentionally returns nodes unchanged to preserve structural wrappers in export.
   const snapshotNodesForExport = useCallback(() => {
     // Pass through nodes unchanged to preserve structural wrappers (row/columns/column).
     return nodes;
   }, [nodes]);
 
+  // Validates export readiness and triggers static Next.js ZIP generation.
   const handleExportNextJSZip = useCallback(async () => {
     if (isExporting) return;
 
@@ -938,6 +915,7 @@ export default function PageBuilderInner() {
   }, [isExporting, site]);
 
   // Force ReactFlow to recalc node dimensions when we update size programmatically
+  // Use after programmatic size updates so handles/bounds stay accurate.
   const refreshNodeInternals = useCallback(
     (ids: string | string[]) => {
       const updateInternals = (reactFlowInstance as any)?.updateNodeInternals;
@@ -957,6 +935,7 @@ export default function PageBuilderInner() {
    * Place node at mouse click location
    * Respects column drop zones if available
    * Centers node on cursor
+   * Returns true when placement is applied.
    */
   const placeNodeAtEvent = useCallback(
     (event: any) => {
@@ -1089,6 +1068,7 @@ export default function PageBuilderInner() {
   // Lets the pane click-through pick the frame when clicking empty space inside it.
   // Coordinates stay in flow space, so section bounds guard against accidental off-canvas selection.
   // Keeps selection lifecycle predictable when toggling between placement and drag interactions.
+  // Returns true when click resolves to frame selection.
   const selectFrameAtPoint = useCallback(
     (event: any) => {
       const flowPoint = reactFlowInstance.screenToFlowPosition({
@@ -1111,18 +1091,15 @@ export default function PageBuilderInner() {
     [nodes, reactFlowInstance, sectionHeightById, selectSectionWithBars]
   );
 
+  // Resolver adapter to keep render mapping readable while layout math stays centralized.
   const getFlowRenderPosition = useCallback(
     (node: any) =>
       resolveFlowRenderPosition(node, flowStackOffsets, nodes, layoutById),
     [flowStackOffsets, nodes, layoutById]
   );
 
-  // Project builder nodes into ReactFlow props while preserving flow/absolute intent and layering.
-  // Ordering and z-index normalization here must stay stable or selection/extent math drifts.
-  // Keep this pure so downstream hooks can trust node data remains untouched during render.
-  // IMPORTANT:
-  // Drag, resize, and layering rules are centralized in frontendRules/interaction, frontendRules/resize, and frontendRules/layering.
-  // Do NOT modify rule logic here.
+  // Projects builder nodes into render-ready ReactFlow nodes.
+  // Keep this transformation pure and delegate rule math to resolver modules.
   const transformedNodes = useMemo(() => {
     return (
       nodes

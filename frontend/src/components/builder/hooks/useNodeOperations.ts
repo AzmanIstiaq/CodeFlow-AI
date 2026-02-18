@@ -37,7 +37,10 @@ export function useNodeOperations(
   // STATE ADAPTER FUNCTIONS
   // =====================================
   // Provide ReactFlow-compatible setNodes/setEdges interface
-
+  /**
+   * ReactFlow-compatible node setter adapter.
+   * Accepts either direct arrays or updater callbacks and writes into active page state.
+   */
   const setNodes = (nodesOrUpdater: any) => {
     const newNodes =
       typeof nodesOrUpdater === "function"
@@ -46,6 +49,10 @@ export function useNodeOperations(
     updateActivePage({ nodes: newNodes });
   };
 
+  /**
+   * ReactFlow-compatible edge setter adapter.
+   * Accepts either direct arrays or updater callbacks and writes into active page state.
+   */
   const setEdges = (edgesOrUpdater: any) => {
     const newEdges =
       typeof edgesOrUpdater === "function"

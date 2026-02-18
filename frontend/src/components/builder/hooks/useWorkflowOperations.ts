@@ -20,7 +20,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SiteSchema, PageSchema } from "../../../types/siteSchema";
 import { saveDiagram, executeWorkflow } from "../../../api/api";
-import { buildTree } from "../../../utils/buildTree";
 
 const MODE: "workflow" | "builder" = "builder";
 

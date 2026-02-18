@@ -87,7 +87,6 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
 
   const blockRef = useRef<HTMLDivElement | null>(null);
   const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const lastHeightRef = useRef<number>(0);
 
   // Register column bounds so drop logic can target them.
   useLayoutEffect(() => {
