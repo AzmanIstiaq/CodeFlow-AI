@@ -337,6 +337,7 @@ export default function PageBuilderInner() {
   // UI state for interactions
   const [isResizing, setIsResizing] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // =====================================
   // HOOK INTEGRATION
@@ -389,14 +390,6 @@ export default function PageBuilderInner() {
     activePage,
     setNodesNormalized
   );
-
-  const handleExportNextJSZip = () => {
-    // Export uses the static Next.js scaffold so layout math stays precomputed at build time.
-    // Keep this call thin to avoid touching canvas state while the archive is generated.
-    if (canExportSite(site)) {
-      exportNextJSZip(site as any);
-    }
-  };
 
   // Smart guides for alignment
   const reactFlowInstance = useReactFlow();
@@ -892,12 +885,57 @@ export default function PageBuilderInner() {
   );
 
   // IMPORTANT:
+  // Flow stacking rules are centralized in frontendRules/layout.
+  // Do NOT modify flow offset logic here.
+  const flowStackOffsets = useMemo(
+    () => computeFlowStackOffsets(nodes),
+    [nodes]
+  );
+
+  // IMPORTANT:
   // Layout rules are centralized in frontendRules/layout.
   // Do NOT modify spacing or stacking logic here.
   const { layoutById, sectionHeightById } = useMemo(
     () => computeLayoutMaps(nodes),
     [nodes]
   );
+
+  // Capture the rendered layout (positions + dimensions) so export matches the on-canvas view.
+  const snapshotNodesForExport = useCallback(() => {
+    // Pass through nodes unchanged to preserve structural wrappers (row/columns/column).
+    return nodes;
+  }, [nodes]);
+
+  const handleExportNextJSZip = useCallback(async () => {
+    if (isExporting) return;
+
+    // Snapshot sizes so absolute nodes (header/footer) have width/height during export.
+    const snapshotNodes = snapshotNodesForExport();
+    const snapshotSite = {
+      ...site,
+      pages: site.pages.map((p: any) =>
+        p.id === site.activePageId ? { ...p, nodes: snapshotNodes } : p
+      ),
+    };
+
+    const gate = canExportSite(snapshotSite as any);
+    if (!gate.ok) {
+      alert(`Cannot export:\n${gate.reasons.join("\n")}`);
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await exportNextJSZip(snapshotSite as any, gate.diagnostics, {
+        pixelPerfect: false, // responsive export; fill available space
+      });
+    } catch (err) {
+      console.error(err);
+      alert(`Export failed: ${(err as Error).message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, site]);
 
   // Force ReactFlow to recalc node dimensions when we update size programmatically
   const refreshNodeInternals = useCallback(
@@ -1071,14 +1109,6 @@ export default function PageBuilderInner() {
       return false;
     },
     [nodes, reactFlowInstance, sectionHeightById, selectSectionWithBars]
-  );
-
-  // IMPORTANT:
-  // Flow stacking rules are centralized in frontendRules/layout.
-  // Do NOT modify flow offset logic here.
-  const flowStackOffsets = useMemo(
-    () => computeFlowStackOffsets(nodes),
-    [nodes]
   );
 
   const getFlowRenderPosition = useCallback(
@@ -1500,6 +1530,7 @@ export default function PageBuilderInner() {
       <MenuBar
         onSave={save}
         onExportNextJSZip={handleExportNextJSZip}
+        exporting={isExporting}
         onNavigateHome={() => navigate("/")}
         onNavigateDashboard={() => navigate("/dashboard")}
         pages={site.pages}

@@ -4,6 +4,7 @@ import {
   FLOW_MIN_HEIGHT,
   ROW_MIN_HEIGHT,
   DEFAULT_PAGE_HEIGHT,
+  DEFAULT_PAGE_WIDTH,
 } from "./layoutMetrics";
 import { isBarNode } from "./layoutPolicy";
 
@@ -93,7 +94,10 @@ export function computeLayoutMaps(nodes: any[]) {
 
   sections.forEach((section: any) => {
     const sectionWidth =
-      section.width ?? section.data?.pageWidth ?? section.data?.maxWidth ?? 0;
+      section.width ??
+      section.data?.pageWidth ??
+      section.data?.maxWidth ??
+      DEFAULT_PAGE_WIDTH; // fallback to a reasonable canvas size
 
     const layoutChildren = nodes
       .filter(
@@ -112,7 +116,7 @@ export function computeLayoutMaps(nodes: any[]) {
     let currentY = 0;
     let footerNode: any = null;
     let footerHeight = 0;
-    const minHeight = section.data?.pageHeight ?? 0;
+    const minHeight = section.data?.pageHeight ?? DEFAULT_PAGE_HEIGHT;
 
     layoutChildren.forEach((child: any) => {
       const height = resolveNodeHeightForLayout(child, nodes);
@@ -135,7 +139,9 @@ export function computeLayoutMaps(nodes: any[]) {
       });
     }
 
-    const totalHeight = footerNode ? bodyHeight + footerHeight : bodyHeight;
+    const totalHeight = footerNode
+      ? Math.max(bodyHeight + footerHeight, minHeight)
+      : Math.max(bodyHeight, minHeight);
     sectionHeights.set(section.id, totalHeight);
   });
 
