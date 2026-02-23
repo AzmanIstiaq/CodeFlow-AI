@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getWorkflows,
   createWorkflow,
+  deleteWorkflow,
   updateWorkflow,
   type Workflow,
 } from "../api/api";
@@ -139,8 +140,6 @@ export default function Dashboard() {
     }
 
     try {
-      // Dynamic import keeps initial bundle size smaller.
-      const { deleteWorkflow } = await import("../api/api");
       await deleteWorkflow(id);
       // Reload workflows after deletion
       await loadWorkflows();
