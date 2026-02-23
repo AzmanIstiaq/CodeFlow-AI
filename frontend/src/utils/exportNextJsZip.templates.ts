@@ -34,8 +34,10 @@
  * - Change: The ZIP assembly loop that writes `/components/*` entries.
  */
 export const generateExportComponentFiles = () => {
+  // Exported components run in App Router client mode so generated hooks/events work.
+  const clientDirective = `"use client";\n\n`;
   const simple = (name: string, tag: string) =>
-    `type PrimitiveProps = {
+    `${clientDirective}type PrimitiveProps = {
   className?: string;
   style?: Record<string, any>;
   children?: any;
@@ -54,7 +56,7 @@ export function ${name}({ children, ...props }: PrimitiveProps) {
     "CanvasColumn.tsx": simple("CanvasColumn", "div"),
     "CanvasHeader.tsx": simple("CanvasHeader", "header"),
     "CanvasFooter.tsx": simple("CanvasFooter", "footer"),
-    "CanvasButton.tsx": `type PrimitiveProps = {
+    "CanvasButton.tsx": `${clientDirective}type PrimitiveProps = {
   className?: string;
   style?: Record<string, any>;
   children?: any;
@@ -76,13 +78,16 @@ export function CanvasButton({ children, type, href, ...props }: PrimitiveProps)
   );
 }
 `,
-    "CanvasFormInput.tsx": `type FormInputProps = {
+    "CanvasFormInput.tsx": `${clientDirective}type FormInputProps = {
   className?: string;
   style?: Record<string, any>;
   label?: string;
   placeholder?: string;
   inputType?: string;
   required?: boolean;
+  // Controlled value/onChange are injected by behavior-aware export codegen.
+  value?: string;
+  onChange?: (value: string) => void;
 };
 
 export function CanvasFormInput({
@@ -92,6 +97,8 @@ export function CanvasFormInput({
   placeholder,
   inputType,
   required,
+  value,
+  onChange,
 }: FormInputProps) {
   return (
     <div className={className} style={style}>
@@ -103,6 +110,8 @@ export function CanvasFormInput({
       ) : null}
       <input
         type={inputType ?? "text"}
+        value={value ?? ""}
+        onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder ?? "Enter text..."}
         style={{ width: "100%" }}
       />
@@ -110,13 +119,16 @@ export function CanvasFormInput({
   );
 }
 `,
-    "CanvasFormTextarea.tsx": `type FormTextareaProps = {
+    "CanvasFormTextarea.tsx": `${clientDirective}type FormTextareaProps = {
   className?: string;
   style?: Record<string, any>;
   label?: string;
   placeholder?: string;
   required?: boolean;
   rows?: number;
+  // Controlled value/onChange are injected by behavior-aware export codegen.
+  value?: string;
+  onChange?: (value: string) => void;
 };
 
 export function CanvasFormTextarea({
@@ -126,6 +138,8 @@ export function CanvasFormTextarea({
   placeholder,
   required,
   rows,
+  value,
+  onChange,
 }: FormTextareaProps) {
   return (
     <div className={className} style={style}>
@@ -137,6 +151,8 @@ export function CanvasFormTextarea({
       ) : null}
       <textarea
         rows={rows ?? 4}
+        value={value ?? ""}
+        onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder ?? "Enter your message..."}
         style={{ width: "100%" }}
       />
@@ -144,12 +160,14 @@ export function CanvasFormTextarea({
   );
 }
 `,
-    "CanvasFormCheckbox.tsx": `type FormCheckboxProps = {
+    "CanvasFormCheckbox.tsx": `${clientDirective}type FormCheckboxProps = {
   className?: string;
   style?: Record<string, any>;
   label?: string;
   checked?: boolean;
   required?: boolean;
+  // Controlled checked/onChange are injected by behavior-aware export codegen.
+  onChange?: (checked: boolean) => void;
 };
 
 export function CanvasFormCheckbox({
@@ -158,10 +176,15 @@ export function CanvasFormCheckbox({
   label,
   checked,
   required,
+  onChange,
 }: FormCheckboxProps) {
   return (
     <label className={className} style={{ ...style, display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <input type="checkbox" defaultChecked={checked === true} />
+      <input
+        type="checkbox"
+        checked={checked === true}
+        onChange={(event) => onChange?.(event.target.checked)}
+      />
       <span>
         {label ?? "Checkbox"}
         {required ? <span style={{ color: "#ef4444" }}> *</span> : null}
@@ -170,7 +193,7 @@ export function CanvasFormCheckbox({
   );
 }
 `,
-    "CanvasFormRadio.tsx": `type FormRadioProps = {
+    "CanvasFormRadio.tsx": `${clientDirective}type FormRadioProps = {
   className?: string;
   style?: Record<string, any>;
   label?: string;
@@ -179,6 +202,8 @@ export function CanvasFormCheckbox({
   required?: boolean;
   groupName?: string;
   layout?: "vertical" | "horizontal";
+  // Controlled selectedValue/onChange are injected by behavior-aware export codegen.
+  onChange?: (value: string) => void;
 };
 
 export function CanvasFormRadio({
@@ -190,6 +215,7 @@ export function CanvasFormRadio({
   required,
   groupName,
   layout,
+  onChange,
 }: FormRadioProps) {
   const resolvedOptions =
     Array.isArray(options) && options.length
@@ -211,7 +237,8 @@ export function CanvasFormRadio({
               type="radio"
               name={groupName ?? "radio-group"}
               value={option}
-              defaultChecked={selectedValue === option}
+              checked={selectedValue === option}
+              onChange={() => onChange?.(option)}
             />
             <span>{option}</span>
           </label>
@@ -221,7 +248,7 @@ export function CanvasFormRadio({
   );
 }
 `,
-    "CanvasFormSelect.tsx": `type FormSelectProps = {
+    "CanvasFormSelect.tsx": `${clientDirective}type FormSelectProps = {
   className?: string;
   style?: Record<string, any>;
   label?: string;
@@ -229,6 +256,8 @@ export function CanvasFormRadio({
   options?: string[];
   selectedValue?: string;
   required?: boolean;
+  // Controlled selectedValue/onChange are injected by behavior-aware export codegen.
+  onChange?: (value: string) => void;
 };
 
 export function CanvasFormSelect({
@@ -239,6 +268,7 @@ export function CanvasFormSelect({
   options,
   selectedValue,
   required,
+  onChange,
 }: FormSelectProps) {
   const resolvedOptions =
     Array.isArray(options) && options.length
@@ -253,7 +283,11 @@ export function CanvasFormSelect({
           {required ? <span style={{ color: "#ef4444" }}> *</span> : null}
         </label>
       ) : null}
-      <select defaultValue={selectedValue || ""} style={{ width: "100%" }}>
+      <select
+        value={selectedValue || ""}
+        onChange={(event) => onChange?.(event.target.value)}
+        style={{ width: "100%" }}
+      >
         <option value="">{emptyOption}</option>
         {resolvedOptions.map((option, index) => (
           <option key={index} value={option}>
@@ -272,5 +306,4 @@ export const GLOBAL_EXPORT_CSS = `
 * { box-sizing: border-box; }
 body { margin: 0; font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif; }
 main { min-height: 100vh; width: 100%; }
-section { width: 100%; }
 `;

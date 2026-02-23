@@ -47,6 +47,17 @@ const roundValue = (value: any): any => {
   return value;
 };
 
+// Treat placeholder or unsafe pseudo-links as non-links so exported buttons
+// render as semantic <button> instead of dead anchors.
+const isUsableHref = (value: any) => {
+  if (typeof value !== "string") return false;
+  const href = value.trim();
+  if (!href) return false;
+  if (href === "#") return false;
+  if (href.toLowerCase().startsWith("javascript:")) return false;
+  return true;
+};
+
 const styleValue = (value: any): string | null => {
   if (value === undefined || value === null) return null;
   const rounded = roundValue(value);
@@ -67,10 +78,25 @@ const styleToPropString = (style: Record<string, any>) => {
   return entries.length ? ` style={{ ${entries.join(", ")} }}` : "";
 };
 
+type RawExpression = { __raw: string };
+
+// Marks a prop value as "inject this verbatim expression into JSX".
+// This is used by exporter-generated runtime bindings (callbacks, state lookups)
+// where JSON stringification would otherwise turn code into plain text.
+const rawExpression = (expression: string): RawExpression => ({ __raw: expression });
+
 const attrsToPropString = (attrs: Record<string, any>) => {
   const entries = Object.entries(attrs).reduce<string[]>(
     (acc, [key, value]) => {
       if (value === undefined || value === null) return acc;
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        typeof (value as RawExpression).__raw === "string"
+      ) {
+        acc.push(` ${key}={${(value as RawExpression).__raw}}`);
+        return acc;
+      }
       if (typeof value === "boolean") {
         if (value) acc.push(` ${key}`);
         return acc;
@@ -851,7 +877,12 @@ const nodeToJSX = (
   parentPosition?: { x?: number; y?: number },
   parentLayoutOffset?: { x?: number; y?: number },
   parentCrossAxisStretch = false,
-  options: ExportOptions = {}
+  options: ExportOptions = {},
+  behaviorCtx?: {
+    formFieldKeyByNodeId: Record<string, string>;
+    buttonActionNodeIds: Set<string>;
+    textTemplateNodeIds: Set<string>;
+  }
 ): string => {
   const pixelPerfect = options.pixelPerfect === true;
   const { node, children } = tree;
@@ -1184,7 +1215,9 @@ const nodeToJSX = (
         baseStyle.height = heightHint;
         baseStyle.minHeight = heightHint;
       }
-      baseStyle.padding = data.padding ?? 24;
+      // Keep header/footer defaults aligned.
+      // If builder provides explicit padding, preserve it; otherwise default to 0.
+      baseStyle.padding = data.padding ?? 0;
       baseStyle.backgroundColor = data.backgroundColor ?? "transparent";
       baseStyle.border = "none"; // remove canvas border for cleaner export
       applyCornerRadius(baseStyle, data.borderRadius ?? data.radius);
@@ -1314,7 +1347,11 @@ const nodeToJSX = (
 
     case "text":
       tag = headingForFontSize(Number(data.fontSize));
-      content = data.text || "";
+      content =
+        behaviorCtx?.textTemplateNodeIds?.has(node.id) &&
+        typeof data.text === "string"
+          ? `{resolveTextTemplate(${JSON.stringify(data.text)})}`
+          : data.text || "";
       baseStyle.color ||= data.color;
       baseStyle.fontSize ||= data.fontSize;
       baseStyle.fontWeight ||= data.fontWeight;
@@ -1332,8 +1369,19 @@ const nodeToJSX = (
 
     case "button":
       tag = "CanvasButton";
-      content = data.label || data.text || "Button";
-      extraAttrs.href = data.href;
+      content =
+        behaviorCtx?.textTemplateNodeIds?.has(node.id) &&
+        typeof (data.label || data.text) === "string"
+          ? `{resolveTextTemplate(${JSON.stringify(data.label || data.text)})}`
+          : data.label || data.text || "Button";
+      if (isUsableHref(data.href)) {
+        extraAttrs.href = data.href;
+      }
+      if (behaviorCtx?.buttonActionNodeIds?.has(node.id)) {
+        extraAttrs.onClick = rawExpression(
+          `() => handleNodeClick(${JSON.stringify(node.id)})`
+        );
+      }
       baseStyle.backgroundColor ||= "#3b82f6";
       baseStyle.color ||= "#ffffff";
       baseStyle.border ||= "none";
@@ -1376,6 +1424,15 @@ const nodeToJSX = (
       extraAttrs.placeholder = data.placeholder ?? "Enter text...";
       extraAttrs.inputType = data.inputType ?? "text";
       extraAttrs.required = Boolean(data.required);
+      if (behaviorCtx?.formFieldKeyByNodeId?.[node.id]) {
+        const fieldKey = behaviorCtx.formFieldKeyByNodeId[node.id];
+        extraAttrs.value = rawExpression(
+          `String(formState[${JSON.stringify(fieldKey)}] ?? "")`
+        );
+        extraAttrs.onChange = rawExpression(
+          `(value) => setFormField(${JSON.stringify(fieldKey)}, value)`
+        );
+      }
       break;
 
     case "formTextarea":
@@ -1384,12 +1441,31 @@ const nodeToJSX = (
       extraAttrs.placeholder = data.placeholder ?? "Enter your message...";
       extraAttrs.required = Boolean(data.required);
       extraAttrs.rows = data.rows ?? 4;
+      if (behaviorCtx?.formFieldKeyByNodeId?.[node.id]) {
+        const fieldKey = behaviorCtx.formFieldKeyByNodeId[node.id];
+        extraAttrs.value = rawExpression(
+          `String(formState[${JSON.stringify(fieldKey)}] ?? "")`
+        );
+        extraAttrs.onChange = rawExpression(
+          `(value) => setFormField(${JSON.stringify(fieldKey)}, value)`
+        );
+      }
       break;
 
     case "formCheckbox":
       tag = "CanvasFormCheckbox";
       extraAttrs.label = data.label ?? "Checkbox";
-      extraAttrs.checked = Boolean(data.checked);
+      if (behaviorCtx?.formFieldKeyByNodeId?.[node.id]) {
+        const fieldKey = behaviorCtx.formFieldKeyByNodeId[node.id];
+        extraAttrs.checked = rawExpression(
+          `Boolean(formState[${JSON.stringify(fieldKey)}])`
+        );
+        extraAttrs.onChange = rawExpression(
+          `(checked) => setFormField(${JSON.stringify(fieldKey)}, checked)`
+        );
+      } else {
+        extraAttrs.checked = Boolean(data.checked);
+      }
       extraAttrs.required = Boolean(data.required);
       break;
 
@@ -1397,7 +1473,17 @@ const nodeToJSX = (
       tag = "CanvasFormRadio";
       extraAttrs.label = data.label;
       extraAttrs.options = Array.isArray(data.options) ? data.options : [];
-      extraAttrs.selectedValue = data.selectedValue ?? "";
+      if (behaviorCtx?.formFieldKeyByNodeId?.[node.id]) {
+        const fieldKey = behaviorCtx.formFieldKeyByNodeId[node.id];
+        extraAttrs.selectedValue = rawExpression(
+          `String(formState[${JSON.stringify(fieldKey)}] ?? "")`
+        );
+        extraAttrs.onChange = rawExpression(
+          `(value) => setFormField(${JSON.stringify(fieldKey)}, value)`
+        );
+      } else {
+        extraAttrs.selectedValue = data.selectedValue ?? "";
+      }
       extraAttrs.required = Boolean(data.required);
       extraAttrs.groupName = data.groupName ?? "radio-group";
       extraAttrs.layout = data.layout === "horizontal" ? "horizontal" : "vertical";
@@ -1408,7 +1494,17 @@ const nodeToJSX = (
       extraAttrs.label = data.label;
       extraAttrs.placeholder = data.placeholder ?? "Select an option...";
       extraAttrs.options = Array.isArray(data.options) ? data.options : [];
-      extraAttrs.selectedValue = data.selectedValue ?? "";
+      if (behaviorCtx?.formFieldKeyByNodeId?.[node.id]) {
+        const fieldKey = behaviorCtx.formFieldKeyByNodeId[node.id];
+        extraAttrs.selectedValue = rawExpression(
+          `String(formState[${JSON.stringify(fieldKey)}] ?? "")`
+        );
+        extraAttrs.onChange = rawExpression(
+          `(value) => setFormField(${JSON.stringify(fieldKey)}, value)`
+        );
+      } else {
+        extraAttrs.selectedValue = data.selectedValue ?? "";
+      }
       extraAttrs.required = Boolean(data.required);
       break;
 
@@ -1565,7 +1661,8 @@ const nodeToJSX = (
         { x: positionX ?? 0, y: positionY ?? 0 },
         { x: positionX ?? 0, y: positionY ?? 0 },
         childParentCrossStretch,
-        options
+        options,
+        behaviorCtx
       )
     )
     .filter(Boolean)
@@ -1627,6 +1724,288 @@ ${childrenJSX ? "\n" + childrenJSX + "\n" + indentStr : ""}
 </${tag}>`;
 };
 
+type BehaviorExportModel = {
+  // Maps exported form node ids -> runtime formState keys.
+  formFieldKeyByNodeId: Record<string, string>;
+  // Node ids that should receive onClick handlers in generated JSX.
+  buttonActionNodeIds: Set<string>;
+  // Nodes containing {{stateKey}} template tokens that must be resolved at runtime.
+  textTemplateNodeIds: Set<string>;
+  // Initial object used to bootstrap generated useState form model.
+  initialFormState: Record<string, any>;
+  // Switch-case payload used by generated handleNodeClick(nodeId).
+  clickStatementsByNodeId: Record<string, string[]>;
+  // useEffect body for mount-only effects.
+  mountEffectStatements: string[];
+  // useEffect bodies tied to specific dependencies.
+  stateEffects: Array<{ dependency: string; statements: string[] }>;
+  // Controls whether resolveTextTemplate helper must be emitted.
+  usesTemplateResolver: boolean;
+};
+
+const TEMPLATE_TOKEN_REGEX = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/;
+
+const hasTemplateTokens = (value: any) =>
+  typeof value === "string" && TEMPLATE_TOKEN_REGEX.test(value);
+
+const flattenNormalizedNodes = (nodes: NormalizedTreeNode[]) => {
+  const flat: NormalizedTreeNode[] = [];
+  // Keep preorder traversal deterministic so generated code order is stable.
+  const walk = (list: NormalizedTreeNode[]) => {
+    list.forEach((entry) => {
+      flat.push(entry);
+      if (Array.isArray(entry.children) && entry.children.length) {
+        walk(entry.children as NormalizedTreeNode[]);
+      }
+    });
+  };
+  walk(nodes);
+  return flat;
+};
+
+const isExportFormNode = (type: string) =>
+  type === "formInput" ||
+  type === "formTextarea" ||
+  type === "formCheckbox" ||
+  type === "formRadio" ||
+  type === "formSelect";
+
+const normalizeStateKey = (value: any, fallback: string) => {
+  const raw =
+    typeof value === "string" || typeof value === "number"
+      ? String(value).trim()
+      : "";
+  if (!raw) return fallback;
+  return raw.replace(/\s+/g, "_");
+};
+
+const buildBehaviorExportModel = (
+  tree: NormalizedTreeNode[]
+): BehaviorExportModel => {
+  // Convert nested export tree into a flat list so behavior parsing can be
+  // handled once regardless of node depth/layout mode.
+  const flatNodes = flattenNormalizedNodes(tree);
+  const formFieldKeyByNodeId: Record<string, string> = {};
+  const textTemplateNodeIds = new Set<string>();
+  const buttonActionNodeIds = new Set<string>();
+  const initialFormState: Record<string, any> = {};
+  const clickStatementsByNodeId: Record<string, string[]> = {};
+  const mountEffectStatements: string[] = [];
+  const stateEffects: Array<{ dependency: string; statements: string[] }> = [];
+  const usedStateKeys = new Set<string>();
+  let usesTemplateResolver = false;
+
+  const reserveUniqueStateKey = (candidate: string) => {
+    // Guarantee unique keys even when multiple fields share labels/names.
+    const base = candidate || "field";
+    if (!usedStateKeys.has(base)) {
+      usedStateKeys.add(base);
+      return base;
+    }
+    let suffix = 2;
+    let next = `${base}_${suffix}`;
+    while (usedStateKeys.has(next)) {
+      suffix += 1;
+      next = `${base}_${suffix}`;
+    }
+    usedStateKeys.add(next);
+    return next;
+  };
+
+  const ensureStateKey = (candidate: any, fallback: string, defaultValue: any) => {
+    // Reuse existing key when possible to keep state object stable across runs.
+    const normalizedCandidate = normalizeStateKey(candidate, fallback);
+    const existing = Object.keys(initialFormState).find(
+      (key) => key === normalizedCandidate
+    );
+    const key = existing ?? reserveUniqueStateKey(normalizedCandidate);
+    if (!(key in initialFormState)) {
+      initialFormState[key] = defaultValue;
+    }
+    return key;
+  };
+
+  const compileValueExpression = (value: any, source = "formState") => {
+    // If value uses {{tokens}}, resolve it against runtime state instead of
+    // hardcoding static JSON.
+    if (hasTemplateTokens(value)) {
+      usesTemplateResolver = true;
+      return `resolveTextTemplate(${JSON.stringify(value)}, ${source})`;
+    }
+    if (value === undefined) return "undefined";
+    return JSON.stringify(value);
+  };
+
+  const parseActionStatements = (actionLike: any): string[] => {
+    // Accept multiple historical formats (string shorthand and object schema)
+    // so existing saved builder data can export behavior without migration.
+    if (actionLike === undefined || actionLike === null) return [];
+
+    if (typeof actionLike === "string") {
+      const raw = actionLike.trim();
+      if (!raw) return [];
+      // String shorthands are intentionally simple to support quick builder
+      // prototypes without full structured action objects.
+      if (raw.toLowerCase() === "resetform") {
+        return ["setFormState(() => ({ ...initialFormState }));"];
+      }
+      if (raw.toLowerCase() === "logstate") {
+        return ['console.log("CodeFlow export state:", formState);'];
+      }
+      if (raw.toLowerCase().startsWith("alert:")) {
+        return [`window.alert(${JSON.stringify(raw.slice(6).trim())});`];
+      }
+      if (raw.toLowerCase().startsWith("navigate:")) {
+        return [`window.location.href = ${JSON.stringify(raw.slice(9).trim())};`];
+      }
+      return [];
+    }
+
+    if (typeof actionLike !== "object") return [];
+
+    // Accept nested shape: { action: { type: ... } } and flat shape: { type: ... }.
+    const action = actionLike.action && typeof actionLike.action === "object"
+      ? actionLike.action
+      : actionLike;
+    const type = String(action.type ?? "").trim().toLowerCase();
+
+    if (type === "resetform") {
+      return ["setFormState(() => ({ ...initialFormState }));"];
+    }
+    if (type === "logstate" || type === "consolelogstate") {
+      return ['console.log("CodeFlow export state:", formState);'];
+    }
+    if (type === "navigate") {
+      if (typeof action.href === "string" && action.href.trim()) {
+        return [`window.location.href = ${JSON.stringify(action.href.trim())};`];
+      }
+      return [];
+    }
+    if (type === "alert") {
+      const message =
+        typeof action.message === "string" ? action.message : "Action triggered";
+      return [`window.alert(${compileValueExpression(message)});`];
+    }
+    if (type === "setstate") {
+      // setState mutates generated formState dictionary.
+      const fallback = normalizeStateKey(action.key ?? action.state, "state");
+      const key = ensureStateKey(
+        action.key ?? action.state,
+        fallback,
+        action.initialValue ?? ""
+      );
+      const valueExpr = compileValueExpression(action.value);
+      return [`setFormState((prev) => ({ ...prev, [${JSON.stringify(key)}]: ${valueExpr} }));`];
+    }
+    if (type === "togglestate") {
+      // toggleState flips current boolean value at runtime.
+      const fallback = normalizeStateKey(action.key ?? action.state, "toggle");
+      const key = ensureStateKey(
+        action.key ?? action.state,
+        fallback,
+        action.initialValue ?? false
+      );
+      return [
+        `setFormState((prev) => ({ ...prev, [${JSON.stringify(key)}]: !Boolean(prev[${JSON.stringify(
+          key
+        )}]) }));`,
+      ];
+    }
+
+    return [];
+  };
+
+  flatNodes.forEach((entry) => {
+    const node = entry.node || {};
+    const data = node.data || {};
+
+    // Mark nodes that need runtime text interpolation via {{stateKey}} tokens.
+    if (node.type === "text" && hasTemplateTokens(data.text)) {
+      textTemplateNodeIds.add(node.id);
+      usesTemplateResolver = true;
+    }
+    if (
+      node.type === "button" &&
+      hasTemplateTokens(data.label ?? data.text ?? "")
+    ) {
+      textTemplateNodeIds.add(node.id);
+      usesTemplateResolver = true;
+    }
+
+    if (isExportFormNode(node.type)) {
+      // Promote form controls into exported React state model.
+      const candidate =
+        data.stateKey ?? data.name ?? data.fieldName ?? data.label ?? node.id;
+      const fallback = normalizeStateKey(node.id, "field");
+      const defaultValue =
+        node.type === "formCheckbox"
+          ? Boolean(data.checked ?? data.defaultChecked ?? false)
+          : data.value ?? data.defaultValue ?? data.selectedValue ?? "";
+      const key = ensureStateKey(candidate, fallback, defaultValue);
+      formFieldKeyByNodeId[node.id] = key;
+    }
+
+    const clickAction =
+      data.onClickAction ??
+      data.clickAction ??
+      data.action ??
+      data.interaction?.onClick;
+    if (node.type === "button") {
+      // Buttons are the primary interactive trigger surface in first-pass export.
+      const statements = parseActionStatements(clickAction);
+      if (statements.length > 0) {
+        buttonActionNodeIds.add(node.id);
+        clickStatementsByNodeId[node.id] = statements;
+      }
+    }
+
+    const rawEffects = [
+      ...(Array.isArray(data.effects)
+        ? data.effects
+        : data.effects
+          ? [data.effects]
+          : []),
+      ...(data.effect ? [data.effect] : []),
+    ];
+
+    rawEffects.forEach((effect: any) => {
+      if (!effect) return;
+      // Defaults to mount behavior for backwards compatibility.
+      const trigger = String(
+        effect.trigger ?? effect.when ?? effect.on ?? "mount"
+      )
+        .trim()
+        .toLowerCase();
+      const statements = parseActionStatements(effect.action ?? effect);
+      if (statements.length === 0) return;
+
+      if (trigger === "statechange" || trigger === "onstatechange") {
+        // If key/state is provided, watch that specific value;
+        // otherwise subscribe to full formState.
+        const watchKey = effect.key ?? effect.state ?? effect.watchKey;
+        const dependency =
+          typeof watchKey === "string" && watchKey.trim()
+            ? `formState[${JSON.stringify(watchKey.trim())}]`
+            : "formState";
+        stateEffects.push({ dependency, statements });
+        return;
+      }
+      mountEffectStatements.push(...statements);
+    });
+  });
+
+  return {
+    formFieldKeyByNodeId,
+    buttonActionNodeIds,
+    textTemplateNodeIds,
+    initialFormState,
+    clickStatementsByNodeId,
+    mountEffectStatements,
+    stateEffects,
+    usesTemplateResolver,
+  };
+};
+
 /* =========================
    Page Generator
 ========================= */
@@ -1640,6 +2019,9 @@ const generatePageTSX = (
   options: ExportOptions = {}
 ) => {
   const tree = normalized.normalizedNodes as NormalizedTreeNode[];
+  // Build behavior model once, then pass it to JSX generation + runtime codegen.
+  const behavior = buildBehaviorExportModel(tree);
+  const flatNodes = flattenNormalizedNodes(tree);
 
   const styleTokenMap = normalized.styleTokens.reduce<
     Record<string, StyleToken>
@@ -1653,8 +2035,13 @@ const generatePageTSX = (
     {}
   );
 
-  const rootData = tree[0]?.node?.data || {};
-  const rootStyle = tree[0]?.node?.style || {};
+  // Use the primary section as visual root. Root sorting can place header first,
+  // which incorrectly forces page background/colors to header values.
+  const primarySectionNode =
+    flatNodes.find((entry) => entry.node?.type === "section")?.node ??
+    tree[0]?.node;
+  const rootData = primarySectionNode?.data || {};
+  const rootStyle = primarySectionNode?.style || {};
 
   const mainStyle: Record<string, any> = {
     background:
@@ -1693,7 +2080,12 @@ const generatePageTSX = (
               undefined,
               undefined,
               false,
-              options
+              options,
+              {
+                formFieldKeyByNodeId: behavior.formFieldKeyByNodeId,
+                buttonActionNodeIds: behavior.buttonActionNodeIds,
+                textTemplateNodeIds: behavior.textTemplateNodeIds,
+              }
             );
           })
           .join("\n");
@@ -1717,15 +2109,145 @@ const generatePageTSX = (
     .map((name) => `import { ${name} } from "../components/${name}";`)
     .join("\n");
 
-  return `${primitiveImports}
+  // Feature flags decide which runtime helpers/imports should be emitted.
+  // This avoids dead code in purely static exports.
+  const hasFormState = Object.keys(behavior.initialFormState).length > 0;
+  const hasClickActions = Object.keys(behavior.clickStatementsByNodeId).length > 0;
+  const hasStateEffects = behavior.stateEffects.length > 0;
+  const hasMountEffects = behavior.mountEffectStatements.length > 0;
+  const needsRuntimeState =
+    hasFormState ||
+    hasClickActions ||
+    hasStateEffects ||
+    hasMountEffects ||
+    behavior.usesTemplateResolver;
+  const needsTemplateResolver = behavior.usesTemplateResolver;
 
-export default function Page() {
+  const reactImport = needsRuntimeState
+    ? 'import { useCallback, useEffect, useState } from "react";\n'
+    : "";
+
+  // Generated local state runtime shared by forms, actions, and effects.
+  const runtimeSetup = needsRuntimeState
+    ? `
+  const initialFormState: Record<string, any> = ${JSON.stringify(
+    behavior.initialFormState,
+    null,
+    2
+  )};
+  const [formState, setFormState] = useState<Record<string, any>>(() => ({
+    ...initialFormState,
+  }));
+  const setFormField = useCallback((key: string, value: any) => {
+    setFormState((prev) => ({ ...prev, [key]: value }));
+  }, []);
+`
+    : "";
+
+  const templateResolverCode = needsTemplateResolver
+    ? `
+  const resolveTextTemplate = useCallback(
+    (template: string, source?: Record<string, any>) => {
+      const state = source ?? formState ?? {};
+      return String(template ?? "").replace(
+        /\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*\\}\\}/g,
+        (_, key) => {
+          const value = state?.[key];
+          return value === undefined || value === null ? "" : String(value);
+        }
+      );
+    },
+    [formState]
+  );
+`
+    : "";
+
+  const clickCases = Object.entries(behavior.clickStatementsByNodeId)
+    .map(
+      ([nodeId, statements]) => `      case ${JSON.stringify(nodeId)}: {
+${statements.map((line) => `        ${line}`).join("\n")}
+        break;
+      }`
+    )
+    .join("\n");
+
+  // Central click dispatcher keeps JSX output simple:
+  // each actionable node references handleNodeClick(nodeId).
+  const clickHandlerCode = hasClickActions
+    ? `
+  const handleNodeClick = useCallback(
+    (nodeId: string) => {
+      switch (nodeId) {
+${clickCases}
+        default:
+          break;
+      }
+    },
+    [formState${needsTemplateResolver ? ", resolveTextTemplate" : ""}]
+  );
+`
+    : "";
+
+  // Persist form state so exported pages keep input values on reload.
+  const persistEffectCode = hasFormState
+    ? `
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const persisted = window.localStorage.getItem("codeflow.export.formState");
+      if (!persisted) return;
+      const parsed = JSON.parse(persisted);
+      if (parsed && typeof parsed === "object") {
+        setFormState((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      // Ignore malformed persisted state.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        "codeflow.export.formState",
+        JSON.stringify(formState)
+      );
+    } catch {
+      // Ignore persistence failures.
+    }
+  }, [formState]);
+`
+    : "";
+
+  // Mount effects run once after client hydration.
+  const mountEffectCode = hasMountEffects
+    ? `
+  useEffect(() => {
+${behavior.mountEffectStatements.map((line) => `    ${line}`).join("\n")}
+  }, []);
+`
+    : "";
+
+  // State effects compile to dedicated useEffect blocks with explicit deps.
+  const stateEffectsCode = hasStateEffects
+    ? behavior.stateEffects
+        .map(
+          (effect) => `
+  useEffect(() => {
+${effect.statements.map((line) => `    ${line}`).join("\n")}
+  }, [${effect.dependency}]);
+`
+        )
+        .join("")
+    : "";
+
+  return `"use client";
+
+${reactImport}${primitiveImports}
+
+export default function Page() {${runtimeSetup}${templateResolverCode}${clickHandlerCode}${persistEffectCode}${mountEffectCode}${stateEffectsCode}
   return (
-    <main className="min-h-screen w-full bg-black text-slate-900" ${styleToPropString(mainStyle)}>
-      <script src="https://cdn.tailwindcss.com"></script>
-      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: ${JSON.stringify(
-        GLOBAL_EXPORT_CSS
-      )} }} />
+    <main className="min-h-screen w-full text-slate-900" ${styleToPropString(mainStyle)}>
       <CanvasSection className="w-full max-w-full relative mx-auto overflow-visible"${styleToPropString(shellStyle)}>
 ${body}
       </CanvasSection>
@@ -1752,7 +2274,7 @@ export async function exportNextJSZip(
   const zip = new JSZip();
 
   const scaffold = import.meta.glob(
-    "../../public/export-nextjs/{package.json,next.config.mjs,tsconfig.json,next-env.d.ts,app/layout.tsx,app/globals.css}",
+    "../../public/export-nextjs/{package.json,next.config.mjs,tsconfig.json,next-env.d.ts,postcss.config.mjs,tailwind.config.mjs,app/layout.tsx,app/globals.css}",
     { query: "?raw", import: "default", eager: true }
   ) as Record<string, string>;
 
@@ -1761,6 +2283,8 @@ export async function exportNextJSZip(
     "next.config.mjs",
     "tsconfig.json",
     "next-env.d.ts",
+    "postcss.config.mjs",
+    "tailwind.config.mjs",
     "app/layout.tsx",
     "app/globals.css",
   ];
@@ -1775,6 +2299,11 @@ export async function exportNextJSZip(
 
   Object.entries(scaffold).forEach(([path, content]) => {
     const rel = path.slice(path.indexOf("export-nextjs/"));
+    if (rel === "export-nextjs/app/globals.css") {
+      const mergedGlobalCss = `${content.trimEnd()}\n\n${GLOBAL_EXPORT_CSS.trim()}\n`;
+      zip.file(rel, mergedGlobalCss);
+      return;
+    }
     zip.file(rel, content);
   });
 
