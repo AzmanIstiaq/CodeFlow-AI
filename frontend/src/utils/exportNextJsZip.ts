@@ -1035,6 +1035,7 @@ const nodeToJSX = (
     node.type === "column" ||
     node.type === "row" ||
     node.type === "button" ||
+    node.type === "image" ||
     node.type === "shape" ||
     node.type === "header" ||
     node.type === "footer" ||
@@ -1516,9 +1517,15 @@ const nodeToJSX = (
     case "image":
       tag = "img";
       isSelfClosing = true;
-      imageSrc = data.src || "";
-      imageAlt = data.alt || "";
+      imageSrc =
+        data.src ??
+        data.imageSrc ??
+        data.url ??
+        data.imageUrl ??
+        "";
+      imageAlt = data.alt ?? data.imageAlt ?? data.caption ?? "";
       baseStyle.display ||= "block";
+      baseStyle.objectFit ||= data.objectFit ?? "cover";
       if (widthHint) baseStyle.width = widthHint;
       if (heightHint) baseStyle.height = heightHint;
       if (shouldExportAsAbsolute) {
