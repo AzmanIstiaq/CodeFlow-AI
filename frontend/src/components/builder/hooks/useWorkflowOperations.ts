@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SiteSchema, PageSchema } from "../../../types/siteSchema";
-import { saveDiagram, executeWorkflow } from "../../../api/api";
+import { createWorkflow, saveDiagram, executeWorkflow } from "../../../api/api";
 
 const MODE: "workflow" | "builder" = "builder";
 
@@ -85,7 +85,6 @@ export function useWorkflowOperations(
     const description = workflowDescription.trim();
 
     try {
-      const { createWorkflow, saveDiagram } = await import("../../../api/api");
       const response = await createWorkflow({
         name,
         description,

@@ -23,6 +23,7 @@ import {
   ColumnControl,
   FlowSpacing,
   Style,
+  Image,
   Text,
   Effects,
   Advanced,
@@ -86,6 +87,13 @@ export default function InspectorPanel({
         />
 
         <Style
+          selectedNodes={selectedNodes}
+          updateNode={updateNode}
+          updateNodes={updateNodes}
+          allNodes={allNodes}
+        />
+
+        <Image
           selectedNodes={selectedNodes}
           updateNode={updateNode}
           updateNodes={updateNodes}
