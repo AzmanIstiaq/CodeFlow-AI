@@ -99,7 +99,13 @@ export function useCanvasDrawing({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [placementMode, drawingMode]);
+  }, [
+    drawingMode,
+    placementMode,
+    setDrawingMode,
+    setDrawingPreview,
+    setPlacementMode,
+  ]);
 
   // =====================================
   // DRAWING MODE HANDLERS
@@ -211,7 +217,11 @@ export function useCanvasDrawing({
   }, [
     drawingMode,
     drawingPreview,
+    getDefaultNodeData,
+    isDrawingRef,
     reactFlowInstance,
+    setDrawingMode,
+    setDrawingPreview,
     setNodes,
     setSelectedNode,
     setSelectedNodes,

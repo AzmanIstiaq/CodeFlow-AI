@@ -7,7 +7,7 @@
  * DO NOT reimplement this logic elsewhere.
  * PageBuilderInner must call this function.
  */
-import { LayoutDecision } from "../../utils/exportNextJsZip";
+import type { LayoutDecision } from "../../utils/exportNextJsZip.types";
 
 export type ExportGateResult = {
   ok: boolean;

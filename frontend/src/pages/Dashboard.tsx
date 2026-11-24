@@ -19,6 +19,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { countSiteNodes } from "../utils/sitePersistence";
 import {
   getWorkflows,
   createWorkflow,
@@ -135,7 +136,7 @@ export default function Dashboard() {
   // ================================
   const handleDeleteWorkflow = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation(); // Prevent opening the workflow
-    if (!confirm("Are you sure you want to delete this workflow?")) {
+    if (!confirm("Are you sure you want to delete this site?")) {
       return;
     }
 
@@ -185,7 +186,7 @@ export default function Dashboard() {
         <div className="modal-overlay" onClick={() => setEditingWorkflow(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {/* Stop propagation to keep overlay click-to-dismiss behavior intact. */}
-            <h2>Edit Workflow</h2>
+            <h2>Edit Site</h2>
             <input
               type="text"
               placeholder="Enter workflow name..."
@@ -223,7 +224,7 @@ export default function Dashboard() {
         >
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {/* Stop propagation to keep overlay click-to-dismiss behavior intact. */}
-            <h2>Create New Workflow</h2>
+            <h2>Create New Site</h2>
             <input
               type="text"
               placeholder="Enter workflow name..."
@@ -258,27 +259,27 @@ export default function Dashboard() {
         <header className="dashboard-header">
           <div>
             <BackButton />
-            <h1>My Workflows</h1>
+            <h1>My Sites</h1>
             <p className="dashboard-subtitle">
-              Manage your AI workflow projects
+              Manage your visual page projects
             </p>
           </div>
           <button className="btn-primary" onClick={handleCreateNew}>
-            + Create New Workflow
+            + Create New Site
           </button>
         </header>
 
         {loading ? (
-          <div className="dashboard-loading">Loading workflows...</div>
+          <div className="dashboard-loading">Loading sites...</div>
         ) : workflows.length === 0 ? (
           <div className="dashboard-empty">
             <div className="empty-icon">
               <ClipboardList size={36} aria-hidden="true" />
             </div>
-            <h3>No workflows yet</h3>
-            <p>Create your first AI workflow to get started</p>
+            <h3>No sites yet</h3>
+            <p>Create your first visual page project to get started</p>
             <button className="btn-primary" onClick={handleCreateNew}>
-              Create Workflow
+              Create Site
             </button>
           </div>
         ) : (
@@ -293,16 +294,7 @@ export default function Dashboard() {
                     <div className="workflow-card-header">
                       <Card.Title as="h3">{workflow.name}</Card.Title>
                       <span className="workflow-badge">
-                        {/* Guard parsing to avoid breaking the list on bad data. */}
-                        {(() => {
-                          try {
-                            return workflow.workflow
-                              ? JSON.parse(workflow.workflow).nodes?.length || 0
-                              : 0;
-                          } catch {
-                            return 0;
-                          }
-                        })()}{" "}
+                        {countSiteNodes(workflow.workflow)}{" "}
                         nodes
                       </span>
                     </div>
@@ -317,7 +309,7 @@ export default function Dashboard() {
                         <button
                           className="btn-delete"
                           onClick={(e) => handleEditWorkflow(e, workflow)}
-                          title="Edit workflow"
+                          title="Edit site"
                           style={{
                             background: "transparent",
                             border: "1px solid #3b82f6",
@@ -329,7 +321,7 @@ export default function Dashboard() {
                         <button
                           className="btn-delete"
                           onClick={(e) => handleDeleteWorkflow(e, workflow.id)}
-                          title="Delete workflow"
+                          title="Delete site"
                         >
                           <Trash2 size={16} aria-hidden="true" />
                         </button>

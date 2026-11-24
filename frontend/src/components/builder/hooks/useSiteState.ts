@@ -19,6 +19,7 @@
 import { useState, useEffect } from "react";
 import type { SiteSchema, PageSchema } from "../../../types/siteSchema";
 import { createDefaultSite, createEmptyPage } from "../../../types/siteSchema";
+import { deserializeSite } from "../../../utils/sitePersistence";
 import { getDiagram } from "../../../api/api";
 
 export function useSiteState(id: string | null) {
@@ -150,30 +151,7 @@ export function useSiteState(id: string | null) {
 
     getDiagram(Number(id))
       .then((res) => {
-        // Handle both { diagram: {...} } and direct {...} response formats
-        const raw = res.data && (res.data.diagram ?? res.data);
-        if (!raw) return;
-
-        const str = typeof raw === "string" ? raw : JSON.stringify(raw);
-        const parsed = JSON.parse(str);
-
-        // If already has pages structure, use it directly
-        if (parsed.pages) {
-          setSite(parsed);
-        } else {
-          // Create single page from legacy format (nodes/edges at root)
-          setSite({
-            pages: [
-              {
-                id: "home",
-                name: "Home",
-                nodes: parsed.nodes || [],
-                edges: parsed.edges || [],
-              },
-            ],
-            activePageId: "home",
-          });
-        }
+        setSite(deserializeSite(res.data));
       })
       .catch(() => console.log("No saved diagram yet."));
   }, [id]);

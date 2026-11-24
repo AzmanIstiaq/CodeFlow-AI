@@ -1,5 +1,5 @@
 {
   "Ollama": {
-    "BaseUrl": "YOUR_URL"
+    "BaseUrl": "http://localhost:11434"
   }
 }

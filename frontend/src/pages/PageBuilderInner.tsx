@@ -407,8 +407,13 @@ export default function PageBuilderInner() {
     };
   }, [setOverrideKey]);
 
-  // History (undo/redo) - keyboard shortcuts handled in useHistory hook
-  useHistory(nodes, setNodesNormalized);
+  // History (undo/redo) - keyboard shortcuts handled in useHistory hook.
+  // Scope snapshots to the active page so undo cannot restore another page's nodes.
+  const { undo, redo, canUndo, canRedo } = useHistory(
+    nodes,
+    setNodesNormalized,
+    activePage.id
+  );
 
   // Canvas drawing (ESC key + drawing mode)
   useCanvasDrawing({
@@ -987,8 +992,8 @@ export default function PageBuilderInner() {
         onPageAdd={handlePageAdd}
         onPageRename={handlePageRename}
         onPageDelete={handlePageDelete}
-        onUndo={NOOP}
-        onRedo={NOOP}
+        onUndo={undo}
+        onRedo={redo}
         onCut={handleCut}
         onCopy={handleCopy}
         onPaste={handlePaste}
@@ -1010,8 +1015,8 @@ export default function PageBuilderInner() {
         onViewportChange={setPreviewMode}
         currentViewport={previewMode}
         showGrid={showGrid}
-        canUndo={false}
-        canRedo={false}
+        canUndo={canUndo}
+        canRedo={canRedo}
         hasSelection={hasSelection}
       />
 

@@ -20,6 +20,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SiteSchema, PageSchema } from "../../../types/siteSchema";
 import { createWorkflow, saveDiagram, executeWorkflow } from "../../../api/api";
+import { serializeSite } from "../../../utils/sitePersistence";
 
 const MODE: "workflow" | "builder" = "builder";
 
@@ -88,7 +89,7 @@ export function useWorkflowOperations(
       const response = await createWorkflow({
         name,
         description,
-        workflow: JSON.stringify(site),
+        workflow: serializeSite(site),
       });
 
       const workflowId = response.data.id;

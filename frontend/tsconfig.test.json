@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"],
+    "noEmit": false
+  },
+  "include": [
+    "tests/**/*.test.ts",
+    "src/components/builder/hooks/historyState.ts",
+    "src/frontendRules/export/exportPolicy.ts",
+    "src/types/siteSchema.ts",
+    "src/utils/exportNextJsZip.types.ts",
+    "src/utils/sitePersistence.ts"
+  ]
+}

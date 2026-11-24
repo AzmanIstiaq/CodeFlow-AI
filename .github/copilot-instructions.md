@@ -1,70 +1,25 @@
-# CodeFlow-AI Development Guidelines
+# CodeFlow AI development guidance
 
-This document provides essential information for AI agents to effectively work with the CodeFlow-AI codebase.
+CodeFlow AI currently runs as a visual page builder. Do not rely on the obsolete AI-workflow product description: inspect the active builder mode and [AGENTS.md](../AGENTS.md) before making changes.
 
-## Project Structure
+Key boundaries:
 
+- Frontend: React 19, TypeScript, Vite, React Flow in `frontend/`
+- Backend: ASP.NET Core 8 Minimal APIs and SQLite in `backend/`
+- Layout/interaction policy: `frontend/src/frontendRules/`
+- Canvas orchestration: `frontend/src/pages/canvas/`
+- Next.js export: `frontend/src/utils/exportNextJsZip.ts`
+
+Preserve the current site/page schema and legacy persistence compatibility unless a migration is explicitly in scope. Keep layout rules out of the main canvas component when an existing resolver or hook owns the behaviour. Do not claim multi-page export or responsive preview until those paths are implemented and verified.
+
+Run relevant validation before completing a change:
+
+```bash
+npx --prefix frontend tsc -b frontend
+npm run build --prefix frontend
+npm run lint --prefix frontend
+npm test --prefix frontend
+dotnet build CodeFlow-AI.sln
 ```
-CodeFlow-AI/
-├── client/           # Frontend application (to be implemented)
-└── server/           # Backend services
-    └── CodeFlowBackend/  # Main ASP.NET Core API
-```
 
-## Architecture Overview
-
-- The project follows a client-server architecture with clear separation of concerns
-- Backend: ASP.NET Core 8.0 Web API (.NET 8.0)
-- Frontend: Client implementation pending
-
-## Key Technical Details
-
-### Backend (CodeFlowBackend)
-
-- **Framework**: ASP.NET Core 8.0
-- **Configuration**:
-  - Development settings in `appsettings.Development.json`
-  - Production settings in `appsettings.json`
-- **Server Configuration**: 
-  - HTTP: `http://localhost:5146`
-  - HTTPS: `https://localhost:7176`
-  - IIS Express: `https://localhost:44335`
-
-### Development Workflows
-
-1. **Building the Solution**:
-   ```powershell
-   dotnet build CodeFlow-AI.sln
-   ```
-
-2. **Running the Backend**:
-   ```powershell
-   cd server/CodeFlowBackend
-   dotnet run
-   ```
-
-### Project Conventions
-
-1. **Nullable Reference Types**: Enabled by default (`<Nullable>enable</Nullable>`)
-2. **Implicit Usings**: Enabled for cleaner code (`<ImplicitUsings>enable</ImplicitUsings>`)
-3. **Global Usings**:
-   - Standard ASP.NET Core namespaces
-   - Common System namespaces
-   - HTTP-related namespaces
-
-## Important Notes
-
-1. When adding new API endpoints:
-   - Follow the existing minimal API pattern in `Program.cs`
-   - Group related endpoints logically
-   - Consider security implications for public endpoints
-
-2. Configuration management:
-   - Use `appsettings.json` for default values
-   - Override with `appsettings.Development.json` for local development
-   - Use environment variables for sensitive information
-
-3. Error handling:
-   - Implement consistent error responses
-   - Use appropriate HTTP status codes
-   - Log errors appropriately using the built-in logging framework
+The focused unit suite is not a substitute for browser or API integration coverage, and the existing lint baseline is not clean. Report those facts accurately rather than suppressing failures.

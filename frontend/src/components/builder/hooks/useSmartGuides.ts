@@ -162,7 +162,7 @@ export function useSmartGuides(
         height,
       };
     },
-    [getParentFrame]
+    [getParentFrame, reactFlowInstance]
   );
 
   // Get all reference lines for a bounds object
@@ -632,7 +632,7 @@ export function useSmartGuides(
 
       return guides;
     },
-    [nodes, getBounds, getReferenceLines, detectEvenSpacing]
+    [nodes, getBounds, getReferenceLines, detectEvenSpacing, getParentFrame, reactFlowInstance]
   );
 
   // =====================================
@@ -750,7 +750,7 @@ export function useSmartGuides(
 
       return { x: snappedX, y: snappedY, snapped };
     },
-    [detectGuides, enableGridSnapRef.current]
+    [detectGuides]
   );
 
   const handleDrag = useCallback(
