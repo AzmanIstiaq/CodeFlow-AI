@@ -83,6 +83,8 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
   // Header/footer should have no column gap visually.
   const gap = BAR_COLUMN_GAP;
   const padding = data.padding ?? 0;
+  const onMeasure = data._onMeasure;
+  const explicitHeight = data.height;
   const { minWidth: barMinWidth, minHeight: barMinHeight } = getBarResizeConstraints();
 
   const blockRef = useRef<HTMLDivElement | null>(null);
@@ -102,16 +104,17 @@ export default function HeaderFooterNode({ id, data, selected }: Props) {
   // Measure height to keep the flow layout accurate.
   // Only report dynamic height when no explicit height is set.
   useLayoutEffect(() => {
-    if (!blockRef.current || !data._onMeasure) return;
-    if (typeof data.height === "number") return;
+    if (!blockRef.current || !onMeasure) return;
+    if (typeof explicitHeight === "number") return;
 
     // DO NOT write _measuredHeight here; delegate to layout measurement callback.
     const height = blockRef.current.offsetHeight;
     if (height) {
-      data._onMeasure(id, height);
-      requestAnimationFrame(() => data._onMeasure!(id, height));
+      onMeasure(id, height);
+      const frame = requestAnimationFrame(() => onMeasure(id, height));
+      return () => cancelAnimationFrame(frame);
     }
-  }, [columns, gap, padding]);
+  }, [columns, explicitHeight, gap, id, onMeasure, padding]);
 
 
   return (

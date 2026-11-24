@@ -87,7 +87,7 @@ export function useColumnDropZones(
   // State and References
   // ================================
   // Incremented when viewport changes to trigger re-registration of column rects.
-  const viewportVersionRef = useRef(0);
+  const [viewportVersion, setViewportVersion] = useState(0);
 
   // Cached column rectangles in flow coordinates: { sectionId: { columnIndex: DOMRect } }.
   const columnRectsRef = useRef<Record<string, Record<number, any>>>({});
@@ -584,8 +584,8 @@ export function useColumnDropZones(
    * Invalidate cached column rectangles when the viewport changes.
    */
   const handleMoveEnd = () => {
-    viewportVersionRef.current += 1;
     columnRectsRef.current = {};
+    setViewportVersion((version) => version + 1);
   };
 
   /**
@@ -612,7 +612,7 @@ export function useColumnDropZones(
         }
       }
     });
-  }, [nodes, viewportVersionRef.current, registerColumnRect]);
+  }, [nodes, viewportVersion, registerColumnRect]);
 
   // ================================
   // Return Public API
@@ -624,7 +624,7 @@ export function useColumnDropZones(
     handleMoveEnd,
     handleNodeDrag,
     handleNodeDragStop,
-    viewportVersion: viewportVersionRef.current,
+    viewportVersion,
     hoverState,
     findDropTarget,
   };

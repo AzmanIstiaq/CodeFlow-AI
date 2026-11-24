@@ -17,7 +17,6 @@
  * - Row labels are derived from sibling ordering within a section.
  */
 
-import { useState, useEffect } from "react";
 import type { Node } from "reactflow";
 import { ToggleIcon, TextInput } from "./inputs";
 import { Eye, EyeOff, Lock, Unlock, X } from "lucide-react";
@@ -46,18 +45,9 @@ export default function SelectionHeader({
   onClose,
   allNodes,
 }: SelectionHeaderProps) {
-  const [nodeName, setNodeName] = useState("");
   const isMultiSelect = selectedNodes.length > 1;
   const node = selectedNodes[0];
-
-  // ================================
-  // Effects
-  // ================================
-  useEffect(() => {
-    if (node && !isMultiSelect) {
-      setNodeName(node.data?.label || node.data?.text || node.id);
-    }
-  }, [node, isMultiSelect]);
+  const nodeName = node?.data?.label || node?.data?.text || node?.id || "";
 
   // ================================
   // Handlers
@@ -66,7 +56,6 @@ export default function SelectionHeader({
    * Update the node's label for single selection.
    */
   const handleNameChange = (value: string) => {
-    setNodeName(value);
     if (node) {
       updateNode(node.id, { label: value });
     }

@@ -1,14 +1,17 @@
 {
   "name": "codeflow-ai",
   "version": "1.0.0",
-  "description": "AI-powered workflow builder with visual editor",
+  "description": "Visual page builder with React Flow canvas and Next.js export",
   "type": "module",
   "scripts": {
-    "start": "dotnet run --project backend/Program.cs",
+    "start": "dotnet run --project backend/CodeFlowBackend.csproj",
     "backend": "dotnet run --project backend",
     "frontend": "npm run dev --prefix frontend",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "build": "npm install && npm install --prefix frontend && npm run build --prefix frontend"
+    "build": "npm run build --prefix frontend && dotnet build backend/CodeFlowBackend.csproj",
+    "lint": "npm run lint --prefix frontend",
+    "test": "npm test --prefix frontend",
+    "check": "npm test && npm run lint && npm run build"
   },
   "repository": {
     "type": "git",

@@ -54,18 +54,15 @@ interface SmartGuidesProps {
  */
 export default function SmartGuides({ guides, viewport }: SmartGuidesProps) {
   if (!guides.vertical.length && !guides.horizontal.length) return null;
-  if (!guides.frameBounds) {
-    // If no frame bounds, use viewport bounds as a fallback.
-    const viewportBounds = {
+  const frameBounds =
+    guides.frameBounds ??
+    {
+      // If no frame bounds, use viewport bounds as a fallback.
       left: -viewport.x / viewport.zoom,
       top: -viewport.y / viewport.zoom,
       right: (-viewport.x + window.innerWidth) / viewport.zoom,
       bottom: (-viewport.y + window.innerHeight) / viewport.zoom,
     };
-    guides.frameBounds = viewportBounds;
-  }
-
-  const frameBounds = guides.frameBounds;
 
   // ================================
   // Coordinate Conversion
